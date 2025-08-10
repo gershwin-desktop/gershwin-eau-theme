@@ -18,5 +18,6 @@
 - Do NOT use Auto Layout, as it is not supported in GNUstep. Use explicit frame layouts instead.
 - Put code logically in multiple files, not in one large file. Make (simple) classes for reusability, for things we might need elsewhere again.
 - Use Model-View-Controller (MVC) architecture where appropriate.
+- Use KVO (Key-Value Observing) for observing changes in properties where needed.
 - Always use a `GNUmakefile` to compile anything involving Foundation or GNUstep.
 - Never "create a simple test to verify" anything. Verify using /System/Applications/LoginWindow.app or other system applications.

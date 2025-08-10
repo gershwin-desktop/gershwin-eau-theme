@@ -26,13 +26,28 @@
   [super setCurrentProgress: progress];
   if(defaultbuttoncell)
     {
-        if(reverse)
-        {
-          defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 1.0 - progress];
-        }else{
-          defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: progress];
+        // Check if the button cell is enabled before updating pulse progress
+        BOOL isEnabled = YES;
+        if ([defaultbuttoncell respondsToSelector:@selector(isEnabled)]) {
+          isEnabled = [defaultbuttoncell isEnabled];
         }
-        [[defaultbuttoncell controlView] setNeedsDisplay: YES];
+        
+        if (isEnabled) {
+          if(reverse)
+          {
+            defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 1.0 - progress];
+          }else{
+            defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: progress];
+          }
+          [[defaultbuttoncell controlView] setNeedsDisplay: YES];
+        } else {
+          // Button is disabled, stop the animation and reset pulse progress
+          RIKLOG(@"DefaultButtonAnimation: Button cell is disabled, stopping animation");
+          defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
+          [[defaultbuttoncell controlView] setNeedsDisplay: YES];
+          [self stopAnimation];
+          return;
+        }
     }
   if (defaultbuttoncell && progress >= 1.0)
   {
@@ -85,6 +100,21 @@
                                                  name:NSApplicationDidUnhideNotification 
                                                object:nil];
     
+    // Monitor for control state changes (enabled/disabled) using KVO
+    if ([buttoncell controlView]) {
+      NSControl *control = (NSControl *)[buttoncell controlView];
+      @try {
+        [control addObserver:self
+                  forKeyPath:@"enabled"
+                     options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld
+                     context:NULL];
+        RIKLOG(@"DefaultButtonAnimationController: Added KVO observer for enabled property on control %p", control);
+      }
+      @catch (NSException *exception) {
+        RIKLOG(@"DefaultButtonAnimationController: ERROR adding KVO observer for enabled property: %@", exception);
+      }
+    }
+    
     RIKLOG(@"DefaultButtonAnimationController: Successfully initialized with cell %p", cell);
   }
   return self;
@@ -98,6 +128,18 @@
   [animation stopAnimation];
   [[NSNotificationCenter defaultCenter] removeObserver:self];
   
+  // Remove KVO observer for enabled property
+  if ([buttoncell controlView]) {
+    NSControl *control = (NSControl *)[buttoncell controlView];
+    @try {
+      [control removeObserver:self forKeyPath:@"enabled"];
+      RIKLOG(@"DefaultButtonAnimationController: Removed KVO observer for enabled property on control %p", control);
+    }
+    @catch (NSException *exception) {
+      RIKLOG(@"DefaultButtonAnimationController: ERROR removing KVO observer for enabled property: %@", exception);
+    }
+  }
+  
   [animation release];
   [super dealloc];
 }
@@ -110,6 +152,17 @@
 - (void) startPulse: (BOOL) reverse
 {
   RIKLOG(@"DefaultButtonAnimationController: startPulse:reverse called with reverse=%d for cell %p", reverse, buttoncell);
+  
+  // Check if the button cell is enabled before starting animation
+  BOOL isEnabled = YES;
+  if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
+    isEnabled = [buttoncell isEnabled];
+  }
+  
+  if (!isEnabled) {
+    RIKLOG(@"DefaultButtonAnimationController: Button cell is disabled, not starting animation");
+    return;
+  }
   
   animation = [[DefaultButtonAnimation alloc] initWithDuration:0.7
                                 animationCurve:NSAnimationEaseInOut];
@@ -140,8 +193,12 @@
 // TS: added this method
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
-      RIKLOG(@"DefaultButtonAnimationController: Window became key, starting animation");
-      [animation startAnimation];
+      if ([self shouldAnimationBeRunning]) {
+          RIKLOG(@"DefaultButtonAnimationController: Window became key and button is enabled, starting animation");
+          [animation startAnimation];
+      } else {
+          RIKLOG(@"DefaultButtonAnimationController: Window became key but button is disabled, not starting animation");
+      }
 }
 
 // Additional notification handlers for proper visibility management
@@ -172,8 +229,8 @@
     NSWindow *deminiaturizedWindow = [notification object];
     NSWindow *buttonWindow = [[buttoncell controlView] window];
     
-    if (deminiaturizedWindow == buttonWindow && [buttonWindow isKeyWindow]) {
-        RIKLOG(@"DefaultButtonAnimationController: Button's window was deminiaturized and is key, starting animation");
+    if (deminiaturizedWindow == buttonWindow && [self shouldAnimationBeRunning]) {
+        RIKLOG(@"DefaultButtonAnimationController: Button's window was deminiaturized and button is enabled, starting animation");
         [animation startAnimation];
     }
 }
@@ -186,11 +243,68 @@
 
 - (void)applicationDidUnhide:(NSNotification *)notification
 {
-    NSWindow *buttonWindow = [[buttoncell controlView] window];
-    
-    if (buttonWindow && [buttonWindow isKeyWindow] && ![buttonWindow isMiniaturized]) {
-        RIKLOG(@"DefaultButtonAnimationController: Application was unhidden and button window is key and visible, starting animation");
+    if ([self shouldAnimationBeRunning]) {
+        RIKLOG(@"DefaultButtonAnimationController: Application was unhidden and button is enabled and visible, starting animation");
         [animation startAnimation];
+    } else {
+        RIKLOG(@"DefaultButtonAnimationController: Application was unhidden but button is disabled or window not visible, not starting animation");
+    }
+}
+
+// Helper method to check if animation should be running
+- (BOOL)shouldAnimationBeRunning
+{
+    // Check if button cell is enabled
+    BOOL isEnabled = YES;
+    if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
+        isEnabled = [buttoncell isEnabled];
+    }
+    
+    if (!isEnabled) {
+        return NO;
+    }
+    
+    // Check if window is visible and key
+    NSWindow *buttonWindow = [[buttoncell controlView] window];
+    if (!buttonWindow || ![buttonWindow isKeyWindow] || [buttonWindow isMiniaturized]) {
+        return NO;
+    }
+    
+    // Check if application is hidden
+    if ([NSApp isHidden]) {
+        return NO;
+    }
+    
+    return YES;
+}
+
+// Handle control state changes (enabled/disabled) using KVO
+- (void)observeValueForKeyPath:(NSString *)keyPath 
+                      ofObject:(id)object 
+                        change:(NSDictionary *)change 
+                       context:(void *)context
+{
+    if ([keyPath isEqualToString:@"enabled"]) {
+        RIKLOG(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
+        
+        if ([self shouldAnimationBeRunning]) {
+            if (![animation isAnimating]) {
+                RIKLOG(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
+                [self startPulse];
+            }
+        } else {
+            if ([animation isAnimating]) {
+                RIKLOG(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
+                [animation stopAnimation];
+                
+                // Reset pulse progress to 0 for disabled buttons (removes blue color)
+                if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
+                    buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
+                    [[buttoncell controlView] setNeedsDisplay: YES];
+                    RIKLOG(@"DefaultButtonAnimationController: Reset pulse progress for disabled button");
+                }
+            }
+        }
     }
 }
 @end
