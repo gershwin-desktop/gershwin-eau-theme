@@ -62,10 +62,46 @@
   RIKLOG(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
   if (self = [super init]) {
     buttoncell = cell;
+    
+    // Register for additional window notifications to handle visibility changes
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(windowWillClose:) 
+                                                 name:NSWindowWillCloseNotification 
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(windowDidMiniaturize:) 
+                                                 name:NSWindowDidMiniaturizeNotification 
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(windowDidDeminiaturize:) 
+                                                 name:NSWindowDidDeminiaturizeNotification 
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(applicationDidHide:) 
+                                                 name:NSApplicationDidHideNotification 
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self 
+                                             selector:@selector(applicationDidUnhide:) 
+                                                 name:NSApplicationDidUnhideNotification 
+                                               object:nil];
+    
     RIKLOG(@"DefaultButtonAnimationController: Successfully initialized with cell %p", cell);
   }
   return self;
 }
+
+- (void) dealloc
+{
+  RIKLOG(@"DefaultButtonAnimationController: dealloc called for cell %p", buttoncell);
+  
+  // Stop animation and remove all notifications
+  [animation stopAnimation];
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  
+  [animation release];
+  [super dealloc];
+}
+
 - (void) startPulse
 {
   RIKLOG(@"DefaultButtonAnimationController: startPulse called for cell %p", buttoncell);
@@ -97,15 +133,66 @@
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
+      RIKLOG(@"DefaultButtonAnimationController: Window resigned key, stopping animation");
       [animation stopAnimation];
 }
 
 // TS: added this method
 - (void)windowDidBecomeKey:(NSNotification *)notification
 {
+      RIKLOG(@"DefaultButtonAnimationController: Window became key, starting animation");
       [animation startAnimation];
 }
 
+// Additional notification handlers for proper visibility management
+- (void)windowWillClose:(NSNotification *)notification
+{
+    NSWindow *closingWindow = [notification object];
+    NSWindow *buttonWindow = [[buttoncell controlView] window];
+    
+    if (closingWindow == buttonWindow) {
+        RIKLOG(@"DefaultButtonAnimationController: Button's window is closing, stopping animation");
+        [animation stopAnimation];
+    }
+}
+
+- (void)windowDidMiniaturize:(NSNotification *)notification
+{
+    NSWindow *miniaturizedWindow = [notification object];
+    NSWindow *buttonWindow = [[buttoncell controlView] window];
+    
+    if (miniaturizedWindow == buttonWindow) {
+        RIKLOG(@"DefaultButtonAnimationController: Button's window was miniaturized, stopping animation");
+        [animation stopAnimation];
+    }
+}
+
+- (void)windowDidDeminiaturize:(NSNotification *)notification
+{
+    NSWindow *deminiaturizedWindow = [notification object];
+    NSWindow *buttonWindow = [[buttoncell controlView] window];
+    
+    if (deminiaturizedWindow == buttonWindow && [buttonWindow isKeyWindow]) {
+        RIKLOG(@"DefaultButtonAnimationController: Button's window was deminiaturized and is key, starting animation");
+        [animation startAnimation];
+    }
+}
+
+- (void)applicationDidHide:(NSNotification *)notification
+{
+    RIKLOG(@"DefaultButtonAnimationController: Application was hidden, stopping animation");
+    [animation stopAnimation];
+}
+
+- (void)applicationDidUnhide:(NSNotification *)notification
+{
+    NSWindow *buttonWindow = [[buttoncell controlView] window];
+    
+    if (buttonWindow && [buttonWindow isKeyWindow] && ![buttonWindow isMiniaturized]) {
+        RIKLOG(@"DefaultButtonAnimationController: Application was unhidden and button window is key and visible, starting animation");
+        [animation startAnimation];
+    }
+}
 @end
 
 // TS: forward dec
