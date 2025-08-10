@@ -287,6 +287,13 @@
     if ([keyPath isEqualToString:@"enabled"]) {
         RIKLOG(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
         
+        // Immediately reset pulse progress if button becomes disabled
+        if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
+            RIKLOG(@"DefaultButtonAnimationController: Button disabled - immediately resetting pulse progress");
+            buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
+            [[buttoncell controlView] setNeedsDisplay: YES];
+        }
+        
         if ([self shouldAnimationBeRunning]) {
             if (![animation isAnimating]) {
                 RIKLOG(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
@@ -296,13 +303,6 @@
             if ([animation isAnimating]) {
                 RIKLOG(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
                 [animation stopAnimation];
-                
-                // Reset pulse progress to 0 for disabled buttons (removes blue color)
-                if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
-                    buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
-                    [[buttoncell controlView] setNeedsDisplay: YES];
-                    RIKLOG(@"DefaultButtonAnimationController: Reset pulse progress for disabled button");
-                }
             }
         }
     }
