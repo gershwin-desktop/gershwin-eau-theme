@@ -1,0 +1,22 @@
+- We are building for GNUstep on FreeBSD, not Darwin.
+- Use commands from `$PATH`, not hardcoded paths.
+- Use `gmake`, not `make`.
+- Avoid bashisms; use POSIX sh.
+- Build the application until it works, even with multiple attempts.
+- Fix all compiler warnings, regardless of severity.
+- Use `sudo -A` for commands requiring root privileges.
+- Compile with `clang19`, never `gcc`.
+- Use extensive logging for debugging with NSLog. Put detailed logging in all methods
+- If you build a preference pane, test with `/System/Applications/SystemPreferences.app/SystemPreferences`.
+- Refer to FreeBSD documentation and the porters handbook for building ports.
+- Before running any shell commands, check which shell is being used.
+- Remember that in one Terminal, you can only run one command at a time unless you use `&` to run it in the background.
+- Always run commands with `timeout` to prevent hanging.
+- If you run the same command multiple times, write an action to run it instead of repeating the command.
+- We don't have `strace`, so use `truss` for tracing system calls.
+- Dispatch functions are not available in GNUstep.
+- Do NOT use Auto Layout, as it is not supported in GNUstep. Use explicit frame layouts instead.
+- Put code logically in multiple files, not in one large file. Make (simple) classes for reusability, for things we might need elsewhere again.
+- Use Model-View-Controller (MVC) architecture where appropriate.
+- Always use a `GNUmakefile` to compile anything involving Foundation or GNUstep.
+- Never "create a simple test to verify" anything. Verify using /System/Applications/LoginWindow.app or other system applications.

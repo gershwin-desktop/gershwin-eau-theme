@@ -7,6 +7,7 @@
  * 2. Automatically set buttons with these images as default buttons
  * 3. Enable pulsing animation for default buttons
  * 4. Make default buttons appear selected with highlighted border
+ * 5. Ensure crash-safe operation even when windows/buttons cannot be found
  * While 2, 3, and 4 could be done by the application,
  * most applications will not do this, so we handle it here. 
  */
@@ -21,7 +22,7 @@
 - (NSImage *) RIKalternateImage;
 - (BOOL) isProcessingReturnButton;
 - (void) setIsProcessingReturnButton:(BOOL)processing;
-- (void) makeButtonSelectedAndHighlighted;
+- (void) safelyMakeButtonSelectedAndHighlighted;
 @end
 
 @implementation Rik(NSButtonCell)
@@ -177,71 +178,182 @@ static NSMutableSet *defaultButtonSetCells = nil;
   }
 }
 
-// Enable pulsing animation for default buttons
+// Enable pulsing animation for default buttons and make them selected
 - (void) enablePulsing
 {
-  RIKLOG(@"NSButtonCell+Rik: Enabling pulsing for button cell %p", self);
-  [self setIsDefaultButton:@YES];
-  [self setPulseProgress:@0];
-  [self makeButtonSelectedAndHighlighted];
-  [self trySetAsDefaultButtonWithStrategy];
+  RIKLOG(@"NSButtonCell+Rik: enablePulsing called for button cell %p", self);
+  
+  @try {
+    // Prevent multiple enablePulsing calls for the same cell
+    @synchronized(defaultButtonSetCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      if ([defaultButtonSetCells containsObject:cellPtr]) {
+        RIKLOG(@"NSButtonCell+Rik: Button cell %p already enabled for pulsing, skipping", self);
+        return;
+      }
+    }
+    
+    RIKLOG(@"NSButtonCell+Rik: Setting button cell %p as default button", self);
+    [self setIsDefaultButton:@YES];
+    
+    RIKLOG(@"NSButtonCell+Rik: Making button cell %p selected and highlighted", self);
+    [self safelyMakeButtonSelectedAndHighlighted];
+    
+    RIKLOG(@"NSButtonCell+Rik: Starting strategy to set default button for cell %p", self);
+    [self trySetAsDefaultButtonWithStrategy];
+    
+    RIKLOG(@"NSButtonCell+Rik: enablePulsing completed successfully for button cell %p", self);
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in enablePulsing for button cell %p: %@", self, exception);
+  }
 }
 
 // Try multiple strategies to find the window and set default button
 - (void) trySetAsDefaultButtonWithStrategy
 {
-  // Prevent multiple attempts for the same cell
-  @synchronized(defaultButtonSetCells) {
-    NSValue *cellPtr = [NSValue valueWithPointer:self];
-    if ([defaultButtonSetCells containsObject:cellPtr]) {
+  RIKLOG(@"NSButtonCell+Rik: trySetAsDefaultButtonWithStrategy called for button cell %p", self);
+  
+  @try {
+    // Prevent multiple attempts for the same cell
+    @synchronized(defaultButtonSetCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      if ([defaultButtonSetCells containsObject:cellPtr]) {
+        RIKLOG(@"NSButtonCell+Rik: Button cell %p already processed, skipping", self);
+        return;
+      }
+    }
+    
+    // Try immediate window access
+    RIKLOG(@"NSButtonCell+Rik: Trying direct window access for button cell %p", self);
+    if ([self tryDirectWindowAccess]) {
+      RIKLOG(@"NSButtonCell+Rik: Direct window access succeeded for button cell %p", self);
       return;
     }
+    
+    // Search all windows for this button cell
+    RIKLOG(@"NSButtonCell+Rik: Trying to search all windows for button cell %p", self);
+    if ([self trySearchAllWindows]) {
+      RIKLOG(@"NSButtonCell+Rik: Window search succeeded for button cell %p", self);
+      return;
+    }
+    
+    // Only schedule ONE delayed attempt to prevent loops
+    RIKLOG(@"NSButtonCell+Rik: Scheduling single delayed attempt for button cell %p", self);
+    @try {
+      [self performSelector:@selector(finalAttemptSetAsDefaultButton) withObject:nil afterDelay:1.0];
+    }
+    @catch (NSException *performException) {
+      RIKLOG(@"NSButtonCell+Rik: ERROR scheduling delayed attempt for cell %p: %@", self, performException);
+    }
   }
-  
-  // Try immediate window access
-  if ([self tryDirectWindowAccess]) {
-    return;
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in trySetAsDefaultButtonWithStrategy for cell %p: %@", self, exception);
   }
+}
+
+// Final attempt to set as default button (only called once)
+- (void) finalAttemptSetAsDefaultButton
+{
+  RIKLOG(@"NSButtonCell+Rik: finalAttemptSetAsDefaultButton called for button cell %p", self);
   
-  // Search all windows for this button cell
-  if ([self trySearchAllWindows]) {
-    return;
+  @try {
+    // Check if already processed
+    @synchronized(defaultButtonSetCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      if ([defaultButtonSetCells containsObject:cellPtr]) {
+        RIKLOG(@"NSButtonCell+Rik: Button cell %p already processed in final attempt", self);
+        return;
+      }
+    }
+    
+    // Try one more time with direct access
+    if ([self tryDirectWindowAccess]) {
+      RIKLOG(@"NSButtonCell+Rik: Final direct window access succeeded for button cell %p", self);
+      return;
+    }
+    
+    // Try one more time with window search
+    if ([self trySearchAllWindows]) {
+      RIKLOG(@"NSButtonCell+Rik: Final window search succeeded for button cell %p", self);
+      return;
+    }
+    
+    RIKLOG(@"NSButtonCell+Rik: Final attempt failed for button cell %p - giving up", self);
   }
-  
-  // Schedule delayed attempts
-  [self performSelector:@selector(trySetAsDefaultButtonWithStrategy) withObject:nil afterDelay:0.1];
-  [self performSelector:@selector(trySetAsDefaultButtonWithStrategy) withObject:nil afterDelay:0.5];
-  [self performSelector:@selector(trySetAsDefaultButtonWithStrategy) withObject:nil afterDelay:1.0];
-  [self performSelector:@selector(trySetAsDefaultButtonWithStrategy) withObject:nil afterDelay:2.0];
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in finalAttemptSetAsDefaultButton for cell %p: %@", self, exception);
+  }
 }
 
 // Strategy 1: Try direct window access through controlView
 - (BOOL) tryDirectWindowAccess
 {
-  NSView *controlView = [self controlView];
-  NSWindow *window = nil;
+  RIKLOG(@"NSButtonCell+Rik: tryDirectWindowAccess called for button cell %p", self);
   
-  if (controlView) {
-    window = [controlView window];
+  @try {
+    NSView *controlView = nil;
+    if ([self respondsToSelector:@selector(controlView)]) {
+      controlView = [self controlView];
+      RIKLOG(@"NSButtonCell+Rik: Found control view %p for button cell %p", controlView, self);
+    }
     
-    if (!window) {
-      // Try to find window by traversing the view hierarchy
-      NSView *currentView = controlView;
-      while (currentView && !window) {
-        currentView = [currentView superview];
-        if (currentView) {
-          window = [currentView window];
+    NSWindow *window = nil;
+    
+    if (controlView) {
+      @try {
+        window = [controlView window];
+        RIKLOG(@"NSButtonCell+Rik: Found window %p for control view %p", window, controlView);
+      }
+      @catch (NSException *windowException) {
+        RIKLOG(@"NSButtonCell+Rik: ERROR getting window from control view %p: %@", controlView, windowException);
+      }
+      
+      if (!window) {
+        // Try to find window by traversing the view hierarchy
+        RIKLOG(@"NSButtonCell+Rik: Traversing view hierarchy to find window for control view %p", controlView);
+        NSView *currentView = controlView;
+        while (currentView && !window) {
+          @try {
+            currentView = [currentView superview];
+            if (currentView) {
+              window = [currentView window];
+              if (window) {
+                RIKLOG(@"NSButtonCell+Rik: Found window %p through view hierarchy traversal", window);
+              }
+            }
+          }
+          @catch (NSException *hierarchyException) {
+            RIKLOG(@"NSButtonCell+Rik: ERROR traversing view hierarchy: %@", hierarchyException);
+            break;
+          }
         }
       }
+      
+      if (window) {
+        @try {
+          [self markAsDefaultButtonSet];
+          RIKLOG(@"NSButtonCell+Rik: Setting window %p default button cell to %p", window, self);
+          [window setDefaultButtonCell:self];
+          
+          // Also make the button visually selected/highlighted
+          [self safelyMakeButtonSelectedAndHighlighted];
+          
+          RIKLOG(@"NSButtonCell+Rik: Successfully set default button cell for window %p", window);
+          return YES;
+        }
+        @catch (NSException *setDefaultException) {
+          RIKLOG(@"NSButtonCell+Rik: ERROR setting default button cell for window %p: %@", window, setDefaultException);
+        }
+      } else {
+        RIKLOG(@"NSButtonCell+Rik: No window found for control view %p", controlView);
+      }
+    } else {
+      RIKLOG(@"NSButtonCell+Rik: No control view found for button cell %p", self);
     }
-    
-    if (window) {
-      RIKLOG(@"NSButtonCell+Rik: Found window %p, setting default button cell", window);
-      [self markAsDefaultButtonSet];
-      [window setDefaultButtonCell:self];
-      [self makeButtonSelectedAndHighlighted];
-      return YES;
-    }
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in tryDirectWindowAccess for cell %p: %@", self, exception);
   }
   
   return NO;
@@ -250,16 +362,43 @@ static NSMutableSet *defaultButtonSetCells = nil;
 // Strategy 2: Search all windows for this button cell
 - (BOOL) trySearchAllWindows
 {
-  NSArray *windows = [NSApp windows];
+  RIKLOG(@"NSButtonCell+Rik: trySearchAllWindows called for button cell %p", self);
   
-  for (NSWindow *candidateWindow in windows) {
-    if ([self findButtonWithCellInWindow:candidateWindow]) {
-      RIKLOG(@"NSButtonCell+Rik: Found button in window %p, setting default button cell", candidateWindow);
-      [self markAsDefaultButtonSet];
-      [candidateWindow setDefaultButtonCell:self];
-      [self makeButtonSelectedAndHighlighted];
-      return YES;
+  @try {
+    NSArray *windows = nil;
+    if ([NSApp respondsToSelector:@selector(windows)]) {
+      windows = [NSApp windows];
+      RIKLOG(@"NSButtonCell+Rik: Found %lu windows to search", (unsigned long)[windows count]);
+    } else {
+      RIKLOG(@"NSButtonCell+Rik: NSApp does not respond to windows selector");
+      return NO;
     }
+    
+    for (NSWindow *candidateWindow in windows) {
+      @try {
+        RIKLOG(@"NSButtonCell+Rik: Searching window %p for button cell %p", candidateWindow, self);
+        if ([self findButtonWithCellInWindow:candidateWindow]) {
+          RIKLOG(@"NSButtonCell+Rik: Found button cell %p in window %p", self, candidateWindow);
+          [self markAsDefaultButtonSet];
+          [candidateWindow setDefaultButtonCell:self];
+          
+          // Also make the button visually selected/highlighted
+          [self safelyMakeButtonSelectedAndHighlighted];
+          
+          RIKLOG(@"NSButtonCell+Rik: Successfully set default button cell for window %p", candidateWindow);
+          return YES;
+        }
+      }
+      @catch (NSException *windowSearchException) {
+        RIKLOG(@"NSButtonCell+Rik: ERROR searching window %p: %@", candidateWindow, windowSearchException);
+        continue;
+      }
+    }
+    
+    RIKLOG(@"NSButtonCell+Rik: Button cell %p not found in any of %lu windows", self, (unsigned long)[windows count]);
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in trySearchAllWindows for cell %p: %@", self, exception);
   }
   
   return NO;
@@ -268,67 +407,181 @@ static NSMutableSet *defaultButtonSetCells = nil;
 // Helper to mark this cell as having its default button set
 - (void) markAsDefaultButtonSet
 {
-  @synchronized(defaultButtonSetCells) {
-    NSValue *cellPtr = [NSValue valueWithPointer:self];
-    [defaultButtonSetCells addObject:cellPtr];
+  @try {
+    @synchronized(defaultButtonSetCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      [defaultButtonSetCells addObject:cellPtr];
+      RIKLOG(@"NSButtonCell+Rik: Marked button cell %p as default button set", self);
+    }
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR marking button cell %p as default: %@", self, exception);
   }
 }
 
 // Recursively search for a button that has this cell
 - (BOOL) findButtonWithCellInWindow:(NSWindow *)window
 {
-  return [self findButtonWithCellInView:[window contentView]];
+  @try {
+    NSView *contentView = [window contentView];
+    if (contentView) {
+      return [self findButtonWithCellInView:contentView];
+    }
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR finding button in window %p: %@", window, exception);
+  }
+  return NO;
 }
 
 - (BOOL) findButtonWithCellInView:(NSView *)view
 {
-  if ([view isKindOfClass:[NSButton class]]) {
-    NSButton *button = (NSButton*)view;
-    if ([button cell] == self) {
-      return YES;
+  @try {
+    if ([view isKindOfClass:[NSButton class]]) {
+      NSButton *button = (NSButton*)view;
+      if ([button cell] == self) {
+        RIKLOG(@"NSButtonCell+Rik: Found matching button %p for cell %p", button, self);
+        return YES;
+      }
+    }
+    
+    // Recursively search subviews
+    NSArray *subviews = [view subviews];
+    if (subviews) {
+      for (NSView *subview in subviews) {
+        if ([self findButtonWithCellInView:subview]) {
+          return YES;
+        }
+      }
     }
   }
-  
-  // Recursively search subviews
-  for (NSView *subview in [view subviews]) {
-    if ([self findButtonWithCellInView:subview]) {
-      return YES;
-    }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR searching view %p: %@", view, exception);
   }
   
   return NO;
 }
 
-// Make the button appear selected and highlighted with thicker border
-- (void) makeButtonSelectedAndHighlighted
+// Safely make the button selected and highlighted with extensive error handling
+- (void) safelyMakeButtonSelectedAndHighlighted
 {
-  RIKLOG(@"NSButtonCell+Rik: Making button cell %p selected and highlighted", self);
+  RIKLOG(@"NSButtonCell+Rik: safelyMakeButtonSelectedAndHighlighted called for button cell %p", self);
   
-  // Set the cell as highlighted to get the thicker border
-  [self setHighlighted:YES];
-  
-  // Mark the button as selected/pressed state for visual feedback
-  [self setState:NSOnState];
-  
-  // Ensure the cell shows as focused to get the focus ring
-  [self setShowsFirstResponder:YES];
-  
-  // Force the control view to update its display
-  NSView *controlView = [self controlView];
-  if (controlView) {
-    RIKLOG(@"NSButtonCell+Rik: Refreshing control view %p display", controlView);
-    [controlView setNeedsDisplay:YES];
-    
-    // Try to make the button the first responder if it's a button
-    if ([controlView isKindOfClass:[NSButton class]]) {
-      NSButton *button = (NSButton*)controlView;
-      NSWindow *window = [button window];
-      if (window) {
-        RIKLOG(@"NSButtonCell+Rik: Making button %p first responder in window %p", button, window);
-        [window makeFirstResponder:button];
+  @try {
+    // First, try to set cell-level properties to make it appear selected
+    @try {
+      if ([self respondsToSelector:@selector(setState:)]) {
+        RIKLOG(@"NSButtonCell+Rik: Setting cell %p state to NSOnState", self);
+        [self setState:NSOnState];
       }
+      
+      if ([self respondsToSelector:@selector(setHighlighted:)]) {
+        RIKLOG(@"NSButtonCell+Rik: Setting cell %p as highlighted", self);
+        [self setHighlighted:YES];
+      }
+      
+      if ([self respondsToSelector:@selector(setShowsFirstResponder:)]) {
+        RIKLOG(@"NSButtonCell+Rik: Setting cell %p to show first responder", self);
+        [self setShowsFirstResponder:YES];
+      }
+      
+    RIKLOG(@"NSButtonCell+Rik: Successfully set cell %p properties", self);
+  }
+  @catch (NSException *cellException) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR setting cell %p properties: %@", self, cellException);
+  }
+    
+    // Try to get the control view safely
+    NSView *controlView = nil;
+    if ([self respondsToSelector:@selector(controlView)]) {
+      controlView = [self controlView];
+      RIKLOG(@"NSButtonCell+Rik: Found control view %p for button cell %p", controlView, self);
+    } else {
+      RIKLOG(@"NSButtonCell+Rik: Button cell %p does not respond to controlView selector", self);
+    }
+    
+    if (controlView && [controlView isKindOfClass:[NSButton class]]) {
+      NSButton *button = (NSButton *)controlView;
+      RIKLOG(@"NSButtonCell+Rik: Control view is NSButton %p for cell %p", button, self);
+      
+      // Make the button highlighted/selected with crash protection
+      @try {
+        RIKLOG(@"NSButtonCell+Rik: Setting button %p state to NSOnState", button);
+        [button setState:NSOnState];
+        
+        // NSButton doesn't have setHighlighted:, use setKeyEquivalent and other properties instead
+        RIKLOG(@"NSButtonCell+Rik: Setting button %p properties for visual highlighting", button);
+        
+        // Try to set as key equivalent if possible
+        if ([button respondsToSelector:@selector(setKeyEquivalent:)]) {
+          RIKLOG(@"NSButtonCell+Rik: Setting button %p key equivalent to return", button);
+          [button setKeyEquivalent:@"\r"];
+        }
+        
+        // Force the button cell to be highlighted
+        NSButtonCell *buttonCell = [button cell];
+        if (buttonCell && [buttonCell respondsToSelector:@selector(setHighlighted:)]) {
+          RIKLOG(@"NSButtonCell+Rik: Setting button cell %p as highlighted via button", buttonCell);
+          [buttonCell setHighlighted:YES];
+        }
+        
+        // Force the button to redraw to show changes
+        RIKLOG(@"NSButtonCell+Rik: Marking button %p as needing display", button);
+        [button setNeedsDisplay:YES];
+        
+        // Try to make it the window's first responder for focus ring
+        NSWindow *window = [button window];
+        if (window && [window respondsToSelector:@selector(makeFirstResponder:)]) {
+          @try {
+            RIKLOG(@"NSButtonCell+Rik: Making button %p first responder in window %p", button, window);
+            [window makeFirstResponder:button];
+          }
+          @catch (NSException *responderException) {
+            RIKLOG(@"NSButtonCell+Rik: ERROR making button %p first responder: %@", button, responderException);
+          }
+        }
+        
+        RIKLOG(@"NSButtonCell+Rik: Successfully made button %p selected and highlighted", button);
+      }
+      @catch (NSException *buttonException) {
+        RIKLOG(@"NSButtonCell+Rik: ERROR setting button %p properties: %@", button, buttonException);
+      }
+    } else {
+      RIKLOG(@"NSButtonCell+Rik: Control view %p is not an NSButton or is nil for cell %p", controlView, self);
     }
   }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in safelyMakeButtonSelectedAndHighlighted for cell %p: %@", self, exception);
+  }
+}
+
+// Clean up when the cell is deallocated
+- (void) dealloc
+{
+  RIKLOG(@"NSButtonCell+Rik: dealloc called for button cell %p", self);
+  
+  @try {
+    // Cancel any pending operations
+    [NSObject cancelPreviousPerformRequestsWithTarget:self];
+    
+    // Remove from tracking sets
+    @synchronized(processingCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      [processingCells removeObject:cellPtr];
+    }
+    
+    @synchronized(defaultButtonSetCells) {
+      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      [defaultButtonSetCells removeObject:cellPtr];
+    }
+    
+    RIKLOG(@"NSButtonCell+Rik: Cleanup completed for button cell %p", self);
+  }
+  @catch (NSException *exception) {
+    RIKLOG(@"NSButtonCell+Rik: ERROR in dealloc for cell %p: %@", self, exception);
+  }
+  
+  [super dealloc];
 }
 
 @end
