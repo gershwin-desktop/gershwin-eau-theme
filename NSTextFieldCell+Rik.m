@@ -87,17 +87,18 @@
 {
   RIKLOG(@"RIKdrawWithFrame: in_editing=%d", _cell.in_editing);
   
+  /* Always draw the border/bezel, regardless of editing state */
+  [super drawWithFrame:cellFrame inView:controlView];
+  
   if (_cell.in_editing)
     {
-      RIKLOG(@"RIKdrawWithFrame: In editing mode - skipping all background drawing for transparency");
-      /* When editing, don't draw anything - this prevents the white background */
-      return;
+      RIKLOG(@"RIKdrawWithFrame: In editing mode - border drawn, interior will be handled transparently");
+      /* Border is drawn by super, but interior will be handled by drawInteriorWithFrame
+       * which will skip drawing to create transparency */
     }
   else
     {
-      RIKLOG(@"RIKdrawWithFrame: Drawing in normal mode - calling super");
-      /* Call the original implementation for normal drawing */
-      [super drawWithFrame:cellFrame inView:controlView];
+      RIKLOG(@"RIKdrawWithFrame: Drawing in normal mode - standard behavior");
     }
 }
 
