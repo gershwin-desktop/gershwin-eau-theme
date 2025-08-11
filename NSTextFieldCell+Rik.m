@@ -25,6 +25,8 @@
                 editor: (NSText*)textObject
               delegate: (id)anObject
                  event: (NSEvent*)theEvent;
+- (void) _RIKdrawEditorWithFrame: (NSRect)cellFrame
+                         inView: (NSView*)controlView;
 @end
 
 @implementation Rik(NSTextFieldCell)
@@ -32,6 +34,13 @@
   RIKLOG(@"_overrideNSTextFieldCellMethod_drawInteriorWithFrame:inView:");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself RIKdrawInteriorWithFrame:cellFrame inView:controlView];
+}
+
+- (void) _overrideNSTextFieldCellMethod__drawEditorWithFrame: (NSRect)cellFrame
+                                                     inView: (NSView*)controlView {
+  RIKLOG(@"_overrideNSTextFieldCellMethod__drawEditorWithFrame:inView:");
+  NSTextFieldCell *xself = (NSTextFieldCell*)self;
+  [xself _RIKdrawEditorWithFrame:cellFrame inView:controlView];
 }
 
 - (void) _overrrideNSTextFieldCellMethod_selectWithFrame: (NSRect)aRect
@@ -160,6 +169,44 @@ titleRect.size.height += 2;
 
 
 
+}
+
+- (void) _RIKdrawEditorWithFrame: (NSRect)cellFrame
+                         inView: (NSView*)controlView
+{
+  RIKLOG(@"_RIKdrawEditorWithFrame:inView: - Setting transparent background for text editing");
+  
+  if ([controlView isKindOfClass: [NSControl class]])
+    {
+      /* Adjust the text editor's frame to match cell's frame (w/o border) */
+      NSRect titleRect = [self titleRectForBounds: cellFrame];
+      NSText *textObject = [(NSControl*)controlView currentEditor];
+      NSView *clipView = [textObject superview];
+
+      RIKLOG(@"_RIKdrawEditorWithFrame: textObject=%@, clipView=%@", textObject, clipView);
+      
+      /* Set transparent background for the text editor */
+      if (textObject != nil)
+        {
+          RIKLOG(@"_RIKdrawEditorWithFrame: Setting text editor background to transparent");
+          [textObject setBackgroundColor: [NSColor clearColor]];
+          [textObject setDrawsBackground: YES];
+        }
+      
+      /* Set transparent background for the clip view if it exists */
+      if ([clipView isKindOfClass: [NSClipView class]])
+	{
+          RIKLOG(@"_RIKdrawEditorWithFrame: Setting clip view background to transparent and adjusting frame");
+	  [clipView setFrame: titleRect];
+          [(NSClipView*)clipView setBackgroundColor: [NSColor clearColor]];
+          [(NSClipView*)clipView setDrawsBackground: YES];
+	}
+      else if (textObject != nil)
+	{
+          RIKLOG(@"_RIKdrawEditorWithFrame: Setting text object frame directly");
+	  [textObject setFrame: titleRect];
+	}
+    }
 }
 
 @end
