@@ -3,10 +3,10 @@
 #import <GNUstepGUI/GSTheme.h>
 
 // To enable debugging messages in the _overrideClassMethod_foo mechanism
-#if 0
-#define RIKLOG(args...) NSLog(args)
+#if 1
+#define RIKLOG(args...) NSDebugLog(args)
 #else
-#define RIKLOG(args...) 
+#define RIKLOG(args...)
 #endif
 
 @interface Rik: GSTheme
