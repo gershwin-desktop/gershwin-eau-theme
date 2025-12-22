@@ -9,4 +9,5 @@
 @interface NSButtonCell(RikTheme)
 - (NSImage *) RIKimage;
 - (NSImage *) RIKalternateImage;
+- (void) safelyMakeButtonSelectedAndHighlighted;
 @end

@@ -15,7 +15,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
 
 - (float) resizebarHeight {
-    return RESIZE_HEIGHT;
+    return 0.0;  // No resize bar
 }
 
 - (float) titlebarHeight {
@@ -25,46 +25,15 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 - (void) drawWindowBackground: (NSRect) frame view: (NSView*) view
 {
 
-  NSWindow * w = [view window];
-
   NSColor* backgroundColor = [[view window] backgroundColor];
-  NSColor *borderColor = [Rik controlStrokeColor];
 
-  //i want to draw over the resize bar
-  frame.origin.x -= 1;
-  frame.size.width += 1;
   NSBezierPath* backgroundPath = [NSBezierPath bezierPath];
-  NSRect backgroundRect;
-  if([w styleMask] & NSResizableWindowMask)
-    {
-      frame.size.height += RESIZE_HEIGHT;
-      frame.origin.y -= RESIZE_HEIGHT;
-      backgroundRect = NSOffsetRect(frame, 0.5, 0.5);
-      NSRect backgroundInnerRect = NSInsetRect( backgroundRect,
-                                                WINDOW_CORNER_RADIUS,
-                                                WINDOW_CORNER_RADIUS);
-      [backgroundPath setLineWidth: 1];
-
-      [backgroundPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMinX(backgroundInnerRect), NSMinY(backgroundInnerRect))
-                                                radius: WINDOW_CORNER_RADIUS startAngle: 180 endAngle: 270];
-      [backgroundPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMaxX(backgroundInnerRect), NSMinY(backgroundInnerRect))
-                                                radius: WINDOW_CORNER_RADIUS startAngle: 270 endAngle: 360];
-      [backgroundPath lineToPoint: NSMakePoint(NSMaxX(backgroundRect), NSMaxY(backgroundRect))];
-      [backgroundPath lineToPoint: NSMakePoint(NSMinX(backgroundRect), NSMaxY(backgroundRect))];
-      [backgroundPath closePath];
-
-    }
-  else
-    {
-      backgroundRect = NSOffsetRect(frame, 0.5, 0.5);
-      [backgroundPath appendBezierPathWithRect: backgroundRect];
-    }
+  NSRect backgroundRect = frame;
+  [backgroundPath appendBezierPathWithRect: backgroundRect];
 
   [backgroundColor setFill];
-  [borderColor setStroke];
 
   [backgroundPath fill];
-  [backgroundPath stroke];
 }
 
 - (void) drawWindowBorder: (NSRect)rect

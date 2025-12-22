@@ -36,6 +36,7 @@ Rik_OBJC_FILES = \
 		NSCell+Rik.m\
 		NSButtonCell+Rik.m\
 		NSTextFieldCell+Rik.m\
+		NSMenuItemCell+Rik.m\
 		NSBox+Rik.m\
 		NSPopUpButton+Rik.m
 ADDITIONAL_TOOL_LIBS =

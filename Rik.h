@@ -3,7 +3,7 @@
 #import <GNUstepGUI/GSTheme.h>
 
 // To enable debugging messages in the _overrideClassMethod_foo mechanism
-#if 0
+#if 1
 #define RIKLOG(args...) NSLog(args)
 #else
 #define RIKLOG(args...) 
@@ -17,6 +17,7 @@
 - (void) drawPathButton: (NSBezierPath*) path
                      in: (NSCell*)cell
 			            state: (GSThemeControlState) state;
+- (BOOL) _isDBusAvailable;
 @end
 
 
