@@ -85,12 +85,12 @@
 
 - (void) RIKdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
-  RIKLOG(@"RIKdrawWithFrame: isEditing=%d", [self isEditing]);
+  RIKLOG(@"RIKdrawWithFrame: in_editing=%d", _cell.in_editing);
   
   /* Always draw the border/bezel, regardless of editing state */
   [super drawWithFrame:cellFrame inView:controlView];
   
-  if ([self isEditing])
+  if (_cell.in_editing)
     {
       RIKLOG(@"RIKdrawWithFrame: In editing mode - border drawn, interior will be handled transparently");
       /* Border is drawn by super, but interior will be handled by drawInteriorWithFrame
@@ -237,5 +237,3 @@ titleRect.size.height += 2;
 }
 
 @end
-
-
