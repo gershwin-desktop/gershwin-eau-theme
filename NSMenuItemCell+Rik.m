@@ -19,10 +19,8 @@
   // After swizzling, this will call the original implementation
   NSRect originalRect = [self RIK_originalTitleRectForBounds:cellFrame];
   
-  NSMenuView *menuView = [self menuView];
-  
-  if (menuView) {
-    if ([menuView isHorizontal]) {
+  if ([self menuView]) {
+    if ([[self menuView] isHorizontal]) {
       // Horizontal menu bar items - shift by half padding to center
       originalRect.origin.x += (RIK_MENU_ITEM_PADDING / 2.0);
     } else {

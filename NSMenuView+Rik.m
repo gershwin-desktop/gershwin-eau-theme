@@ -10,19 +10,17 @@
 
 // This method will hold the original implementation after swizzling
 - (NSPoint)RIK_originalLocationForSubmenu:(NSMenu *)aSubmenu {
-  NSMenuView *menuView = self;
-  
   // After swizzling, this calls the original implementation
   NSPoint originalPoint = [self RIK_originalLocationForSubmenu:aSubmenu];
   
   // If this menu view itself is horizontal (the menu bar), use original positioning entirely
-  if ([menuView isHorizontal]) {
+  if ([self isHorizontal]) {
     return originalPoint;
   }
   
   // For vertical dropdown menus, adjust only the X position to remove overlap
   // Keep the original Y position which correctly aligns with the parent item
-  NSWindow *window = [menuView window];
+  NSWindow *window = [self window];
   if (!window) {
     return originalPoint;
   }
