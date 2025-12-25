@@ -9,6 +9,9 @@
 #define RIKLOG(args...)
 #endif
 
+// Menu item horizontal padding (total padding, split equally left and right)
+#define RIK_MENU_ITEM_PADDING 10.0
+
 @interface Rik: GSTheme
 {
     id menuRegistry;

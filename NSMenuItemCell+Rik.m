@@ -4,16 +4,98 @@
 #import "NSMenuItemCell+Rik.h"
 #import <objc/runtime.h>
 
+// Store original method implementations
+static IMP originalTitleWidthIMP = NULL;
+static IMP originalTitleRectForBoundsIMP = NULL;
+
+// Our replacement titleWidth method - adds padding
+static CGFloat swizzled_titleWidth(id self, SEL _cmd) {
+  // Call original implementation
+  CGFloat originalWidth = ((CGFloat (*)(id, SEL))originalTitleWidthIMP)(self, _cmd);
+  
+  // Add padding from Rik.h constant
+  CGFloat paddedWidth = originalWidth + RIK_MENU_ITEM_PADDING;
+  
+  return paddedWidth;
+}
+
+// Our replacement titleRectForBounds: method - shifts title right by half the padding
+static NSRect swizzled_titleRectForBounds(id self, SEL _cmd, NSRect cellFrame) {
+  // Call original implementation
+  NSRect originalRect = ((NSRect (*)(id, SEL, NSRect))originalTitleRectForBoundsIMP)(self, _cmd, cellFrame);
+  
+  // Shift the title rect right by half the padding to center text
+  originalRect.origin.x += (RIK_MENU_ITEM_PADDING / 2.0);
+  
+  NSLog(@"NSMenuItemCell+Rik: swizzled_titleRectForBounds - shifted x by %.0f, new x: %.1f", 
+         (RIK_MENU_ITEM_PADDING / 2.0), originalRect.origin.x);
+  
+  return originalRect;
+}
+
+// This function runs when the bundle is loaded
+__attribute__((constructor))
+static void initMenuItemCellSwizzling(void) {
+  NSLog(@"NSMenuItemCell+Rik: Constructor called - setting up swizzling");
+  
+  Class menuItemCellClass = objc_getClass("NSMenuItemCell");
+  if (!menuItemCellClass) {
+    NSLog(@"NSMenuItemCell+Rik: ERROR - NSMenuItemCell class not found");
+    return;
+  }
+  
+  // Swizzle titleWidth - this is what NSMenuView uses to calculate item widths
+  SEL titleWidthSelector = sel_registerName("titleWidth");
+  Method titleWidthMethod = class_getInstanceMethod(menuItemCellClass, titleWidthSelector);
+  if (titleWidthMethod) {
+    originalTitleWidthIMP = method_getImplementation(titleWidthMethod);
+    method_setImplementation(titleWidthMethod, (IMP)swizzled_titleWidth);
+    NSLog(@"NSMenuItemCell+Rik: Successfully swizzled titleWidth method");
+  } else {
+    NSLog(@"NSMenuItemCell+Rik: ERROR - Could not find titleWidth method");
+  }
+  
+  // Swizzle titleRectForBounds: - this positions the title text
+  SEL titleRectSelector = sel_registerName("titleRectForBounds:");
+  Method titleRectMethod = class_getInstanceMethod(menuItemCellClass, titleRectSelector);
+  if (titleRectMethod) {
+    originalTitleRectForBoundsIMP = method_getImplementation(titleRectMethod);
+    method_setImplementation(titleRectMethod, (IMP)swizzled_titleRectForBounds);
+    NSLog(@"NSMenuItemCell+Rik: Successfully swizzled titleRectForBounds: method");
+  } else {
+    NSLog(@"NSMenuItemCell+Rik: ERROR - Could not find titleRectForBounds: method");
+  }
+}
+
 @implementation Rik(NSMenuItemCell)
+
 // Override drawKeyEquivalentWithFrame to intercept just the key equivalent drawing
 - (void) _overrideNSMenuItemCellMethod_drawKeyEquivalentWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
   RIKLOG(@"_overrideNSMenuItemCellMethod_drawKeyEquivalentWithFrame:inView:");
   NSMenuItemCell *xself = (NSMenuItemCell*)self;
   [xself RIKdrawKeyEquivalentWithFrame:cellFrame inView:controlView];
 }
+
+// Override drawingRectForBounds to add padding
+- (NSRect) _overrideNSMenuItemCellMethod_drawingRectForBounds: (NSRect)theRect {
+  RIKLOG(@"_overrideNSMenuItemCellMethod_drawingRectForBounds:");
+  NSMenuItemCell *xself = (NSMenuItemCell*)self;
+  return [xself RIKdrawingRectForBounds:theRect];
+}
 @end
 
 @implementation NSMenuItemCell (RikTheme)
+
+- (CGFloat) RIKpreferredWidth
+{
+  RIKLOG(@"NSMenuItemCell+Rik: RIKpreferredWidth called");
+  
+  // Fallback to cellSize
+  NSSize cellSize = [super cellSize];
+  RIKLOG(@"NSMenuItemCell+Rik: RIKpreferredWidth - cellSize width: %.1f, padded: %.1f", 
+         cellSize.width, cellSize.width + RIK_MENU_ITEM_PADDING);
+  return cellSize.width + RIK_MENU_ITEM_PADDING;
+}
 
 - (void) RIKdrawKeyEquivalentWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
@@ -119,6 +201,15 @@
   
   RIKLOG(@"NSMenuItemCell+Rik: No conversion needed for '%@'", keyEquivalent);
   return keyEquivalent;
+}
+
+- (NSRect) RIKdrawingRectForBounds: (NSRect)theRect
+{
+  RIKLOG(@"NSMenuItemCell+Rik: RIKdrawingRectForBounds - original rect: {{%.1f, %.1f}, {%.1f, %.1f}}", 
+         theRect.origin.x, theRect.origin.y, theRect.size.width, theRect.size.height);
+  
+  // No inset - just return the original rect
+  return theRect;
 }
 
 @end
