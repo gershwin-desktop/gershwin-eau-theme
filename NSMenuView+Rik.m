@@ -8,6 +8,7 @@
 
 // Store original method implementations
 static IMP originalSizeToFitIMP = NULL;
+static IMP originalRectOfItemAtIndexIMP = NULL;
 
 // Our replacement sizeToFit method - adds padding to vertical menus
 static void swizzled_sizeToFit(id self, SEL _cmd) {
@@ -22,16 +23,28 @@ static void swizzled_sizeToFit(id self, SEL _cmd) {
     
     frame.size.width += RIK_MENU_ITEM_PADDING;
     [menuView setFrameSize: frame.size];
-    
-    NSLog(@"NSMenuView+Rik: swizzled_sizeToFit - added %.0fpx padding, new width: %.1f", 
-           RIK_MENU_ITEM_PADDING, frame.size.width);
   }
+}
+
+// Our replacement rectOfItemAtIndex: method - adds padding to cell rect width
+static NSRect swizzled_rectOfItemAtIndex(id self, SEL _cmd, NSInteger index) {
+  NSMenuView *menuView = (NSMenuView *)self;
+  
+  // Call original implementation
+  NSRect originalRect = ((NSRect (*)(id, SEL, NSInteger))originalRectOfItemAtIndexIMP)(self, _cmd, index);
+  
+  // Only add padding to vertical (dropdown) menus, not horizontal menu bar
+  if (![menuView isHorizontal]) {
+    originalRect.size.width += RIK_MENU_ITEM_PADDING;
+  }
+  
+  return originalRect;
 }
 
 // This function runs when the bundle is loaded
 __attribute__((constructor))
 static void initMenuViewSwizzling(void) {
-  NSLog(@"NSMenuView+Rik: Constructor called - setting up sizeToFit swizzling");
+  NSLog(@"NSMenuView+Rik: Constructor called - setting up swizzling");
   
   Class menuViewClass = objc_getClass("NSMenuView");
   if (!menuViewClass) {
@@ -41,18 +54,24 @@ static void initMenuViewSwizzling(void) {
   
   // Swizzle sizeToFit to add padding to vertical menus
   SEL sizeToFitSelector = sel_registerName("sizeToFit");
-  
-  Method originalMethod = class_getInstanceMethod(menuViewClass, sizeToFitSelector);
-  if (originalMethod) {
-    // Save the original implementation
-    originalSizeToFitIMP = method_getImplementation(originalMethod);
-    
-    // Replace with our implementation
-    method_setImplementation(originalMethod, (IMP)swizzled_sizeToFit);
-    
-    NSLog(@"NSMenuView+Rik: Successfully swizzled sizeToFit method (original IMP: %p)", originalSizeToFitIMP);
+  Method sizeToFitMethod = class_getInstanceMethod(menuViewClass, sizeToFitSelector);
+  if (sizeToFitMethod) {
+    originalSizeToFitIMP = method_getImplementation(sizeToFitMethod);
+    method_setImplementation(sizeToFitMethod, (IMP)swizzled_sizeToFit);
+    NSLog(@"NSMenuView+Rik: Successfully swizzled sizeToFit method");
   } else {
     NSLog(@"NSMenuView+Rik: ERROR - Could not find sizeToFit method");
+  }
+  
+  // Swizzle rectOfItemAtIndex: to return padded rect
+  SEL rectOfItemSelector = sel_registerName("rectOfItemAtIndex:");
+  Method rectOfItemMethod = class_getInstanceMethod(menuViewClass, rectOfItemSelector);
+  if (rectOfItemMethod) {
+    originalRectOfItemAtIndexIMP = method_getImplementation(rectOfItemMethod);
+    method_setImplementation(rectOfItemMethod, (IMP)swizzled_rectOfItemAtIndex);
+    NSLog(@"NSMenuView+Rik: Successfully swizzled rectOfItemAtIndex: method");
+  } else {
+    NSLog(@"NSMenuView+Rik: ERROR - Could not find rectOfItemAtIndex: method");
   }
 }
 
