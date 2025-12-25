@@ -25,7 +25,8 @@
 }
 - (CGFloat) menuSubmenuHorizontalOverlap
 {
-  return 3;
+  // Set to 0 so submenu just touches the parent menu without overlapping
+  return 0;
 }
 -(CGFloat) menuSubmenuVerticalOverlap
 {

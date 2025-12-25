@@ -107,7 +107,50 @@ static void initMenuItemCellSwizzling(void) {
 - (void) RIKdrawKeyEquivalentWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
   NSMenuItem *menuItem = [self menuItem];
+  NSRect keyEquivRect = [self keyEquivalentRectForBounds: cellFrame];
   
+  // First, draw the submenu arrow if this item has a submenu
+  if ([menuItem hasSubmenu]) {
+    NSImage *arrow = nil;
+    
+    if ([self isHighlighted]) {
+      arrow = [NSImage imageNamed: @"NSHighlightedMenuArrow"];
+    }
+    if (arrow == nil) {
+      arrow = [NSImage imageNamed: @"NSMenuArrow"];
+    }
+    // Fall back to common arrow images if NSMenuArrow is not found
+    if (arrow == nil) {
+      if ([self isHighlighted]) {
+        arrow = [NSImage imageNamed: @"common_3DArrowRightH"];
+      } else {
+        arrow = [NSImage imageNamed: @"common_3DArrowRight"];
+      }
+    }
+    
+    if (arrow != nil) {
+      NSSize size = [arrow size];
+      NSPoint position;
+      
+      position.x = keyEquivRect.origin.x + keyEquivRect.size.width - size.width;
+      position.y = MAX(NSMidY(keyEquivRect) - (size.height / 2.0), 0.0);
+      
+      // Adjust for flipped view
+      if ([controlView isFlipped]) {
+        position.y += size.height;
+      }
+      
+      [arrow compositeToPoint: position operation: NSCompositeSourceOver];
+      
+      RIKLOG(@"NSMenuItemCell+Rik: Drew submenu arrow at position: {%.1f, %.1f} size: {%.1f, %.1f}",
+             position.x, position.y, size.width, size.height);
+    } else {
+      RIKLOG(@"NSMenuItemCell+Rik: WARNING - No arrow image found for submenu item '%@'", [menuItem title]);
+    }
+    return; // Submenu items don't have key equivalents, so we're done
+  }
+  
+  // For non-submenu items, handle key equivalents
   if (menuItem != nil) {
     NSString *originalKeyEquivalent = [menuItem keyEquivalent];
     NSUInteger modifierMask = [menuItem keyEquivalentModifierMask];
@@ -138,9 +181,9 @@ static void initMenuItemCellSwizzling(void) {
         
         // Calculate the size and position for right-aligned text
         NSSize textSize = [macStyleKeyEquivalent sizeWithAttributes:attributes];
-        NSRect textRect = cellFrame;
-        textRect.origin.x = NSMaxX(cellFrame) - textSize.width - 4; // 4 pixel margin from right
-        textRect.origin.y = cellFrame.origin.y + (cellFrame.size.height - textSize.height) / 2;
+        NSRect textRect = keyEquivRect;
+        textRect.origin.x = NSMaxX(keyEquivRect) - textSize.width - 4; // 4 pixel margin from right
+        textRect.origin.y = keyEquivRect.origin.y + (keyEquivRect.size.height - textSize.height) / 2;
         textRect.size = textSize;
         
         [macStyleKeyEquivalent drawInRect:textRect withAttributes:attributes];
