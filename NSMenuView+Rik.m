@@ -6,15 +6,14 @@
 #import <AppKit/NSMenuView.h>
 #import <objc/runtime.h>
 
-// Store original method implementation
-static IMP originalLocationForSubmenuIMP = NULL;
+@implementation NSMenuView (RikTheme)
 
-// Our replacement locationForSubmenu: method
-static NSPoint swizzled_locationForSubmenu(id self, SEL _cmd, NSMenu *aSubmenu) {
-  NSMenuView *menuView = (NSMenuView *)self;
+// This method will hold the original implementation after swizzling
+- (NSPoint)RIK_originalLocationForSubmenu:(NSMenu *)aSubmenu {
+  NSMenuView *menuView = self;
   
-  // Call the original implementation - it correctly calculates Y position
-  NSPoint originalPoint = ((NSPoint (*)(id, SEL, NSMenu*))originalLocationForSubmenuIMP)(self, _cmd, aSubmenu);
+  // After swizzling, this calls the original implementation
+  NSPoint originalPoint = [self RIK_originalLocationForSubmenu:aSubmenu];
   
   // If this menu view itself is horizontal (the menu bar), use original positioning entirely
   if ([menuView isHorizontal]) {
@@ -36,34 +35,36 @@ static NSPoint swizzled_locationForSubmenu(id self, SEL _cmd, NSMenu *aSubmenu) 
   // Y position: use the original calculation which correctly handles item position
   CGFloat yPos = originalPoint.y;
   
-  NSLog(@"NSMenuView+Rik: Adjusted submenu position from {%.1f, %.1f} to {%.1f, %.1f}",
+  RIKLOG(@"NSMenuView+Rik: Adjusted submenu position from {%.1f, %.1f} to {%.1f, %.1f}",
         originalPoint.x, originalPoint.y, xPos, yPos);
   
   return NSMakePoint(xPos, yPos);
 }
 
-// This function runs when the bundle is loaded
-__attribute__((constructor))
-static void initMenuViewSwizzling(void) {
-  NSLog(@"NSMenuView+Rik: Constructor called - setting up swizzling");
+// +load is called when the class is loaded, guaranteed to run after the class is ready
++ (void)load {
+  RIKLOG(@"NSMenuView+Rik: +load called - setting up swizzling");
   
-  Class menuViewClass = objc_getClass("NSMenuView");
+  Class menuViewClass = [NSMenuView class];
   if (!menuViewClass) {
-    NSLog(@"NSMenuView+Rik: ERROR - NSMenuView class not found");
+    RIKLOG(@"NSMenuView+Rik: ERROR - NSMenuView class not found");
     return;
   }
   
   // Swizzle locationForSubmenu:
-  SEL locationSelector = sel_registerName("locationForSubmenu:");
-  Method locationMethod = class_getInstanceMethod(menuViewClass, locationSelector);
-  if (locationMethod) {
-    originalLocationForSubmenuIMP = method_getImplementation(locationMethod);
-    method_setImplementation(locationMethod, (IMP)swizzled_locationForSubmenu);
-    NSLog(@"NSMenuView+Rik: Successfully swizzled locationForSubmenu: method");
+  SEL originalSelector = @selector(locationForSubmenu:);
+  SEL swizzledSelector = @selector(RIK_originalLocationForSubmenu:);
+  
+  Method originalMethod = class_getInstanceMethod(menuViewClass, originalSelector);
+  Method swizzledMethod = class_getInstanceMethod(menuViewClass, swizzledSelector);
+  
+  if (originalMethod && swizzledMethod) {
+    // Exchange implementations - this is thread-safe
+    method_exchangeImplementations(originalMethod, swizzledMethod);
+    RIKLOG(@"NSMenuView+Rik: Successfully swizzled locationForSubmenu: method");
   } else {
-    NSLog(@"NSMenuView+Rik: ERROR - Could not find locationForSubmenu: method");
+    RIKLOG(@"NSMenuView+Rik: ERROR - Could not find locationForSubmenu: method");
   }
 }
 
-@implementation NSMenuView (RikTheme)
 @end
