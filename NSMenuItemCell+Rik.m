@@ -19,14 +19,9 @@
   // After swizzling, this will call the original implementation
   NSRect originalRect = [self RIK_originalTitleRectForBounds:cellFrame];
   
+  // Shift by half padding to center the title for both horizontal and vertical menu items
   if ([self menuView]) {
-    if ([[self menuView] isHorizontal]) {
-      // Horizontal menu bar items - shift by half padding to center
-      originalRect.origin.x += (RIK_MENU_ITEM_PADDING / 2.0);
-    } else {
-      // Vertical dropdown items - shift by half padding to center
-      originalRect.origin.x += (RIK_MENU_ITEM_PADDING / 2.0);
-    }
+    originalRect.origin.x += (RIK_MENU_ITEM_PADDING / 2.0);
   }
   
   return originalRect;
