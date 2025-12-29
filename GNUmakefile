@@ -24,6 +24,7 @@ Rik_OBJC_FILES = \
 		Rik+Browser.m\
 		Rik+Table.m\
 		GSStandardDecorationView+Rik.m\
+		GSInfoPanel+Rik.m\
 		NSWindow+Rik.m\
 		NSSegmentedCell+Rik.m\
 		RikWindowButton.m\
