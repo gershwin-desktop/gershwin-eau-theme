@@ -47,7 +47,7 @@
 // This function runs when the bundle is loaded
 __attribute__((constructor))
 static void initMenuItemCellSwizzling(void) {
-  NSLog(@"NSMenuItemCell+Eau: Constructor called - setting up swizzling");
+  // NSLog(@"NSMenuItemCell+Eau: Constructor called - setting up swizzling");
 
   Class menuItemCellClass = objc_getClass("NSMenuItemCell");
   if (!menuItemCellClass) {
@@ -65,9 +65,9 @@ static void initMenuItemCellSwizzling(void) {
     IMP swizzledIMP = method_getImplementation(swizzledTitleWidthMethod);
     if (originalIMP != swizzledIMP) {
       method_exchangeImplementations(originalTitleWidthMethod, swizzledTitleWidthMethod);
-      NSLog(@"NSMenuItemCell+Eau: Successfully swizzled titleWidth method");
+      // NSLog(@"NSMenuItemCell+Eau: Successfully swizzled titleWidth method");
     } else {
-      NSLog(@"NSMenuItemCell+Eau: titleWidth already swizzled, skipping");
+      // NSLog(@"NSMenuItemCell+Eau: titleWidth already swizzled, skipping");
     }
   } else {
     if (!originalTitleWidthMethod) {
@@ -88,9 +88,9 @@ static void initMenuItemCellSwizzling(void) {
     IMP swizzledIMP = method_getImplementation(swizzledTitleRectMethod);
     if (originalIMP != swizzledIMP) {
       method_exchangeImplementations(originalTitleRectMethod, swizzledTitleRectMethod);
-      NSLog(@"NSMenuItemCell+Eau: Successfully swizzled titleRectForBounds: method");
+      // NSLog(@"NSMenuItemCell+Eau: Successfully swizzled titleRectForBounds: method");
     } else {
-      NSLog(@"NSMenuItemCell+Eau: titleRectForBounds: already swizzled, skipping");
+      // NSLog(@"NSMenuItemCell+Eau: titleRectForBounds: already swizzled, skipping");
     }
   } else {
     if (!originalTitleRectMethod) {

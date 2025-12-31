@@ -819,20 +819,20 @@ static void setKeyEquivalent(NSButton *button)
     didSwizzle = YES;
     
     EAULOG(@"Eau: Installing NSAlert customizations");
-    NSLog(@"Eau: Installing NSAlert customizations - FORCED LOG");
+    // NSLog(@"Eau: Installing NSAlert customizations - FORCED LOG");
     
     // Swizzle NSAlert's _setupPanel to use EauAlertPanel
     Class alertClass = NSClassFromString(@"NSAlert");
     SEL origSetupSel = @selector(_setupPanel);
     SEL swizzledSetupSel = @selector(eau_setupPanel);
     
-    NSLog(@"Eau: Found NSAlert class: %@", alertClass);
+    // NSLog(@"Eau: Found NSAlert class: %@", alertClass);
     
     Method origSetupMethod = class_getInstanceMethod(alertClass, origSetupSel);
     Method swizzledSetupMethod = class_getInstanceMethod(alertClass, swizzledSetupSel);
     
-    NSLog(@"Eau: Original _setupPanel method: %p", origSetupMethod);
-    NSLog(@"Eau: Swizzled eau_setupPanel method: %p", swizzledSetupMethod);
+    // NSLog(@"Eau: Original _setupPanel method: %p", origSetupMethod);
+    // NSLog(@"Eau: Swizzled eau_setupPanel method: %p", swizzledSetupMethod);
     
     if (origSetupMethod && swizzledSetupMethod)
     {
@@ -852,12 +852,12 @@ static void setKeyEquivalent(NSButton *button)
             method_exchangeImplementations(origSetupMethod, swizzledSetupMethod);
         }
         EAULOG(@"Eau: NSAlert _setupPanel swizzled successfully");
-        NSLog(@"Eau: NSAlert _setupPanel swizzled successfully - FORCED LOG");
+        // NSLog(@"Eau: NSAlert _setupPanel swizzled successfully - FORCED LOG");
     }
     else
     {
         EAULOG(@"Eau: Warning - could not find _setupPanel method to swizzle");
-        NSLog(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
+        // NSLog(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
     }
     
     // Also swizzle GSAlertPanel's _initWithoutGModel to handle legacy alert functions

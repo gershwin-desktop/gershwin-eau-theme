@@ -54,7 +54,7 @@
 // This function runs when the bundle is loaded
 __attribute__((constructor))
 static void initMenuViewSwizzling(void) {
-  NSLog(@"NSMenuView+Eau: Constructor called - setting up swizzling");
+  // NSLog(@"NSMenuView+Eau: Constructor called - setting up swizzling");
 
   Class menuViewClass = objc_getClass("NSMenuView");
   if (!menuViewClass) {
@@ -88,5 +88,5 @@ static void initMenuViewSwizzling(void) {
   }
 
   method_exchangeImplementations(originalMethod, swizzledMethod);
-  NSLog(@"NSMenuView+Eau: Successfully swizzled locationForSubmenu: with eau_locationForSubmenu:");
+  // NSLog(@"NSMenuView+Eau: Successfully swizzled locationForSubmenu: with eau_locationForSubmenu:");
 }

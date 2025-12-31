@@ -139,4 +139,9 @@
   return NO;
 }
 
+- (BOOL) scrollViewShouldAutohideScrollers
+{
+  return YES;
+}
+
 @end
