@@ -39,6 +39,12 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 static void setKeyEquivalent(NSButton *button);
 static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
+// Private category to declare swizzled selectors so the compiler knows about them
+@interface EauAlertPanel (Swizzles)
+- (id)eau_initWithoutGModel;
+- (id)eau_initWithoutGModelHelper;
+@end
+
 #pragma mark - EauAlertPanel Implementation
 
 @implementation EauAlertPanel
