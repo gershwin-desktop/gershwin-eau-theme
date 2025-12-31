@@ -1,5 +1,4 @@
 obj/
-Rik.theme/
 .AppleDouble
 .gwdir
 *.swp
@@ -9,3 +8,4 @@ tags
 *Test*
 *_test.*
 *.test
+Eau.theme/
