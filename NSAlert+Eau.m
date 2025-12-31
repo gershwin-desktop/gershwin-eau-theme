@@ -113,7 +113,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     // Buttons
     defButton = [self _makeButtonWithRect: NSZeroRect tag: NSAlertDefaultReturn];
     [defButton setKeyEquivalent: @"\r"];
-    NSLog(@"Eau: defButton key equivalent set to: '%@' - FORCED LOG", [defButton keyEquivalent]);
+    // NSLog(@"Eau: defButton key equivalent set to: '%@' - FORCED LOG", [defButton keyEquivalent]);
     [defButton setHighlightsBy: NSPushInCellMask | NSChangeGrayCellMask | NSContentsCellMask];
     [defButton setImagePosition: NSImageRight];
     [defButton setImage: [NSImage imageNamed: @"common_ret"]];
@@ -134,7 +134,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
 - (id) init
 {
-    NSLog(@"Eau: EauAlertPanel init called - FORCED LOG");
+    // NSLog(@"Eau: EauAlertPanel init called - FORCED LOG");
     return [self initWithContentRect: NSMakeRect(0, 0, WinMinWidth, WinMinHeight)];
 }
 
@@ -445,7 +445,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
 - (NSInteger) runModal
 {
-    NSLog(@"Eau: runModal called - FORCED LOG");
+    // NSLog(@"Eau: runModal called - FORCED LOG");
     if (isGreen)
         [self sizePanelToFit];
     
@@ -454,10 +454,10 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     [self makeKeyAndOrderFront: self];
     EAULOG(@"Eau: runModal - window is key: %d", [self isKeyWindow]);
     EAULOG(@"Eau: runModal - first responder: %@", [self firstResponder]);
-    NSLog(@"Eau: About to call runModalForWindow - FORCED LOG");
+    // NSLog(@"Eau: About to call runModalForWindow - FORCED LOG");
     
     result = [NSApp runModalForWindow: self];
-    NSLog(@"Eau: runModalForWindow returned with result: %ld - FORCED LOG", result);
+    // NSLog(@"Eau: runModalForWindow returned with result: %ld - FORCED LOG", result);
     [self orderOut: self];
     return result;
 }
@@ -691,7 +691,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
 - (void) setButtons: (NSArray *)buttons
 {
-    NSLog(@"Eau: setButtons called with %lu buttons - FORCED LOG", [buttons count]);
+    // NSLog(@"Eau: setButtons called with %lu buttons - FORCED LOG", [buttons count]);
     NSView *content = [self contentView];
     NSUInteger count = [buttons count];
     
@@ -767,13 +767,13 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 {
     if (templateBtn != nil)
     {
-        NSLog(@"Eau: setButton - template title: '%@', keyEquiv: '%@' - FORCED LOG", [templateBtn title], [templateBtn keyEquivalent]);
+        // NSLog(@"Eau: setButton - template title: '%@', keyEquiv: '%@' - FORCED LOG", [templateBtn title], [templateBtn keyEquivalent]);
         [control setTitle: [templateBtn title]];
         [control setKeyEquivalent: [templateBtn keyEquivalent]];
         [control setKeyEquivalentModifierMask: [templateBtn keyEquivalentModifierMask]];
         [control setTag: [templateBtn tag]];
         [control sizeToFit];
-        NSLog(@"Eau: setButton - control after setup: title='%@', keyEquiv='%@', tag=%ld - FORCED LOG", [control title], [control keyEquivalent], [control tag]);
+        // NSLog(@"Eau: setButton - control after setup: title='%@', keyEquiv='%@', tag=%ld - FORCED LOG", [control title], [control keyEquivalent], [control tag]);
         if (!useControl(control))
             [content addSubview: control];
     }
@@ -892,15 +892,15 @@ static void setKeyEquivalent(NSButton *button)
 // Replacement for NSAlert's _setupPanel method
 - (void) eau_setupPanel
 {
-    NSLog(@"Eau: eau_setupPanel called - FORCED LOG");
+    // NSLog(@"Eau: eau_setupPanel called - FORCED LOG");
     EAULOG(@"Eau: eau_setupPanel called");
     
     EauAlertPanel *panel;
     NSString *title;
     
-    NSLog(@"Eau: Creating EauAlertPanel - FORCED LOG");
+    // NSLog(@"Eau: Creating EauAlertPanel - FORCED LOG");
     panel = [[EauAlertPanel alloc] init];
-    NSLog(@"Eau: EauAlertPanel created: %@ - FORCED LOG", panel);
+    // NSLog(@"Eau: EauAlertPanel created: %@ - FORCED LOG", panel);
     
     // Access NSAlert's ivars through KVC or accessor methods
     NSAlertStyle style = [self alertStyle];
