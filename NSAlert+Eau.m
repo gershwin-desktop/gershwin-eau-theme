@@ -499,7 +499,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
 - (NSInteger) runModal
 {
-    NSLog(@"Eau: EauAlertPanel runModal called");
+    EAULOG(@"Eau: EauAlertPanel runModal called");
     if (isGreen)
         [self sizePanelToFit];
     
@@ -515,15 +515,12 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     if (useControl(defButton))
     {
         [self makeFirstResponder: defButton];
-        NSLog(@"Eau: Made defButton first responder");
     }
     
-    NSLog(@"Eau: runModal - window is key: %d", [self isKeyWindow]);
-    NSLog(@"Eau: runModal - first responder: %@", [self firstResponder]);
-    NSLog(@"Eau: runModal - defButton: %@", defButton);
+    EAULOG(@"Eau: runModal - window is key: %d", [self isKeyWindow]);
+    EAULOG(@"Eau: runModal - first responder: %@", [self firstResponder]);
     
     result = [NSApp runModalForWindow: self];
-    NSLog(@"Eau: runModalForWindow returned with result: %ld", result);
     [self orderOut: self];
     return result;
 }
@@ -595,16 +592,16 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 - (BOOL) performKeyEquivalent: (NSEvent *)event
 {
     NSString *chars = [event characters];
-    NSLog(@"Eau: performKeyEquivalent received: '%@' (keyCode: %d)", chars, [event keyCode]);
+    EAULOG(@"Eau: performKeyEquivalent received: '%@'", chars);
     if ([chars isEqualToString: @"\r"] && useControl(defButton))
     {
-        NSLog(@"Eau: performKeyEquivalent Enter pressed, clicking default button");
+        EAULOG(@"Eau: performKeyEquivalent Enter pressed, clicking default button");
         [defButton performClick: self];
         return YES;
     }
     if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
     {
-        NSLog(@"Eau: performKeyEquivalent Escape pressed, clicking cancel button");
+        EAULOG(@"Eau: performKeyEquivalent Escape pressed, clicking cancel button");
         [altButton performClick: self];
         return YES;
     }
@@ -616,20 +613,19 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     if ([event type] == NSKeyDown)
     {
         NSString *chars = [event characters];
-        NSLog(@"Eau: sendEvent received keyDown: '%@'", chars);
+        EAULOG(@"Eau: sendEvent received keyDown: '%@'", chars);
         if ([chars length] > 0)
         {
             unichar keyChar = [chars characterAtIndex: 0];
-            NSLog(@"Eau: keyChar = %d (0x%X)", keyChar, keyChar);
             if (keyChar == '\r' && useControl(defButton))
             {
-                NSLog(@"Eau: Enter pressed, clicking default button");
+                EAULOG(@"Eau: Enter pressed, clicking default button");
                 [defButton performClick: self];
                 return;
             }
             if (keyChar == 0x1B && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
             {
-                NSLog(@"Eau: Escape pressed, clicking cancel button");
+                EAULOG(@"Eau: Escape pressed, clicking cancel button");
                 [altButton performClick: self];
                 return;
             }
@@ -841,13 +837,11 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 {
     if (templateBtn != nil)
     {
-        NSLog(@"Eau: setButton - template title: '%@', keyEquiv: '%@', tag: %ld", [templateBtn title], [templateBtn keyEquivalent], [templateBtn tag]);
         [control setTitle: [templateBtn title]];
         [control setKeyEquivalent: [templateBtn keyEquivalent]];
         [control setKeyEquivalentModifierMask: [templateBtn keyEquivalentModifierMask]];
         [control setTag: [templateBtn tag]];
         [control sizeToFit];
-        NSLog(@"Eau: setButton - control after setup: title='%@', keyEquiv='%@', tag=%ld", [control title], [control keyEquivalent], [control tag]);
         if (!useControl(control))
             [content addSubview: control];
     }
