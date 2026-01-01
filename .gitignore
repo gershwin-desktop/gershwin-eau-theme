@@ -5,7 +5,6 @@ obj/
 .vimrc
 tags
 *.core
-*Test*
 *_test.*
 *.test
 Eau.theme/
