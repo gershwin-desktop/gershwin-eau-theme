@@ -9,27 +9,9 @@
 #import <objc/runtime.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
+#import "AppearanceMetrics.h"
 
-// Constants for panel layout - modern centered appearance
-static const float WinMinWidth = 420.0;
-static const float WinMinHeight = 130.0;
-static const float IconSide = 64.0;
-static const float IconLeft = 20.0;
-static const float IconTop = 20.0;
-static const float TextLeft = 100.0;       // Left edge for both title and message
-static const float TextRight = 20.0;       // Right margin
-static const float TitleTop = 20.0;        // Distance from top to title
-static const float TitleMessageGap = 14.0;  // Gap between title and message
-static const float ButtonBottom = 14.0;
-static const float ButtonMargin = 20.0;
-static const float ButtonInterspace = 12.0;
-static const float ButtonMinHeight = 24.0;
-static const float ButtonMinWidth = 72.0;
-static const float ContentBottomMargin = 20.0;
-
-#define SIZE_SCALE 0.6
-#define TitleFont [NSFont systemFontOfSize: 0]
-#define MessageFont [NSFont systemFontOfSize: 0]
+// Import centralized layout constants from AppearanceMetrics.h
 
 #define useControl(control) ([control superview] != nil)
 
@@ -80,12 +62,12 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     [self setBecomesKeyOnlyIfNeeded: NO];
     
     NSView *content = [self contentView];
-    NSFont *titleFont = TitleFont;
+    NSFont *titleFont = METRICS_TITLE_FONT;
     
     // Icon button - positioned at top left
-    NSRect iconRect = NSMakeRect(IconLeft, 
-                                  rect.size.height - IconTop - IconSide,
-                                  IconSide, IconSide);
+    NSRect iconRect = NSMakeRect(METRICS_ICON_LEFT, 
+                                  rect.size.height - METRICS_ICON_TOP - METRICS_ICON_SIDE,
+                                  METRICS_ICON_SIDE, METRICS_ICON_SIDE);
     icoButton = [[NSButton alloc] initWithFrame: iconRect];
     [icoButton setAutoresizingMask: NSViewMaxXMargin | NSViewMinYMargin];
     [icoButton setBordered: NO];
@@ -97,7 +79,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     [content addSubview: icoButton];
     
     // Title field - positioned to the right of icon, top aligned
-    NSRect titleRect = NSMakeRect(TextLeft, 0, 0, 0);
+    NSRect titleRect = NSMakeRect(METRICS_TEXT_LEFT, 0, 0, 0);
     titleField = [[NSTextField alloc] initWithFrame: titleRect];
     [titleField setAutoresizingMask: NSViewWidthSizable | NSViewMinYMargin];
     [titleField setEditable: NO];
@@ -120,7 +102,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     [messageField setDrawsBackground: NO];
     [messageField setAlignment: NSLeftTextAlignment];
     [messageField setStringValue: @""];
-    [messageField setFont: MessageFont];
+    [messageField setFont: METRICS_MESSAGE_FONT];
     [[messageField cell] setWraps: YES];
     [[messageField cell] setLineBreakMode: NSLineBreakByWordWrapping];
     
@@ -154,7 +136,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 - (id) init
 {
     NSLog(@"Eau: EauAlertPanel init called");
-    return [self initWithContentRect: NSMakeRect(0, 0, WinMinWidth, WinMinHeight)];
+    return [self initWithContentRect: NSMakeRect(0, 0, METRICS_WIN_MIN_WIDTH, METRICS_WIN_MIN_HEIGHT)];
 }
 
 // Helper method that will be injected into GSAlertPanel via swizzling
@@ -283,12 +265,12 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     bounds = [screen frame];
     bounds = [NSWindow contentRectForFrameRect: bounds styleMask: mask];
     ssize = bounds.size;
-    ssize.width = SIZE_SCALE * ssize.width;
-    ssize.height = SIZE_SCALE * ssize.height;
+    ssize.width = METRICS_SIZE_SCALE * ssize.width;
+    ssize.height = METRICS_SIZE_SCALE * ssize.height;
     
     // Start with minimum width
-    wsize.width = WinMinWidth;
-    textAreaWidth = wsize.width - TextLeft - TextRight;
+    wsize.width = METRICS_WIN_MIN_WIDTH;
+    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
     
     // Calculate title size
     if (useControl(titleField))
@@ -304,8 +286,8 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     }
     
     // Count buttons and calculate button area size
-    bsize.width = ButtonMinWidth;
-    bsize.height = ButtonMinHeight;
+    bsize.width = METRICS_BUTTON_MIN_WIDTH;
+    bsize.height = METRICS_BUTTON_HEIGHT;
     buttons[0] = defButton;
     buttons[1] = altButton;
     buttons[2] = othButton;
@@ -341,23 +323,23 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     
     // Calculate total height needed
     // Top margin + title + gap + message + gap to buttons + buttons + bottom margin
-    float textContentHeight = TitleTop + titleHeight;
+    float textContentHeight = METRICS_CONTENT_TOP_MARGIN + titleHeight;
     if (messageHeight > 0)
     {
-        textContentHeight += TitleMessageGap + messageHeight;
+        textContentHeight += METRICS_TITLE_MESSAGE_GAP + messageHeight;
     }
-    textContentHeight += ContentBottomMargin;
+    textContentHeight += METRICS_CONTENT_BOTTOM_MARGIN;
     
     if (numberOfButtons > 0)
     {
-        textContentHeight += bsize.height + ButtonBottom;
+        textContentHeight += bsize.height + METRICS_CONTENT_BOTTOM_MARGIN;
     }
     
     // Ensure icon has enough space (icon height + margins)
-    float iconContentHeight = IconTop + IconSide + ContentBottomMargin;
+    float iconContentHeight = METRICS_ICON_TOP + METRICS_ICON_SIDE + METRICS_CONTENT_BOTTOM_MARGIN;
     if (numberOfButtons > 0)
     {
-        iconContentHeight += bsize.height + ButtonBottom;
+        iconContentHeight += bsize.height + METRICS_CONTENT_BOTTOM_MARGIN;
     }
     
     wsize.height = (textContentHeight > iconContentHeight) ? textContentHeight : iconContentHeight;
@@ -368,9 +350,9 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
         wsize.height = ssize.height;
         needsScroll = couldNeedScroll;
     }
-    else if (wsize.height < WinMinHeight)
+    else if (wsize.height < METRICS_WIN_MIN_HEIGHT)
     {
-        wsize.height = WinMinHeight;
+        wsize.height = METRICS_WIN_MIN_HEIGHT;
     }
     
     if (needsScroll)
@@ -378,8 +360,8 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     
     if (ssize.width < wsize.width)
         wsize.width = ssize.width;
-    else if (wsize.width < WinMinWidth)
-        wsize.width = WinMinWidth;
+    else if (wsize.width < METRICS_WIN_MIN_WIDTH)
+        wsize.width = METRICS_WIN_MIN_WIDTH;
     
     bounds = NSMakeRect(0, 0, wsize.width, wsize.height);
     bounds = [NSWindow frameRectForContentRect: bounds styleMask: mask];
@@ -392,16 +374,16 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     // Place icon at top left
     if (useControl(icoButton))
     {
-        NSRect iconRect = NSMakeRect(IconLeft,
-                                      bounds.size.height - IconTop - IconSide,
-                                      IconSide, IconSide);
+        NSRect iconRect = NSMakeRect(METRICS_ICON_LEFT,
+                                      bounds.size.height - METRICS_ICON_TOP - METRICS_ICON_SIDE,
+                                      METRICS_ICON_SIDE, METRICS_ICON_SIDE);
         [icoButton setFrame: iconRect];
     }
     
     // Place buttons at bottom right
     if (numberOfButtons > 0)
     {
-        position = bounds.origin.x + bounds.size.width - ButtonMargin;
+        position = bounds.origin.x + bounds.size.width - METRICS_CONTENT_SIDE_MARGIN;
         for (i = 0; i < 3; i++)
         {
             if (useControl(buttons[i]))
@@ -409,25 +391,25 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
                 NSRect rect;
                 position -= bsize.width;
                 rect.origin.x = position;
-                rect.origin.y = bounds.origin.y + ButtonBottom;
+                rect.origin.y = bounds.origin.y + METRICS_CONTENT_BOTTOM_MARGIN;
                 rect.size.width = bsize.width;
                 rect.size.height = bsize.height;
                 [buttons[i] setFrame: rect];
-                position -= ButtonInterspace;
+                position -= METRICS_BUTTON_INTERSPACE;
             }
         }
     }
     
     // Calculate vertical positions for title and message
-    float buttonAreaHeight = (numberOfButtons > 0) ? (ButtonBottom + bsize.height) : 0;
+    float buttonAreaHeight = (numberOfButtons > 0) ? (METRICS_CONTENT_BOTTOM_MARGIN + bsize.height) : 0;
     
     // Place title at top, left-aligned with TextLeft
-    float currentY = bounds.size.height - TitleTop;
+    float currentY = bounds.size.height - METRICS_CONTENT_TOP_MARGIN;
     if (useControl(titleField))
     {
         NSRect trect = [titleField frame];
-        trect.origin.x = TextLeft;
-        trect.size.width = bounds.size.width - TextLeft - TextRight;
+        trect.origin.x = METRICS_TEXT_LEFT;
+        trect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
         currentY -= trect.size.height;
         trect.origin.y = currentY;
         [titleField setFrame: trect];
@@ -443,10 +425,10 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
             NSRect srect;
             float width;
             
-            srect.origin.x = TextLeft;
-            srect.origin.y = buttonAreaHeight + ContentBottomMargin;
-            srect.size.width = bounds.size.width - TextLeft - TextRight;
-            srect.size.height = currentY - TitleMessageGap - srect.origin.y;
+            srect.origin.x = METRICS_TEXT_LEFT;
+            srect.origin.y = buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN;
+            srect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
+            srect.size.height = currentY - METRICS_TITLE_MESSAGE_GAP - srect.origin.y;
             [scroll setFrame: srect];
             
             if (!useControl(scroll))
@@ -466,9 +448,9 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
         }
         else
         {
-            currentY -= TitleMessageGap;
-            mrect.origin.x = TextLeft;
-            mrect.size.width = bounds.size.width - TextLeft - TextRight;
+            currentY -= METRICS_TITLE_MESSAGE_GAP;
+            mrect.origin.x = METRICS_TEXT_LEFT;
+            mrect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
             currentY -= mrect.size.height;
             mrect.origin.y = currentY;
             [messageField setFrame: mrect];
@@ -950,7 +932,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
 static NSScrollView *makeScrollViewWithRect(NSRect rect)
 {
-    float lineHeight = [MessageFont boundingRectForFont].size.height;
+    float lineHeight = [METRICS_MESSAGE_FONT boundingRectForFont].size.height;
     NSScrollView *scrollView = [[NSScrollView alloc] initWithFrame: rect];
     
     [scrollView setBorderType: NSLineBorder];
