@@ -146,4 +146,6 @@ static const float METRICS_SPACE_24 = 24.0;
 //   - Used for labels with controls (e.g., sliders, icon bevel buttons); shall be used rarely in dialogs.
 #define METRICS_FONT_LABEL_10 ([NSFont systemFontOfSize: 10])
 
+// Must not use horizontal lines in dialogs or alert panels, use spacing only
+
 #endif // APPEARANCE_METRICS_H
