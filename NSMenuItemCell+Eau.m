@@ -263,6 +263,8 @@ static void initMenuItemCellSwizzling(void) {
         keyToAdd = @"⇥";
       } else if (ch == 13) { // Return/Enter
         keyToAdd = @"↵";
+      } else if (ch == 32) { // Space
+        keyToAdd = @"␣";
       }
     } else if ([keyEquivalent length] > 1) {
       // Handle arrow keys and other multi-character key names
