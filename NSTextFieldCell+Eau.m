@@ -85,14 +85,11 @@
 
 - (void) EAUdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
-  EAULOG(@"EAUdrawWithFrame: in_editing=%d", _cell.in_editing);
-  
   /* Always draw the border/bezel, regardless of editing state */
   [super drawWithFrame:cellFrame inView:controlView];
   
   if (_cell.in_editing)
     {
-      EAULOG(@"EAUdrawWithFrame: In editing mode - border drawn, interior will be handled transparently");
       /* Border is drawn by super, but interior will be handled by drawInteriorWithFrame
        * which will skip drawing to create transparency */
     }
@@ -108,11 +105,8 @@
 	cellFrame.origin.y -= 1;
 	cellFrame.size.height += 2;
 	
-	EAULOG(@"EAUdrawInteriorWithFrame: in_editing=%d", _cell.in_editing);
-	
   if (_cell.in_editing)
   {
-	EAULOG(@"EAUdrawInteriorWithFrame: In editing mode - skipping all drawing for transparent background");
 	/* When editing, don't draw anything in the cell - let the text editor handle everything
 	 * This creates the transparent background effect */
 	return;
@@ -193,14 +187,11 @@ titleRect.size.height += 2;
 - (void) _EAUdrawEditorWithFrame: (NSRect)cellFrame
                          inView: (NSView*)controlView
 {
-  EAULOG(@"_EAUdrawEditorWithFrame:inView: - Setting up editor frame for transparent background");
-  
   if ([controlView isKindOfClass: [NSControl class]])
     {
       /* Don't draw any cell background when editing - this allows transparency */
       if (_cell.in_editing)
         {
-          EAULOG(@"_EAUdrawEditorWithFrame: In editing mode - skipping background drawing for transparency");
           /* Just adjust the editor frame and let it handle its own drawing */
           NSRect titleRect = [self titleRectForBounds: cellFrame];
           NSText *textObject = [(NSControl*)controlView currentEditor];
@@ -222,8 +213,6 @@ titleRect.size.height += 2;
       NSRect titleRect = [self titleRectForBounds: cellFrame];
       NSText *textObject = [(NSControl*)controlView currentEditor];
       NSView *clipView = [textObject superview];
-
-      EAULOG(@"_EAUdrawEditorWithFrame: textObject=%@, clipView=%@", textObject, clipView);
       
       if ([clipView isKindOfClass: [NSClipView class]])
         {
