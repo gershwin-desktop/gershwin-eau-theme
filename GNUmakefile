@@ -38,6 +38,7 @@ Eau_OBJC_FILES = \
 		NSCell+Eau.m\
 		NSButtonCell+Eau.m\
 		NSTextFieldCell+Eau.m\
+		NSFont+Eau.m\
 		NSMenuItemCell+Eau.m\
 		NSMenuView+Eau.m\
 		NSBox+Eau.m\

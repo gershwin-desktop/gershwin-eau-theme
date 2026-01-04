@@ -14,8 +14,7 @@
 }
 - (NSColor *) menuBackgroundColor
 {
-  // Remove transparency - always return fully opaque color
-  NSColor *color = [NSColor colorWithCalibratedRed: 0.992 green: 0.992 blue: 0.992 alpha: 1.0];
+  NSColor *color = [NSColor colorWithCalibratedRed: 0.992 green: 0.992 blue: 0.992 alpha: 0.66];
   return color;
 }
 - (NSColor *) menuItemBackgroundColor
@@ -34,12 +33,12 @@
 }
 - (CGFloat) menuBarHeight
 {
-  return 28;
+  return 22; // Menus and menu items shall be 22px high
 }
 
 - (CGFloat) menuItemHeight
 {
-  return 26;
+  return 22; // Menus and menu items shall be 22px high
 }
 - (CGFloat) menuSeparatorHeight
 {
@@ -91,22 +90,27 @@
     {
       // here the semitrasparent status bar...
       menuPath = [NSBezierPath bezierPathWithRect:bounds];
-      NSColor* fillColor = [self menuBackgroundColor];
-      [fillColor setFill];
-      NSRectFill(bounds);
+      NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.95 green: 0.95 blue: 0.95 alpha: 0.80];
+      NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.70];
+      NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
+      [menuGradient drawInRect: bounds angle: -90];
+      // Draw bright line at top of menu bar
       NSBezierPath* linePath = [NSBezierPath bezierPath];
-      [linePath moveToPoint: NSMakePoint(bounds.origin.x, bounds.origin.y)];
-      [linePath lineToPoint: NSMakePoint(bounds.origin.x+ bounds.size.width, bounds.origin.y)];
+      [linePath moveToPoint: NSMakePoint(bounds.origin.x, bounds.origin.y + bounds.size.height)];
+      [linePath lineToPoint: NSMakePoint(bounds.origin.x+ bounds.size.width, bounds.origin.y + bounds.size.height)];
       [linePath setLineWidth: 1];
+      NSColor* topLineColor = [NSColor colorWithCalibratedRed: 1.0 green: 1.0 blue: 1.0 alpha: 0.8];
+      [topLineColor setStroke];
       [linePath stroke];
     }
   else
     {
       // here the vertical menus
       menuPath = [NSBezierPath bezierPathWithRect: bounds];
-
-      [[self menuBackgroundColor] setFill];
-      [menuPath fill];
+      NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.66];
+      NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.65 green: 0.65 blue: 0.65 alpha: 0.66];
+      NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
+      [menuGradient drawInRect: bounds angle: -90];
 
       NSBezierPath * strokemenuPath = [NSBezierPath bezierPathWithRect: bounds];
       [borderColor setStroke];
@@ -138,12 +142,12 @@
   // TS: unused
   // NSRectEdge sides[4] = { NSMinXEdge, NSMaxYEdge, NSMaxXEdge, NSMinYEdge };
 
-
-  [[self menuBackgroundColor] setFill];
-
   NSRect r = NSIntersectionRect(bounds, dirtyRect);
   NSRectFillUsingOperation(r, NSCompositeClear);
-  NSRectFill(r);
+  NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.66];
+  NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.65 green: 0.65 blue: 0.65 alpha: 0.66];
+  NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
+  [menuGradient drawInRect: r angle: -90];
 }
 
 - (void) drawBorderAndBackgroundForMenuItemCell: (NSMenuItemCell *)cell
@@ -200,8 +204,8 @@
                                    inView: (NSView *)controlView
                              isHorizontal: (BOOL)isHorizontal
 {
-  // Draw a thin 1px separator line in mid gray
-  NSColor *separatorColor = [NSColor colorWithCalibratedRed: 0.5 green: 0.5 blue: 0.5 alpha: 1.0];
+  // Draw a thin 1px separator line in light grey
+  NSColor *separatorColor = [NSColor colorWithCalibratedRed: 0.8 green: 0.8 blue: 0.8 alpha: 1.0];
   [separatorColor set];
   
   // Draw a single pixel line in the middle of the cell frame
