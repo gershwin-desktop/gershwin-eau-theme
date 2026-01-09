@@ -75,11 +75,17 @@ static char originalFrameKey;  // Store original frame before zoom
     {
       resizeBarRect = NSMakeRect(0.0, 0.0, [self bounds].size.width, [theme resizebarHeight]);
     }
+  
+  // Calculate vertical center for buttons within the title bar
+  CGFloat viewHeight = [self bounds].size.height;
+  CGFloat titleBarY = viewHeight - [theme titlebarHeight];
+  CGFloat buttonYCenter = titleBarY + ([theme titlebarHeight] - TITLEBAR_BUTTON_SIZE) / 2.0;
+  
   if (hasCloseButton)
   {
     closeButtonRect = NSMakeRect(
       TITLEBAR_PADDING_LEFT,
-      [self bounds].size.height - TITLEBAR_BUTTON_SIZE - TITLEBAR_PADDING_TOP,
+      buttonYCenter,
       TITLEBAR_BUTTON_SIZE, TITLEBAR_BUTTON_SIZE);
     [closeButton setFrame: closeButtonRect];
   }
@@ -88,7 +94,7 @@ static char originalFrameKey;  // Store original frame before zoom
   {
     miniaturizeButtonRect = NSMakeRect(
       TITLEBAR_PADDING_LEFT + TITLEBAR_BUTTON_SIZE + 4, // 4px padding between buttons
-      [self bounds].size.height - TITLEBAR_BUTTON_SIZE - TITLEBAR_PADDING_TOP,
+      buttonYCenter,
       TITLEBAR_BUTTON_SIZE, TITLEBAR_BUTTON_SIZE);
     [miniaturizeButton setFrame: miniaturizeButtonRect];
   }
@@ -97,7 +103,7 @@ static char originalFrameKey;  // Store original frame before zoom
   {
     NSRect zoomButtonRect = NSMakeRect(
       TITLEBAR_PADDING_LEFT + (TITLEBAR_BUTTON_SIZE + 4) * 2, // After miniaturize button
-      [self bounds].size.height - TITLEBAR_BUTTON_SIZE - TITLEBAR_PADDING_TOP,
+      buttonYCenter,
       TITLEBAR_BUTTON_SIZE, TITLEBAR_BUTTON_SIZE);
 
     // Store the rect as associated object
