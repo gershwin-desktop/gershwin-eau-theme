@@ -29,6 +29,7 @@ Eau_OBJC_FILES = \
 		NSWindow+Eau.m\
 		NSSegmentedCell+Eau.m\
 		NSTableView+Eau.m\
+		NSTableHeaderCell+Eau.m\
 		EauWindowButton.m\
 		EauWindowButtonCell.m\
 		EauScrollerKnobCell.m\

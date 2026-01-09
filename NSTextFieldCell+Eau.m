@@ -102,8 +102,8 @@
 - (void) EAUdrawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
 	NSRect titleRect;
-	cellFrame.origin.y -= 1;
-	cellFrame.size.height += 2;
+	// cellFrame.origin.y -= 1;
+	// cellFrame.size.height += 2;
 	
   if (_cell.in_editing)
   {
@@ -114,8 +114,8 @@
   else
     {
       EAULOG(@"EAUdrawInteriorWithFrame: Drawing in normal mode");
-	cellFrame.origin.y-= 1;
-	cellFrame.size.height += 2;
+	// cellFrame.origin.y-= 1;
+	// cellFrame.size.height += 2;
 
        /*Make sure we are a text cell; titleRect might return an incorrect
          rectangle otherwise. Note that the type could be different if the

@@ -30,8 +30,8 @@
     {
       drawingRect.origin.x += 3;
       drawingRect.size.width -= 6;
-      drawingRect.origin.y -= 2;
-      drawingRect.size.height += 3;
+      // drawingRect.origin.y -= 2;
+      // drawingRect.size.height += 3;
     }
 
   switch (_cell.type)

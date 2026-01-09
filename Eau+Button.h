@@ -4,6 +4,7 @@
 @interface Eau(EauButton)
 {
 }
+- (NSColor*) buttonColorInCell:(NSCell*) cell forState: (GSThemeControlState) state;
 @end
 
 

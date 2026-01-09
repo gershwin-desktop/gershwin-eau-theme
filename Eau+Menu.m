@@ -83,13 +83,11 @@
   // TS: unused
   // NSRect r = NSIntersectionRect(bounds, rect);
   NSRectFillUsingOperation(bounds, NSCompositeClear);
-  NSBezierPath * menuPath;
   NSColor *borderColor = [self menuBorderColor];
   [borderColor setStroke];
   if(horizontal == YES)
     {
       // here the semitrasparent status bar...
-      menuPath = [NSBezierPath bezierPathWithRect:bounds];
       NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.95 green: 0.95 blue: 0.95 alpha: 0.80];
       NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.70];
       NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
@@ -106,7 +104,6 @@
   else
     {
       // here the vertical menus
-      menuPath = [NSBezierPath bezierPathWithRect: bounds];
       NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.66];
       NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.65 green: 0.65 blue: 0.65 alpha: 0.66];
       NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];

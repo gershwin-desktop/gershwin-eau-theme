@@ -1,8 +1,12 @@
 #import "Eau.h"
 #import "Eau+Drawings.h"
 
-@interface Eau(EauTabView)
+// Forward declare private GSTheme method to avoid compiler warnings
+@interface GSTheme (PrivateTabMethods)
+- (void) drawTabFillInRect: (NSRect)aRect forPart: (GSTabPart)part type: (NSTabViewType)type;
+@end
 
+@interface Eau(EauTabView)
 @end
 
 @implementation Eau(EauTabView)

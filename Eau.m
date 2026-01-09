@@ -3,11 +3,7 @@
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import "NSMenuItemCell+Eau.h"
-
-// add this declaration to quiet the compiler
-@interface Eau(EauButton)
-- (NSColor*) buttonColorInCell:(NSCell*) cell forState: (GSThemeControlState) state;
-@end
+#import "Eau+Button.h"
 
 // cache the DBusMenu bundle's principal class
 static Class _menuRegistryClass;
@@ -128,7 +124,11 @@ static Class _menuRegistryClass;
       NSColorList *systemColors = [NSColorList colorListNamed: @"System"];
       if (systemColors != nil)
         {
-          [systemColors setColor: [NSColor colorWithCalibratedWhite: 0.96 alpha: 1.0]
+          // Light gray with a touch of blue
+          [systemColors setColor: [NSColor colorWithCalibratedRed: 0.94 
+                                                             green: 0.95 
+                                                              blue: 0.97 
+                                                             alpha: 1.0]
                            forKey: @"alternateRowBackgroundColor"];
         }
     }

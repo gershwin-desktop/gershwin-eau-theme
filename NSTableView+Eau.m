@@ -1,5 +1,11 @@
 #import "NSTableView+Eau.h"
 #import <objc/runtime.h>
+#import <GNUstepGUI/GSTheme.h>
+
+// Declare the custom theme method
+@interface GSTheme (EauTableExtensions)
+- (CGFloat) tableHeaderRowHeight;
+@end
 
 @implementation NSTableView (Eau)
 
@@ -33,6 +39,16 @@
       
       // Set grid color to transparent to ensure no lines show
       [self setGridColor: [NSColor clearColor]];
+      
+      // Set header view height to use the custom theme height
+      NSTableHeaderView *headerView = [self headerView];
+      if (headerView != nil)
+        {
+          CGFloat headerHeight = [[GSTheme theme] tableHeaderRowHeight];
+          NSSize headerSize = [headerView frame].size;
+          headerSize.height = headerHeight;
+          [headerView setFrameSize: headerSize];
+        }
     }
   
   return self;

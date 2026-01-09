@@ -35,6 +35,18 @@
   return color;
 }
 
+- (NSFont *) tableHeaderFontOfSize: (CGFloat)fontSize
+{
+  // Use small system font (11pt) for table headers
+  return [NSFont systemFontOfSize: 11];
+}
+
+- (CGFloat) tableHeaderRowHeight
+{
+  // Return a smaller height (17px) for table headers to match the small font
+  return 17.0;
+}
+
 - (void) drawTableCornerView: (NSView*)cornerView
                    withClip: (NSRect)aRect
 {
