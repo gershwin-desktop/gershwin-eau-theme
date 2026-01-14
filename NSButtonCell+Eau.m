@@ -16,6 +16,88 @@
 #import "Eau+Button.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
+
+// Prevent the specific "return" images from ever being drawn by intercepting common draw methods.
+@interface NSImage(EauSuppressReturnImageDraw)
+@end
+
+@implementation NSImage(EauSuppressReturnImageDraw)
+
++ (void)load
+{
+  // Grand Central Dispatch may not be available in all build environments; use a simple synchronized guard.
+  static BOOL EAU_swizzled = NO;
+  @synchronized([NSImage class]) {
+    if (EAU_swizzled) return;
+    EAU_swizzled = YES;
+
+    Class cls = [self class];
+    Method orig, swiz;
+
+    orig = class_getInstanceMethod(cls, @selector(drawAtPoint:));
+    swiz = class_getInstanceMethod(cls, @selector(EAU_drawAtPoint:));
+    if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+    orig = class_getInstanceMethod(cls, @selector(drawInRect:));
+    swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:));
+    if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+    orig = class_getInstanceMethod(cls, @selector(drawInRect:fromRect:operation:fraction:));
+    swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:fromRect:operation:fraction:));
+    if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+    orig = class_getInstanceMethod(cls, @selector(drawInRect:fromRect:operation:fraction:respectFlipped:hints:));
+    swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:fromRect:operation:fraction:respectFlipped:hints:));
+    if (orig && swiz) method_exchangeImplementations(orig, swiz);
+  }
+}
+
+- (BOOL)EAU_isReturnImage
+{
+  NSString *name = [self name];
+  if (!name) return NO;
+  NSString *base = [name stringByDeletingPathExtension];
+  return [base isEqualToString:@"common_ret"] || [base isEqualToString:@"common_retH"];
+}
+
+- (void)EAU_drawAtPoint:(NSPoint)point
+{
+  if ([self EAU_isReturnImage]) {
+    EAULOG(@"NSImage: Suppressing drawAtPoint for %@", [self name]);
+    return;
+  }
+  [self EAU_drawAtPoint:point];
+}
+
+- (void)EAU_drawInRect:(NSRect)rect
+{
+  if ([self EAU_isReturnImage]) {
+    EAULOG(@"NSImage: Suppressing drawInRect for %@", [self name]);
+    return;
+  }
+  [self EAU_drawInRect:rect];
+}
+
+- (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta
+{
+  if ([self EAU_isReturnImage]) {
+    EAULOG(@"NSImage: Suppressing drawInRect:fromRect:operation:fraction: for %@", [self name]);
+    return;
+  }
+  [self EAU_drawInRect:rect fromRect:srcRect operation:op fraction:delta];
+}
+
+- (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta respectFlipped:(BOOL)respectFlipped hints:(NSDictionary *)hints
+{
+  if ([self EAU_isReturnImage]) {
+    EAULOG(@"NSImage: Suppressing drawInRect:respectFlipped:hints: for %@", [self name]);
+    return;
+  }
+  [self EAU_drawInRect:rect fromRect:srcRect operation:op fraction:delta respectFlipped:respectFlipped hints:hints];
+}
+
+@end
 
 @interface NSButtonCell(EauTheme)
 - (NSImage *) EAUimage;
@@ -46,11 +128,25 @@
 // Prevent infinite recursion during image processing
 static NSMutableSet *processingCells = nil;
 static NSMutableSet *defaultButtonSetCells = nil;
+static NSMutableSet *returnImageCells = nil;
 
 + (void)load
 {
   processingCells = [[NSMutableSet alloc] init];
   defaultButtonSetCells = [[NSMutableSet alloc] init];
+  returnImageCells = [[NSMutableSet alloc] init];
+
+  // Swizzle -drawInteriorWithFrame:inView: so we can ignore return images for
+  // layout calculations (prevents title shifting when mouse is pressed).
+  @try {
+    Class cls = [NSButtonCell class];
+    Method orig = class_getInstanceMethod(cls, @selector(drawInteriorWithFrame:inView:));
+    Method swiz = class_getInstanceMethod(cls, @selector(EAU_drawInteriorWithFrame:inView:));
+    if (orig && swiz) method_exchangeImplementations(orig, swiz);
+  }
+  @catch (NSException *exception) {
+    EAULOG(@"NSButtonCell+Eau: ERROR swizzling drawInteriorWithFrame: %@", exception);
+  }
 }
 
 // Helper methods to track processing state
@@ -80,10 +176,17 @@ static NSMutableSet *defaultButtonSetCells = nil;
   if (originalImage)
     {
       NSString *imageName = [originalImage name];
+      NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
       
-      if (imageName && ([imageName isEqualToString:@"common_ret"] || 
-                       [imageName isEqualToString:@"common_retH"]))
+      if (baseName && ([baseName isEqualToString:@"common_ret"] || 
+                       [baseName isEqualToString:@"common_retH"]))
         {
+          // Remember that this cell is using the suppressed return image so
+          // we can treat layout differently while it's highlighted.
+          @synchronized(returnImageCells) {
+            [returnImageCells addObject:[NSValue valueWithPointer:self]];
+          }
+
           // Prevent infinite loops
           if (![self isProcessingReturnButton]) {
             [self setIsProcessingReturnButton:YES];
@@ -104,10 +207,17 @@ static NSMutableSet *defaultButtonSetCells = nil;
 {
   if (image) {
     NSString *imageName = [image name];
+    NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
-    if (imageName && ([imageName isEqualToString:@"common_ret"] || 
-                     [imageName isEqualToString:@"common_retH"])) {
+    if (baseName && ([baseName isEqualToString:@"common_ret"] || 
+                     [baseName isEqualToString:@"common_retH"])) {
       
+      // Remember that this cell is using the suppressed return image so
+      // we can treat layout differently while it's highlighted.
+      @synchronized(returnImageCells) {
+        [returnImageCells addObject:[NSValue valueWithPointer:self]];
+      }
+
       // Prevent infinite loops
       if (![self isProcessingReturnButton]) {
         [self setIsProcessingReturnButton:YES];
@@ -135,10 +245,17 @@ static NSMutableSet *defaultButtonSetCells = nil;
   if (originalImage)
     {
       NSString *imageName = [originalImage name];
+      NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
       
-      if (imageName && ([imageName isEqualToString:@"common_ret"] || 
-                       [imageName isEqualToString:@"common_retH"]))
+      if (baseName && ([baseName isEqualToString:@"common_ret"] || 
+                       [baseName isEqualToString:@"common_retH"]))
         {
+          // Remember that this cell is using the suppressed return image so
+          // we can treat layout differently while it's highlighted.
+          @synchronized(returnImageCells) {
+            [returnImageCells addObject:[NSValue valueWithPointer:self]];
+          }
+
           // Prevent infinite loops
           if (![self isProcessingReturnButton]) {
             [self setIsProcessingReturnButton:YES];
@@ -159,9 +276,16 @@ static NSMutableSet *defaultButtonSetCells = nil;
 {
   if (alternateImage) {
     NSString *imageName = [alternateImage name];
+    NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
-    if (imageName && ([imageName isEqualToString:@"common_ret"] || 
-                     [imageName isEqualToString:@"common_retH"])) {
+    if (baseName && ([baseName isEqualToString:@"common_ret"] || 
+                     [baseName isEqualToString:@"common_retH"])) {
+      // Remember that this cell is using the suppressed return image so
+      // we can treat layout differently while it's highlighted.
+      @synchronized(returnImageCells) {
+        [returnImageCells addObject:[NSValue valueWithPointer:self]];
+      }
+
       // Prevent infinite loops
       if (![self isProcessingReturnButton]) {
         [self setIsProcessingReturnButton:YES];
@@ -238,17 +362,25 @@ static NSMutableSet *defaultButtonSetCells = nil;
       return;
     }
     
-    // Defensive: Check if this is a modal panel - if so, don't schedule delayed attempt
-    // Modal panels are often short-lived and may be deallocated before timer fires
+    // Defensive: Check if this is a modal panel or modal window - if so, don't schedule delayed attempt
+    // Modal windows are often short-lived and may be deallocated before timer fires
     NSView *controlView = nil;
     if ([self respondsToSelector:@selector(controlView)]) {
       controlView = [self controlView];
     }
     if (controlView) {
       NSWindow *window = [controlView window];
-      if (window && [window isKindOfClass:[NSPanel class]]) {
-        EAULOG(@"NSButtonCell+Eau: Button is in a panel, skipping delayed attempt for cell %p", self);
-        return;
+      if (window) {
+        // Skip delayed attempts for panels (short-lived)
+        if ([window isKindOfClass:[NSPanel class]]) {
+          EAULOG(@"NSButtonCell+Eau: Button is in a panel, skipping delayed attempt for cell %p", self);
+          return;
+        }
+        // Skip delayed attempts for modal windows (short-lived, closed when modal session ends)
+        if ([NSApp modalWindow] == window) {
+          EAULOG(@"NSButtonCell+Eau: Button is in modal window, skipping delayed attempt for cell %p", self);
+          return;
+        }
       }
     }
     
@@ -280,22 +412,58 @@ static NSMutableSet *defaultButtonSetCells = nil;
     
     // Defensive: Check if the window still exists before proceeding
     NSView *controlView = nil;
-    if ([self respondsToSelector:@selector(controlView)]) {
-      controlView = [self controlView];
-    }
-    if (!controlView || ![controlView isKindOfClass:[NSView class]]) {
-      EAULOG(@"NSButtonCell+Eau: Control view is nil or invalid in final attempt for cell %p", self);
+    NSWindow *window = nil;
+    
+    if (![self respondsToSelector:@selector(controlView)]) {
+      EAULOG(@"NSButtonCell+Eau: Cell does not respond to controlView, aborting");
       return;
     }
     
-    NSWindow *window = [controlView window];
-    if (!window || ![window isKindOfClass:[NSWindow class]]) {
-      EAULOG(@"NSButtonCell+Eau: Window is nil or invalid in final attempt for cell %p", self);
+    controlView = [self controlView];
+    if (!controlView) {
+      EAULOG(@"NSButtonCell+Eau: Control view is nil in final attempt for cell %p", self);
       return;
     }
     
-    // Check if window is still visible - if not, it's probably being closed
-    if (![window isVisible]) {
+    // Validate controlView is actually a view before accessing it
+    if (![controlView respondsToSelector:@selector(window)]) {
+      EAULOG(@"NSButtonCell+Eau: Control view does not respond to window selector, aborting");
+      return;
+    }
+    
+    if (![controlView isKindOfClass:[NSView class]]) {
+      EAULOG(@"NSButtonCell+Eau: Control view is not an NSView in final attempt for cell %p", self);
+      return;
+    }
+    
+    /* Getting the window can crash if view is deallocated - wrap in exception handler */
+    @try {
+      window = [controlView window];
+    } @catch (NSException *windowException) {
+      EAULOG(@"NSButtonCell+Eau: Exception getting window from control view for cell %p: %@", self, windowException);
+      return;
+    }
+    
+    if (!window) {
+      EAULOG(@"NSButtonCell+Eau: Window is nil in final attempt for cell %p (window closed or view detached)", self);
+      return;
+    }
+    
+    if (![window isKindOfClass:[NSWindow class]]) {
+      EAULOG(@"NSButtonCell+Eau: Window is not an NSWindow in final attempt for cell %p", self);
+      return;
+    }
+    
+    // Check if window is still visible - if not, it's being closed
+    BOOL isVisible = NO;
+    @try {
+      isVisible = [window isVisible];
+    } @catch (NSException *visException) {
+      EAULOG(@"NSButtonCell+Eau: Exception checking window visibility for cell %p: %@", self, visException);
+      return;
+    }
+    
+    if (!isVisible) {
       EAULOG(@"NSButtonCell+Eau: Window is not visible in final attempt for cell %p, aborting", self);
       return;
     }
@@ -326,6 +494,33 @@ static NSMutableSet *defaultButtonSetCells = nil;
   @catch (NSException *exception) {
     EAULOG(@"NSButtonCell+Eau: ERROR in finalAttemptSetAsDefaultButton for cell %p: %@", self, exception);
   }
+}
+
+// When highlighted, if this cell has a return icon image set internally, compute
+// the title rect as if there was no image so the title doesn't shift while
+// clicking. This mirrors NSCell's text layout and only applies for the highlighted
+// state and when the stored images are the suppressed return images.
+- (NSRect) titleRectForBounds:(NSRect)theRect
+{
+  BOOL hasReturnImage = NO;
+  @synchronized(returnImageCells) {
+    NSValue *cellPtr = [NSValue valueWithPointer:self];
+    hasReturnImage = [returnImageCells containsObject:cellPtr];
+  }
+
+  if (hasReturnImage && [self isHighlighted]) {
+    EAULOG(@"NSButtonCell+Eau: Suppressing layout image space for highlighted cell %p (return image), title rect adjusted", self);
+    NSRect frame = [self drawingRectForBounds: theRect];
+    if ([self isBordered] || [self isBezeled]) {
+      frame.origin.x += 3;
+      frame.size.width -= 6;
+      frame.origin.y += 1;
+      frame.size.height -= 2;
+    }
+    return frame;
+  }
+
+  return [super titleRectForBounds: theRect];
 }
 
 // Strategy 1: Try direct window access through controlView
@@ -410,6 +605,49 @@ static NSMutableSet *defaultButtonSetCells = nil;
   }
   
   return NO;
+}
+
+// Replace layout-influencing image data while drawing so buttons don't shift as if the
+// return icon were present. This temporarily clears private ivars that hold the images
+// only if those images are the return images, then calls the original implementation.
+- (void) EAU_drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView*)controlView
+{
+  BOOL shouldRemoveImagePosition = NO;
+  NSCellImagePosition oldPos = [self imagePosition];
+
+  @synchronized(returnImageCells) {
+    NSValue *cellPtr = [NSValue valueWithPointer:self];
+    if ([returnImageCells containsObject:cellPtr] && oldPos != NSNoImage) {
+      shouldRemoveImagePosition = YES;
+    }
+  }
+
+  if (shouldRemoveImagePosition) {
+    @try {
+      [self setImagePosition: NSNoImage];
+    }
+    @catch (NSException *e) {
+      EAULOG(@"NSButtonCell+Eau: ERROR setting imagePosition to NSNoImage for cell %p: %@", self, e);
+      shouldRemoveImagePosition = NO; // avoid restoring to wrong state
+    }
+  }
+
+  // Call original implementation (swizzled)
+  @try {
+    [self EAU_drawInteriorWithFrame:cellFrame inView:controlView];
+  }
+  @catch (NSException *e) {
+    EAULOG(@"NSButtonCell+Eau: ERROR in EAU_drawInteriorWithFrame (original): %@", e);
+  }
+
+  if (shouldRemoveImagePosition) {
+    @try {
+      [self setImagePosition: oldPos];
+    }
+    @catch (NSException *e) {
+      EAULOG(@"NSButtonCell+Eau: ERROR restoring imagePosition for cell %p: %@", self, e);
+    }
+  }
 }
 
 // Strategy 2: Search all windows for this button cell
