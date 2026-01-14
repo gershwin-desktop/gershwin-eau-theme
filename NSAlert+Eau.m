@@ -21,6 +21,11 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 static void setKeyEquivalent(NSButton *button);
 static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
+// Declare -beep on NSApplication so callers in this file don't warn at compile time
+@interface NSApplication (EauBeep)
+- (void)beep;
+@end
+
 // Private category to declare swizzled selectors so the compiler knows about them
 @interface EauAlertPanel (Swizzles)
 - (id)eau_initWithoutGModel;
@@ -515,6 +520,17 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 - (NSInteger) runModal
 {
     NSLog(@"Eau: EauAlertPanel runModal called");
+    
+    // Beep when alert is displayed (diagnostics)
+    NSApplication *app = [NSApplication sharedApplication];
+    NSLog(@"Eau: EauAlertPanel about to beep - NSApp class: %@ respondsToSelector: %d",
+          NSStringFromClass([app class]), (int)[app respondsToSelector:@selector(beep)]);
+    if ([app respondsToSelector:@selector(beep)]) {
+        [app performSelector:@selector(beep)];
+    } else {
+        NSLog(@"Eau: NSApp does not respond to -beep");
+    }
+    
     @try {
         if (isGreen)
         {
@@ -1164,6 +1180,16 @@ static void setKeyEquivalent(NSButton *button)
     // Call _setupPanel - this invokes the Eau custom setup since methods were swizzled
     // After swizzling: _setupPanel -> eau_setupPanel code, eau_setupPanel -> original code
     [self performSelector: @selector(_setupPanel)];
+    
+    // Beep when alert is displayed (diagnostics)
+    NSApplication *eauApp = [NSApplication sharedApplication];
+    NSLog(@"Eau: NSAlert about to beep - NSApp class: %@ respondsToSelector: %d",
+          NSStringFromClass([eauApp class]), (int)[eauApp respondsToSelector:@selector(beep)]);
+    if ([eauApp respondsToSelector:@selector(beep)]) {
+        [eauApp performSelector:@selector(beep)];
+    } else {
+        NSLog(@"Eau: NSApp does not respond to -beep");
+    }
     
     // Get the _window ivar
     NSWindow *window = nil;
