@@ -1,4 +1,5 @@
 #import "Eau.h"
+#import "AppearanceMetrics.h"
 #include <AppKit/AppKit.h>
 #import <Foundation/NSUserDefaults.h>
 @interface Eau(EauMenu)
@@ -33,12 +34,12 @@
 }
 - (CGFloat) menuBarHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return METRICS_MENU_ITEM_HEIGHT;
 }
 
 - (CGFloat) menuItemHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return METRICS_MENU_ITEM_HEIGHT;
 }
 - (CGFloat) menuSeparatorHeight
 {

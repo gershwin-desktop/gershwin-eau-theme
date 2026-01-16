@@ -400,7 +400,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
                 rect.size.width = bsize.width;
                 rect.size.height = bsize.height;
                 [buttons[i] setFrame: rect];
-                position -= METRICS_BUTTON_VERT_INTERSPACE;
+                position -= METRICS_BUTTON_HORIZ_INTERSPACE;
             }
         }
     }

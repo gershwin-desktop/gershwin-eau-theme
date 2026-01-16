@@ -18,6 +18,7 @@ Eau_OBJC_FILES = \
 		Eau+Slider.m\
 		Eau+ProgressIndicator.m\
 		Eau+Scroller.m\
+		Eau+ScrollView.m\
 		Eau+ColorWell.m\
 		Eau+Stepper.m\
 		Eau+Segmented.m\
@@ -29,24 +30,44 @@ Eau_OBJC_FILES = \
 		NSWindow+Eau.m\
 		NSSegmentedCell+Eau.m\
 		NSTableView+Eau.m\
+		NSOutlineView+Eau.m\
 		NSTableHeaderCell+Eau.m\
+		NSTableCellView+Eau.m\
 		EauWindowButton.m\
 		EauWindowButtonCell.m\
 		EauScrollerKnobCell.m\
 		EauScrollerKnobSlotCell.m\
 		EauScrollerArrowCell.m\
 		NSAlert+Eau.m\
+		NSObject+Eau.m\
 		NSBrowserCell+Eau.m\
 		NSSearchFieldCell+Eau.m\
 		NSBeep+Eau.m\
 		NSCell+Eau.m\
 		NSButtonCell+Eau.m\
+		ControlSizing+Eau.m\
 		NSTextFieldCell+Eau.m\
+		NSTextView+Eau.m\
+		NSDatePicker+Eau.m\
+		NSPathControl+Eau.m\
+		NSLevelIndicator+Eau.m\
+		NSImageView+Eau.m\
 		NSFont+Eau.m\
 		NSMenuItemCell+Eau.m\
+		NSMenuItem+Eau.m\
 		NSMenuView+Eau.m\
+		NSPanel+Eau.m\
 		NSBox+Eau.m\
-		NSPopUpButton+Eau.m
+		NSPopUpButton+Eau.m\
+		NSSplitView+Eau.m\
+		NSComboBox+Eau.m\
+		NSForm+Eau.m\
+		NSMatrix+Eau.m\
+		NSClipView+Eau.m\
+		NSScroller+Eau.m\
+		NSImageCell+Eau.m\
+		NSPathComponentCell+Eau.m\
+		NSTableHeaderView+Eau.m
 ADDITIONAL_TOOL_LIBS =
 $(BUNDLE_NAME)_RESOURCE_FILES = \
 	./Resources/ThemeIcon.png\

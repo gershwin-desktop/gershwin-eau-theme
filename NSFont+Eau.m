@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import "AppearanceMetrics.h"
 
 // Category on NSFont used for method swizzling
 @interface NSFont (EauSwizzling)
@@ -9,30 +10,30 @@
 
 @implementation NSFont (EauSwizzling)
 
-// Swizzled implementation for menuBarFontOfSize: - returns font with size 14.0
+// Swizzled implementation for menuBarFontOfSize: - returns font with HIG size
 + (NSFont *)eau_menuBarFontOfSize:(CGFloat)fontSize {
   // Call the original menuBarFontOfSize: to get the base font
   NSFont *baseFont = [self eau_menuBarFontOfSize:fontSize];
   
-  // Create a new font with size 14.0 using the font descriptor
+  // Create a new font with HIG size using the font descriptor
   NSFontDescriptor *descriptor = [baseFont fontDescriptor];
-  NSFont *sizedFont = [NSFont fontWithDescriptor:descriptor size:14.0];
+  NSFont *sizedFont = [NSFont fontWithDescriptor:descriptor size:[METRICS_FONT_SYSTEM_REGULAR_13 pointSize]];
   
-  NSDebugLog(@"NSFont+Eau: menuBarFontOfSize: returning font with size 14.0 (was %.1f)", [baseFont pointSize]);
+  NSDebugLog(@"NSFont+Eau: menuBarFontOfSize: returning font with size %.1f (was %.1f)", [sizedFont pointSize], [baseFont pointSize]);
   
   return sizedFont;
 }
 
-// Swizzled implementation for menuFontOfSize: - returns font with size 14.0
+// Swizzled implementation for menuFontOfSize: - returns font with HIG size
 + (NSFont *)eau_menuFontOfSize:(CGFloat)fontSize {
   // Call the original menuFontOfSize: to get the base font
   NSFont *baseFont = [self eau_menuFontOfSize:fontSize];
   
-  // Create a new font with size 14.0 using the font descriptor
+  // Create a new font with HIG size using the font descriptor
   NSFontDescriptor *descriptor = [baseFont fontDescriptor];
-  NSFont *sizedFont = [NSFont fontWithDescriptor:descriptor size:14.0];
+  NSFont *sizedFont = [NSFont fontWithDescriptor:descriptor size:[METRICS_FONT_SYSTEM_REGULAR_13 pointSize]];
   
-  NSDebugLog(@"NSFont+Eau: menuFontOfSize: returning font with size 14.0 (was %.1f)", [baseFont pointSize]);
+  NSDebugLog(@"NSFont+Eau: menuFontOfSize: returning font with size %.1f (was %.1f)", [sizedFont pointSize], [baseFont pointSize]);
   
   return sizedFont;
 }

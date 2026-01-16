@@ -1,4 +1,5 @@
 #import "Eau.h"
+#import "AppearanceMetrics.h"
 #import "Eau+Drawings.h"
 
 @interface Eau(EauTable)
@@ -43,8 +44,8 @@
 
 - (CGFloat) tableHeaderRowHeight
 {
-  // Return a smaller height (17px) for table headers to match the small font
-  return 17.0;
+  // Return a smaller height to match the small font
+  return METRICS_BUTTON_SMALL_HEIGHT;
 }
 
 - (void) drawTableCornerView: (NSView*)cornerView
@@ -125,6 +126,53 @@
                                                           alpha: 1.0];
               [strokeColor setStroke];
               [linesPath stroke];
+}
+
+- (void) drawTableViewBackgroundInClipRect: (NSRect)aRect
+                                    inView: (NSView *)view
+                       withBackgroundColor: (NSColor *)backgroundColor
+{
+  NSTableView *tableView = (NSTableView *)view;
+  
+  // Fill with background color first
+  [backgroundColor set];
+  NSRectFill(aRect);
+  
+  // Draw alternating row colors if enabled
+  if ([tableView usesAlternatingRowBackgroundColors])
+    {
+      const CGFloat rowHeight = [tableView rowHeight];
+      NSInteger startingRow = [tableView rowAtPoint: NSMakePoint(0, NSMinY(aRect))];
+      NSInteger endingRow;
+      NSInteger i;
+      
+      NSArray *rowColors = [NSColor controlAlternatingRowBackgroundColors];
+      const NSUInteger rowColorCount = [rowColors count];
+      
+      NSRect rowRect;
+      
+      if (rowHeight <= 0 || rowColorCount == 0 || aRect.size.height <= 0)
+        return;
+      
+      if (startingRow <= 0)
+        startingRow = 0;
+      
+      rowRect = [tableView rectOfRow: startingRow];
+      rowRect.origin.x = aRect.origin.x;
+      rowRect.size.width = aRect.size.width;
+      
+      endingRow = startingRow + ceil(aRect.size.height / rowHeight);
+      
+      for (i = startingRow; i <= endingRow; i++)
+        {
+          NSColor *color = [rowColors objectAtIndex: (i % rowColorCount)];
+          
+          [color set];
+          NSRectFill(rowRect);
+          
+          rowRect.origin.y += rowHeight;
+        }
+    }
 }
 
 @end

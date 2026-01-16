@@ -1,4 +1,5 @@
 #import "Eau.h"
+#import "AppearanceMetrics.h"
 #import "Eau+Drawings.h"
 
 // Forward declare private GSTheme method to avoid compiler warnings
@@ -10,6 +11,43 @@
 @end
 
 @implementation Eau(EauTabView)
+
+static CGFloat EauTabHeightForView(NSTabView *view)
+{
+  if ([view respondsToSelector:@selector(controlSize)])
+    {
+      NSControlSize size = [(id)view controlSize];
+      return EauHeightForControlSize(size, METRICS_TAB_HEIGHT, METRICS_TAB_SMALL_HEIGHT, METRICS_TAB_MINI_HEIGHT);
+    }
+
+  return METRICS_TAB_HEIGHT;
+}
+
+- (CGFloat) tabHeightForType: (NSTabViewType)type
+{
+  // Enforce HIG tab height for full-size tabs
+  return METRICS_TAB_HEIGHT;
+}
+
+- (NSRect) tabViewContentRectForBounds: (NSRect)aRect
+                           tabViewType: (NSTabViewType)type
+                               tabView: (NSTabView *)view
+{
+  NSRect rect = [super tabViewContentRectForBounds: aRect tabViewType: type tabView: view];
+  CGFloat tabHeight = EauTabHeightForView(view);
+
+  if (type == NSTopTabsBezelBorder)
+    {
+      rect.origin.y += (METRICS_TAB_HEIGHT - tabHeight);
+      rect.size.height -= (METRICS_TAB_HEIGHT - tabHeight);
+    }
+  else if (type == NSBottomTabsBezelBorder)
+    {
+      rect.size.height -= (METRICS_TAB_HEIGHT - tabHeight);
+    }
+
+  return rect;
+}
 
 - (void) drawTabViewRect: (NSRect)rect
                   inView: (NSView *)view
@@ -25,7 +63,7 @@
   NSRect aRect = [self tabViewBackgroundRectForBounds: bounds tabViewType: type];
 
   const BOOL truncate = [(NSTabView *)view allowsTruncatedLabels];
-  const CGFloat tabHeight = [self tabHeightForType: type];
+  const CGFloat tabHeight = EauTabHeightForView((NSTabView *)view);
   
   DPSgsave(ctxt);
   

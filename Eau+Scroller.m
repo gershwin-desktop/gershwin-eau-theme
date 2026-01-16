@@ -1,4 +1,5 @@
 #include "Eau.h"
+#include "AppearanceMetrics.h"
 #include "EauScrollerKnobCell.h"
 #include "EauScrollerKnobSlotCell.h"
 #include "EauScrollerArrowCell.h"
@@ -126,7 +127,7 @@
 // REMEMBER THIS SETTING
 - (float) defaultScrollerWidth
 {
-  return 16.0;
+  return METRICS_SCROLLBAR_WIDTH;
 }
 
 - (BOOL) scrollViewUseBottomCorner

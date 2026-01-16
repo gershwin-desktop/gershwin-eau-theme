@@ -8,6 +8,7 @@
  */
 
 #import <AppKit/AppKit.h>
+#import <objc/runtime.h>
 
 @implementation NSApplication (EauBeep)
 
@@ -91,6 +92,45 @@
     }
     
     isPlaying = NO;
+}
+
+- (void)eau_awakeFromNib
+{
+    Method awakeMethod = class_getInstanceMethod([NSApplication class], @selector(awakeFromNib));
+    Method eauMethod = class_getInstanceMethod([NSApplication class], @selector(eau_awakeFromNib));
+
+    if (awakeMethod && eauMethod)
+    {
+        IMP awakeImp = method_getImplementation(awakeMethod);
+        IMP eauImp = method_getImplementation(eauMethod);
+
+        if (awakeImp != eauImp)
+        {
+            ((void (*)(id, SEL))awakeImp)(self, @selector(awakeFromNib));
+        }
+    }
+}
+
+- (void)eau_applyHIGDefaults
+{
+}
+
+- (NSRect)frame
+{
+    return NSZeroRect;
+}
+
+- (void)setFrame: (NSRect)frame
+{
+}
+
+- (NSSize)frameSize
+{
+    return NSZeroSize;
+}
+
+- (void)setFrameSize: (NSSize)size
+{
 }
 
 @end

@@ -5,22 +5,19 @@
 - (NSRect) stepperUpButtonRectWithFrame: (NSRect)frame
 {
   NSRect upRect = frame;
-  upRect.size.width = 13;
-  upRect.size.height = 12;
-  upRect.origin.x = frame.origin.x + frame.size.width/2 - 6;
-  upRect.origin.y = frame.origin.y + frame.size.height/2-1;
+  CGFloat halfHeight = ceil(frame.size.height / 2.0);
+  upRect.size.height = halfHeight;
+  upRect.origin.y = NSMaxY(frame) - halfHeight;
   return upRect;
 }
 
 - (NSRect) stepperDownButtonRectWithFrame: (NSRect)frame
 {
 
-  NSRect upRect = frame;
-  upRect.size.width = 13;
-  upRect.size.height = 12;
-  upRect.origin.x = frame.origin.x + frame.size.width/2 - 6;
-  upRect.origin.y = frame.origin.y + frame.size.height/2 - 11;
-  return upRect;
+  NSRect downRect = frame;
+  CGFloat halfHeight = floor(frame.size.height / 2.0);
+  downRect.size.height = halfHeight;
+  return downRect;
 }
 
 - (void) drawStepperBorder: (NSRect)frame
@@ -106,8 +103,8 @@
   const NSRect upRect = [self stepperUpButtonRectWithFrame: cellFrame];
   const NSRect downRect = [self stepperDownButtonRectWithFrame: cellFrame];
 
-  NSRect frame = NSMakeRect(cellFrame.origin.x + cellFrame.size.width/2 - 6, cellFrame.origin.y + cellFrame.size.height/2 - 11, 13, 22);
-
+  NSRect frame = cellFrame;
+  frame = NSInsetRect(frame, 0.5, 0.5);
   CGFloat radius = 5;
   NSGradient * fillgradient = [self _buttonGradientWithColor:[NSColor controlBackgroundColor]];
   NSBezierPath* roundedRectanglePath = [NSBezierPath bezierPathWithRoundedRect:frame  xRadius: radius yRadius: radius];
@@ -130,7 +127,7 @@
 -(NSBezierPath *) stepperBezierPathWithFrame:(NSRect)frame
 {
   CGFloat radius = 5;
-  frame = NSMakeRect(frame.origin.x + frame.size.width/2 - 6, frame.origin.y + frame.size.height/2 - 11, 13, 22);
+  frame = NSInsetRect(frame, 0.5, 0.5);
   NSBezierPath* roundedRectanglePath = [NSBezierPath bezierPathWithRoundedRect:frame  xRadius: radius yRadius: radius];
   return RETAIN(roundedRectanglePath);
 }
