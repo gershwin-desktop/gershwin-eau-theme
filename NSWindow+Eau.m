@@ -3,7 +3,9 @@
 #include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSImage.h>
+#import <AppKit/NSAlert.h>
 #import "GNUstepGUI/GSTheme.h"
+#import <objc/runtime.h>
 
 @interface DefaultButtonAnimation: NSAnimation
 {
@@ -13,6 +15,183 @@
 
 @property (nonatomic, assign) BOOL reverse;
 @property (retain) NSButtonCell * defaultbuttoncell;
+
+@end
+
+// Dialog logging helpers (used by NSWindow presentation hooks).
+static BOOL EAUIsDialogWindow(NSWindow *window)
+{
+  if (window == nil)
+    {
+      return NO;
+    }
+  if ([window isKindOfClass: [NSPanel class]])
+    {
+      return YES;
+    }
+  if ([window level] >= NSModalPanelWindowLevel)
+    {
+      return YES;
+    }
+  if (([window styleMask] & NSUtilityWindowMask) != 0)
+    {
+      return YES;
+    }
+  return NO;
+}
+
+static void EAUCollectDialogTextFromView(NSMutableArray *parts, NSView *view)
+{
+  if (view == nil)
+    {
+      return;
+    }
+  if ([view isKindOfClass: [NSTextField class]])
+    {
+      NSTextField *field = (NSTextField *)view;
+      NSString *value = [field stringValue];
+      if (value != nil && [value length] > 0)
+        {
+          [parts addObject: value];
+        }
+    }
+  NSArray *subviews = [view subviews];
+  NSUInteger count = [subviews count];
+  for (NSUInteger i = 0; i < count; i++)
+    {
+      EAUCollectDialogTextFromView(parts, [subviews objectAtIndex: i]);
+    }
+}
+
+static NSString *EAUDialogTextSummary(NSWindow *window)
+{
+  NSMutableArray *parts = [NSMutableArray array];
+  NSString *title = [window title];
+  if (title != nil && [title length] > 0)
+    {
+      [parts addObject: title];
+    }
+  EAUCollectDialogTextFromView(parts, [window contentView]);
+  if ([parts count] == 0)
+    {
+      return @"";
+    }
+  return [parts componentsJoinedByString: @" | "];
+}
+
+static void EAUWindowLog(NSString *event, NSWindow *window)
+{
+  if (window == nil)
+    {
+      EAULOG(@"EauWindowLog: %@ window=(null)", event);
+      return;
+    }
+  NSString *summary = nil;
+  if (EAUIsDialogWindow(window))
+    {
+      summary = EAUDialogTextSummary(window);
+    }
+  EAULOG(@"EauWindowLog: %@ window=%p class=%@ title='%@' visible=%d key=%d main=%d level=%ld",
+         event,
+         window,
+         NSStringFromClass([window class]),
+         [window title],
+         (int)[window isVisible],
+         (int)[window isKeyWindow],
+         (int)[window isMainWindow],
+         (long)[window level]);
+  if (summary != nil && [summary length] > 0)
+    {
+      EAULOG(@"EauDialog: window=%p class=%@ text='%@'", window, NSStringFromClass([window class]), summary);
+    }
+}
+
+@implementation NSWindow (EauLogging)
+
++ (void) load
+{
+  static BOOL swizzled = NO;
+  if (swizzled)
+    {
+      return;
+    }
+  swizzled = YES;
+
+  Class cls = [NSWindow class];
+  Method orig;
+  Method swiz;
+
+  orig = class_getInstanceMethod(cls, @selector(orderFront:));
+  swiz = class_getInstanceMethod(cls, @selector(eau_orderFront:));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  orig = class_getInstanceMethod(cls, @selector(orderFrontRegardless));
+  swiz = class_getInstanceMethod(cls, @selector(eau_orderFrontRegardless));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  orig = class_getInstanceMethod(cls, @selector(makeKeyAndOrderFront:));
+  swiz = class_getInstanceMethod(cls, @selector(eau_makeKeyAndOrderFront:));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  orig = class_getInstanceMethod(cls, @selector(orderOut:));
+  swiz = class_getInstanceMethod(cls, @selector(eau_orderOut:));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  orig = class_getInstanceMethod(cls, @selector(close));
+  swiz = class_getInstanceMethod(cls, @selector(eau_close));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  /* windowWillReturnFieldEditor:toObject: swizzling REMOVED - it was causing crashes */
+
+  [[NSNotificationCenter defaultCenter] addObserver: self
+                                           selector: @selector(eau_windowWillClose:)
+                                               name: NSWindowWillCloseNotification
+                                             object: nil];
+}
+
++ (void) eau_windowWillClose: (NSNotification *)note
+{
+  NSWindow *window = (NSWindow *)[note object];
+  EAUWindowLog(@"willClose", window);
+}
+
+
+- (void) eau_orderFront: (id)sender
+{
+  EAUWindowLog(@"orderFront", self);
+  [self eau_orderFront: sender];
+}
+
+- (void) eau_orderFrontRegardless
+{
+  EAUWindowLog(@"orderFrontRegardless", self);
+  [self eau_orderFrontRegardless];
+}
+
+- (void) eau_makeKeyAndOrderFront: (id)sender
+{
+  EAUWindowLog(@"makeKeyAndOrderFront", self);
+  [self eau_makeKeyAndOrderFront: sender];
+}
+
+- (void) eau_orderOut: (id)sender
+{
+  EAUWindowLog(@"orderOut", self);
+  [self eau_orderOut: sender];
+}
+
+- (void) eau_close
+{
+  EAUWindowLog(@"close", self);
+  [self eau_close];
+}
+
+/* REMOVED: eau_windowWillReturnFieldEditor:toObject: swizzling.
+   This delegate method should not be swizzled into NSWindow itself.
+   The swizzle caused objc_msgSend_stret crashes due to incorrect type
+   encoding. If GWDialog needs to customize field editor behavior, it
+   should implement this as a proper delegate method on its delegate object,
+   not swizzle it into the window class. */
 
 @end
 
@@ -90,6 +269,14 @@
     [[NSNotificationCenter defaultCenter] addObserver:self 
                                              selector:@selector(windowDidDeminiaturize:) 
                                                  name:NSWindowDidDeminiaturizeNotification 
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(windowDidBecomeKey:)
+                                                 name:NSWindowDidBecomeKeyNotification
+                                               object:nil];
+    [[NSNotificationCenter defaultCenter] addObserver:self
+                                             selector:@selector(windowDidResignKey:)
+                                                 name:NSWindowDidResignKeyNotification
                                                object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self 
                                              selector:@selector(applicationDidHide:) 
@@ -388,6 +575,8 @@
 
 @implementation NSWindow(EauTheme)
 
+static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonControllerKey;
+
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell
 {
   EAULOG(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p", aCell);
@@ -401,12 +590,28 @@
 
   EAULOG(@"NSWindow+Eau: Creating DefaultButtonAnimationController for cell %p", aCell);
   DefaultButtonAnimationController * animationcontroller = [[DefaultButtonAnimationController alloc] initWithButtonCell: aCell];
-  
-  EAULOG(@"NSWindow+Eau: Setting window delegate to animation controller %p", animationcontroller);
-  [self setDelegate:animationcontroller];
+
+  // Retain controller via association to ensure it stays alive
+  objc_setAssociatedObject(self,
+                           kEAUDefaultButtonControllerKey,
+                           animationcontroller,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+  // Guard against overriding existing delegates
+  id currentDelegate = [self delegate];
+  if (currentDelegate == nil || currentDelegate == animationcontroller)
+    {
+      EAULOG(@"NSWindow+Eau: Setting window delegate to animation controller %p", animationcontroller);
+      [self setDelegate: animationcontroller];
+    }
+  else
+    {
+      EAULOG(@"NSWindow+Eau: Preserving existing delegate %@, not overriding", currentDelegate);
+    }
   
   EAULOG(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
   [animationcontroller startPulse];
+  [animationcontroller release];
   
   EAULOG(@"NSWindow+Eau: Default button cell setup completed for cell %p", aCell);
 }

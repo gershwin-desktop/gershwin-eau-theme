@@ -21,6 +21,16 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 static void setKeyEquivalent(NSButton *button);
 static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
+static id EAUGetAlertIvar(id obj, const char *name)
+{
+    Ivar ivar = class_getInstanceVariable([obj class], name);
+    if (ivar == NULL)
+    {
+        return nil;
+    }
+    return object_getIvar(obj, ivar);
+}
+
 // Declare -beep on NSApplication so callers in this file don't warn at compile time
 @interface NSApplication (EauBeep)
 - (void)beep;
@@ -144,14 +154,47 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
     return [self initWithContentRect: NSMakeRect(0, 0, METRICS_WIN_MIN_WIDTH, METRICS_WIN_MIN_HEIGHT)];
 }
 
-// Helper method that will be injected into GSAlertPanel via swizzling
-// This calls the original _initWithoutGModel and then removes the horizontal line
+// Helper method injected into GSAlertPanel via swizzling
+// - Calls original _initWithoutGModel
+// - Removes legacy separator line
+// - Applies Eau fonts to match AppearanceMetrics
 - (id) eau_initWithoutGModelHelper
 {
     // Call the original implementation (which is now at this selector after swizzling)
     self = [self eau_initWithoutGModel];
     if (self == nil)
         return nil;
+
+    // Apply Eau fonts to legacy GSAlertPanel controls
+    NSTextField *legacyTitleField = (NSTextField *)EAUGetAlertIvar(self, "titleField");
+    NSTextField *legacyMessageField = (NSTextField *)EAUGetAlertIvar(self, "messageField");
+    NSButton *legacyDefButton = (NSButton *)EAUGetAlertIvar(self, "defButton");
+    NSButton *legacyAltButton = (NSButton *)EAUGetAlertIvar(self, "altButton");
+    NSButton *legacyOthButton = (NSButton *)EAUGetAlertIvar(self, "othButton");
+
+    if (legacyTitleField != nil)
+    {
+        [legacyTitleField setFont: METRICS_FONT_SYSTEM_BOLD_13];
+    }
+    if (legacyMessageField != nil)
+    {
+        [legacyMessageField setFont: METRICS_FONT_SYSTEM_REGULAR_11];
+    }
+    if (legacyDefButton != nil)
+    {
+        [legacyDefButton setFont: METRICS_FONT_SYSTEM_BOLD_13];
+        [legacyDefButton sizeToFit];
+    }
+    if (legacyAltButton != nil)
+    {
+        [legacyAltButton setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+        [legacyAltButton sizeToFit];
+    }
+    if (legacyOthButton != nil)
+    {
+        [legacyOthButton setFont: METRICS_FONT_SYSTEM_REGULAR_13];
+        [legacyOthButton sizeToFit];
+    }
     
     // Remove the horizontal line (NSBox with NSGrooveBorder)
     NSView *content = [(NSPanel *)self contentView];
@@ -217,13 +260,7 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 - (void) dealloc
 {
     NSLog(@"Eau: EauAlertPanel dealloc called for panel: %@", self);
-    RELEASE(defButton);
-    RELEASE(altButton);
-    RELEASE(othButton);
-    RELEASE(icoButton);
-    RELEASE(titleField);
-    RELEASE(messageField);
-    RELEASE(scroll);
+    // Superclass GSAlertPanel already releases its ivars; avoid double-free.
     NSLog(@"Eau: EauAlertPanel dealloc calling super");
     [super dealloc];
 }
@@ -1107,22 +1144,20 @@ static void setKeyEquivalent(NSButton *button)
     
     // Also swizzle GSAlertPanel's _initWithoutGModel to handle legacy alert functions
     // (NSRunAlertPanel, NSGetAlertPanel, etc.) which create GSAlertPanel directly
-    // FIXME: This causes crashes, so disabled
-    /*
     Class gsAlertPanelClass = NSClassFromString(@"GSAlertPanel");
     if (gsAlertPanelClass)
     {
         SEL origInitSel = @selector(_initWithoutGModel);
         SEL swizzledInitSel = @selector(eau_initWithoutGModel);
         
-        // Add the swizzled method to GSAlertPanel dynamically
-        Method rikInitMethod = class_getInstanceMethod([EauAlertPanel class], @selector(eau_initWithoutGModelHelper));
-        if (rikInitMethod)
+        // Add the swizzled init method to GSAlertPanel dynamically
+        Method initHelperMethod = class_getInstanceMethod([EauAlertPanel class], @selector(eau_initWithoutGModelHelper));
+        if (initHelperMethod)
         {
             class_addMethod(gsAlertPanelClass,
                            swizzledInitSel,
-                           method_getImplementation(rikInitMethod),
-                           method_getTypeEncoding(rikInitMethod));
+                           method_getImplementation(initHelperMethod),
+                           method_getTypeEncoding(initHelperMethod));
             
             Method origInitMethod = class_getInstanceMethod(gsAlertPanelClass, origInitSel);
             Method newSwizzledMethod = class_getInstanceMethod(gsAlertPanelClass, swizzledInitSel);
@@ -1133,49 +1168,35 @@ static void setKeyEquivalent(NSButton *button)
                 EAULOG(@"Eau: GSAlertPanel _initWithoutGModel swizzled successfully");
             }
         }
-        
-        // Swizzle GSAlertPanel's runModal to ensure focus and pulsing
-        SEL origRunModalSel = @selector(runModal);
-        SEL swizzledRunModalSel = @selector(eau_runModal);
-        
-        // Add the eau_getDefButton helper method to GSAlertPanel
-        Method getDefButtonMethod = class_getInstanceMethod([EauAlertPanel class], @selector(eau_getDefButton));
-        if (getDefButtonMethod)
-        {
-            class_addMethod(gsAlertPanelClass,
-                           @selector(eau_getDefButton),
-                           method_getImplementation(getDefButtonMethod),
-                           method_getTypeEncoding(getDefButtonMethod));
-        }
-        
-        // Add the swizzled runModal method to GSAlertPanel
-        Method runModalHelperMethod = class_getInstanceMethod([EauAlertPanel class], @selector(eau_runModalHelper));
-        if (runModalHelperMethod)
-        {
-            class_addMethod(gsAlertPanelClass,
-                           swizzledRunModalSel,
-                           method_getImplementation(runModalHelperMethod),
-                           method_getTypeEncoding(runModalHelperMethod));
-            
-            Method origRunModalMethod = class_getInstanceMethod(gsAlertPanelClass, origRunModalSel);
-            Method newSwizzledRunModalMethod = class_getInstanceMethod(gsAlertPanelClass, swizzledRunModalSel);
-            
-            if (origRunModalMethod && newSwizzledRunModalMethod)
-            {
-                method_exchangeImplementations(origRunModalMethod, newSwizzledRunModalMethod);
-                EAULOG(@"Eau: GSAlertPanel runModal swizzled successfully");
-            }
-        }
+
+        // Note: GSAlertPanel runModal/sizePanelToFit swizzles are intentionally
+        // disabled here to avoid crashes in legacy alert panels.
     }
-    */
 }
 
 // Replacement for NSAlert's runModal method
-// This ensures the window is activated and brought to front before the modal loop
+// - Ensures activation and key focus
+// - Preserves GNUstep lifecycle (setup, run modal, order out, destroy window)
+// - Avoids KVC retain/release side effects on _window
 - (NSInteger) eau_runModal
 {
     NSLog(@"Eau: NSAlert eau_runModal called");
     @try {
+
+    if (![NSThread isMainThread])
+    {
+        [self performSelectorOnMainThread: _cmd withObject: nil waitUntilDone: YES];
+        @try {
+            NSNumber *resultValue = [self valueForKey: @"_result"];
+            if (resultValue != nil)
+            {
+                return [resultValue integerValue];
+            }
+        } @catch (NSException *exception) {
+            // Ignore and fall through
+        }
+        return NSAlertErrorReturn;
+    }
     
     // Call _setupPanel - this invokes the Eau custom setup since methods were swizzled
     // After swizzling: _setupPanel -> eau_setupPanel code, eau_setupPanel -> original code
@@ -1191,7 +1212,7 @@ static void setKeyEquivalent(NSButton *button)
         NSLog(@"Eau: NSApp does not respond to -beep");
     }
     
-    // Get the _window ivar
+    // Get the _window ivar (NSAlert owns the panel instance)
     NSWindow *window = nil;
     @try {
         window = [self valueForKey: @"_window"];
@@ -1206,60 +1227,30 @@ static void setKeyEquivalent(NSButton *button)
     
     if (window)
     {
-        // If it's an EauAlertPanel, use its runModal which handles keyboard focus
+        NSInteger result = NSAlertErrorReturn;
+
         if ([window isKindOfClass: [EauAlertPanel class]])
         {
             EauAlertPanel *panel = (EauAlertPanel *)window;
-            // Retain the panel to prevent premature deallocation when nested modals close
-            RETAIN(panel);
-            NSLog(@"Eau: eau_runModal retained panel: %@, retainCount before modal: %lu", panel, (unsigned long)[panel retainCount]);
-            NSInteger modalResult = [panel runModal];
-            NSLog(@"Eau: eau_runModal completed, retainCount: %lu", (unsigned long)[panel retainCount]);
-            
-            // Store result via KVC if possible
-            @try {
-                [self setValue: @(modalResult) forKey: @"_result"];
-            }
-            @catch (NSException *exception) {
-                // Ignore if ivar doesn't exist
-            }
-            
-            // Destroy the window as original does
-            @try {
-                [self setValue: nil forKey: @"_window"];
-            }
-            @catch (NSException *exception) {
-                Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-                if (windowIvar)
-                {
-                    object_setIvar(self, windowIvar, nil);
-                }
-            }
-            
-            // Release our retain from before the modal
-            NSLog(@"Eau: eau_runModal releasing panel, retainCount before release: %lu", (unsigned long)[panel retainCount]);
-            RELEASE(panel);
-            
-            return modalResult;
+            result = [panel runModal];
         }
-        
-        // Fallback for non-EauAlertPanel windows
-        [NSApp activateIgnoringOtherApps: YES];
-        [window center];
-        [window orderFrontRegardless];
-        [window makeKeyAndOrderFront: nil];
-        
-        EAULOG(@"Eau: NSAlert running modal for window: %@", window);
-        [NSApp runModalForWindow: window];
-        [window orderOut: self];
-        
-        // Get the result from the panel
-        NSInteger result = 0;
-        if ([window respondsToSelector: @selector(result)])
+        else
         {
-            result = [(EauAlertPanel *)window result];
+            [NSApp activateIgnoringOtherApps: YES];
+            [window center];
+            [window orderFrontRegardless];
+            [window makeKeyAndOrderFront: nil];
+            
+            EAULOG(@"Eau: NSAlert running modal for window: %@", window);
+            [NSApp runModalForWindow: window];
+            if ([window respondsToSelector: @selector(result)])
+            {
+                result = [(EauAlertPanel *)window result];
+            }
         }
-        
+
+        [window orderOut: self];
+
         // Store result via KVC if possible
         @try {
             [self setValue: @(result) forKey: @"_result"];
@@ -1267,19 +1258,24 @@ static void setKeyEquivalent(NSButton *button)
         @catch (NSException *exception) {
             // Ignore if ivar doesn't exist
         }
-        
-        // Destroy the window as original does
-        @try {
-            [self setValue: nil forKey: @"_window"];
+
+        // Destroy the window as original does (avoid KVC retain/release side effects)
+        Ivar windowIvar = class_getInstanceVariable([self class], "_window");
+        if (windowIvar)
+        {
+            object_setIvar(self, windowIvar, nil);
         }
-        @catch (NSException *exception) {
-            Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-            if (windowIvar)
-            {
-                object_setIvar(self, windowIvar, nil);
+        else
+        {
+            @try {
+                [self setValue: nil forKey: @"_window"];
+            }
+            @catch (NSException *exception) {
+                // Ignore if ivar doesn't exist
             }
         }
-        
+        [window release];
+
         return result;
     }
     
@@ -1296,6 +1292,7 @@ static void setKeyEquivalent(NSButton *button)
 }
 
 // Replacement for NSAlert's _setupPanel method
+// Builds a themed EauAlertPanel and assigns it to NSAlert's _window ivar.
 - (void) eau_setupPanel
 {
     NSLog(@"Eau: eau_setupPanel called for NSAlert");
@@ -1421,16 +1418,9 @@ static void setKeyEquivalent(NSButton *button)
         NSLog(@"Eau: EXCEPTION in setButtons: %@", e);
     }
     
-    // Set the _window ivar using KVC
-    // NSAlert stores its window in an ivar called _window
+    // Set the _window ivar directly when possible to avoid KVC retain/release side effects
     NSLog(@"Eau: Setting _window ivar on NSAlert");
-    @try {
-        [self setValue: panel forKey: @"_window"];
-        NSLog(@"Eau: Successfully set _window via KVC");
-    }
-    @catch (NSException *exception) {
-        NSLog(@"Eau: KVC failed, trying direct ivar access: %@", exception);
-        // If KVC fails, try using the object_setInstanceVariable approach
+    {
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
@@ -1439,7 +1429,13 @@ static void setKeyEquivalent(NSButton *button)
         }
         else
         {
-            NSLog(@"Eau: CRITICAL - could not set _window ivar on NSAlert");
+            @try {
+                [self setValue: panel forKey: @"_window"];
+                NSLog(@"Eau: Successfully set _window via KVC");
+            }
+            @catch (NSException *exception) {
+                NSLog(@"Eau: CRITICAL - could not set _window ivar on NSAlert: %@", exception);
+            }
         }
     }
     

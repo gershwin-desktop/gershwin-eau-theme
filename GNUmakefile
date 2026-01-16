@@ -39,6 +39,7 @@ Eau_OBJC_FILES = \
 		NSBrowserCell+Eau.m\
 		NSSearchFieldCell+Eau.m\
 		NSBeep+Eau.m\
+		GWDialog+Eau.m\
 		NSCell+Eau.m\
 		NSButtonCell+Eau.m\
 		NSTextFieldCell+Eau.m\
