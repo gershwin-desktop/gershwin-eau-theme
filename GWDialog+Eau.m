@@ -122,16 +122,64 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   [cancelButt setFrame: NSMakeRect(cancelX, buttonY, cancelSize.width, cancelSize.height)];
   [okButt setFrame: NSMakeRect(okX, buttonY, okSize.width, okSize.height)];
 
-  /* Don't set key equivalents here - the buttons already have target/action set
-     by the original init, and adding key equivalents can interfere with that. */
+  /* Configure button behavior for proper keyboard interaction.
+     OK button should respond to Enter and be the default (pulsating) button.
+     Cancel button should respond to Escape. This must be done carefully
+     to avoid interfering with the existing target/action setup. */
+  
+  EAULOG(@"EauDialog: Configuring button key equivalents and default button");
+  
+  // Verify buttons exist and have proper targets/actions before modifying
+  if (okButt && [okButt target] && [okButt action])
+    {
+      EAULOG(@"EauDialog: OK button has target %@ and action %@", 
+             [okButt target], NSStringFromSelector([okButt action]));
+      
+      // Set Enter key to trigger OK button
+      [okButt setKeyEquivalent: @"\r"];
+      [okButt setKeyEquivalentModifierMask: 0];
+      EAULOG(@"EauDialog: Set OK button key equivalent to Enter");
+      
+      // Mark OK as the default button - this triggers pulsating animation
+      NSButtonCell *okCell = [okButt cell];
+      if (okCell)
+        {
+          [dialog setDefaultButtonCell: okCell];
+          EAULOG(@"EauDialog: Set OK button cell %@ as default button", okCell);
+        }
+      else
+        {
+          EAULOG(@"EauDialog: WARNING - OK button has no cell, cannot set as default");
+        }
+    }
+  else
+    {
+      EAULOG(@"EauDialog: WARNING - OK button missing target or action, not setting key equivalent");
+    }
+  
+  if (cancelButt && [cancelButt target] && [cancelButt action])
+    {
+      EAULOG(@"EauDialog: Cancel button has target %@ and action %@",
+             [cancelButt target], NSStringFromSelector([cancelButt action]));
+      
+      // Set Escape key to trigger Cancel button
+      [cancelButt setKeyEquivalent: @"\e"];
+      [cancelButt setKeyEquivalentModifierMask: 0];
+      EAULOG(@"EauDialog: Set Cancel button key equivalent to Escape");
+    }
+  else
+    {
+      EAULOG(@"EauDialog: WARNING - Cancel button missing target or action, not setting key equivalent");
+    }
 
   // Set up key view loop for tab navigation.
   [editField setNextKeyView: okButt];
   [okButt setNextKeyView: cancelButt];
   [cancelButt setNextKeyView: editField];
 
-  // Set initial first responder to the edit field for immediate keyboard input.
-  [dialog setInitialFirstResponder: editField];
+  // Don't set initialFirstResponder here - let NSWindow handle it naturally
+  // to avoid triggering field editor before dialog is ready
+  EAULOG(@"EauDialog: Skipping initialFirstResponder to avoid field editor crash");
 
   // Position dialog using golden ratio centering.
   [dialog center];
@@ -187,6 +235,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   self = [self eau_initWithTitle: title editText: eText switchTitle: swTitle];
   if (self != nil)
     {
+      EAULOG(@"EauDialog: init completed, applying layout");
       EAULayoutGWDialog((GWDialog *)self);
     }
   return self;

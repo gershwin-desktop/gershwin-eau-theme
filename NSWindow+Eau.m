@@ -307,6 +307,14 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   return self;
 }
 
+// Implement windowWillReturnFieldEditor:toObject: to avoid objc_msgSend_stret crash.
+// Must return nil to use default field editor.
+- (id)windowWillReturnFieldEditor:(id)fieldEditor toObject:(id)anObject
+{
+  return nil;
+}
+
+
 - (void) dealloc
 {
   EAULOG(@"DefaultButtonAnimationController: dealloc called for cell %p", buttoncell);
@@ -597,16 +605,25 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
                            animationcontroller,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-  // Guard against overriding existing delegates
-  id currentDelegate = [self delegate];
-  if (currentDelegate == nil || currentDelegate == animationcontroller)
+  // Don't set delegate for GWDialog - it causes field editor crashes.
+  // The animation controller will work via notifications.
+  if ([self isKindOfClass: NSClassFromString(@"GWDialog")])
     {
-      EAULOG(@"NSWindow+Eau: Setting window delegate to animation controller %p", animationcontroller);
-      [self setDelegate: animationcontroller];
+      EAULOG(@"NSWindow+Eau: Not setting delegate for GWDialog to avoid field editor crash");
     }
   else
     {
-      EAULOG(@"NSWindow+Eau: Preserving existing delegate %@, not overriding", currentDelegate);
+      // Guard against overriding existing delegates
+      id currentDelegate = [self delegate];
+      if (currentDelegate == nil || currentDelegate == animationcontroller)
+        {
+          EAULOG(@"NSWindow+Eau: Setting window delegate to animation controller %p", animationcontroller);
+          [self setDelegate: animationcontroller];
+        }
+      else
+        {
+          EAULOG(@"NSWindow+Eau: Preserving existing delegate %@, not overriding", currentDelegate);
+        }
     }
   
   EAULOG(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
