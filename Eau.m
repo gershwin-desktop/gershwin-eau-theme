@@ -76,74 +76,49 @@ static Class _menuRegistryClass;
   return _menuRegistryClass;
 }
 
-- (void)_initializeDBusMenuRegistry
-{
-  EAULOG(@"Eau: Beginning deferred D-Bus menu registry initialization");
-  
-  // Try to initialize D-Bus menu registry, but continue gracefully if it fails
-  @try 
-    {
-      Class menuRegistryClass = [self _findDBusMenuRegistryClass];
-      if (menuRegistryClass != Nil)
-        {
-          menuRegistry = [[menuRegistryClass alloc] init];
-          if (menuRegistry != nil)
-            {
-              EAULOG(@"Eau: D-Bus menu registry initialized successfully");
-              
-              // Add notification observer for menu changes only if D-Bus is available
-              [[NSNotificationCenter defaultCenter] 
-                addObserver: self
-                   selector: @selector(macintoshMenuDidChange:)
-                       name: @"NSMacintoshMenuDidChangeNotification"
-                     object: nil];
-              
-              EAULOG(@"Eau: Menu change notification observer added");
-            }
-          else
-            {
-              EAULOG(@"Eau: Failed to initialize D-Bus menu registry instance, continuing without D-Bus");
-            }
-        }
-      else
-        {
-          EAULOG(@"Eau: No D-Bus menu registry class available, continuing without D-Bus");
-        }
-    }
-  @catch (NSException *exception)
-    {
-      EAULOG(@"Eau: Exception during D-Bus initialization: %@, continuing without D-Bus", exception);
-      menuRegistry = nil;
-    }
-  
-  EAULOG(@"Eau: Deferred D-Bus initialization completed (D-Bus %@)", menuRegistry ? @"enabled" : @"disabled");
-}
-
-- (void)_applicationDidFinishLaunching:(NSNotification *)notification
-{
-  EAULOG(@"Eau: Application finished launching, initializing D-Bus support");
-  [[NSNotificationCenter defaultCenter] removeObserver:self 
-                                                  name:NSApplicationDidFinishLaunchingNotification 
-                                                object:nil];
-  [self _initializeDBusMenuRegistry];
-}
-
 - (id)initWithBundle:(NSBundle *)bundle
 {
   if ((self = [super initWithBundle:bundle]) != nil)
     {
       EAULOG(@"Eau: Initializing theme with bundle: %@", bundle);
       
-      // Defer D-Bus menu registry initialization until after app finishes launching
-      // to avoid deadlocks during early startup when other components may be
-      // initializing their own D-Bus connections
-      [[NSNotificationCenter defaultCenter] 
-        addObserver: self
-           selector: @selector(_applicationDidFinishLaunching:)
-               name: NSApplicationDidFinishLaunchingNotification
-             object: nil];
+      // Try to initialize D-Bus menu registry, but continue gracefully if it fails
+      @try 
+        {
+          Class menuRegistryClass = [self _findDBusMenuRegistryClass];
+          if (menuRegistryClass != Nil)
+            {
+              menuRegistry = [[menuRegistryClass alloc] init];
+              if (menuRegistry != nil)
+                {
+                  EAULOG(@"Eau: D-Bus menu registry initialized successfully");
+                  
+                  // Add notification observer for menu changes only if D-Bus is available
+                  [[NSNotificationCenter defaultCenter] 
+                    addObserver: self
+                       selector: @selector(macintoshMenuDidChange:)
+                           name: @"NSMacintoshMenuDidChangeNotification"
+                         object: nil];
+                  
+                  EAULOG(@"Eau: Menu change notification observer added");
+                }
+              else
+                {
+                  EAULOG(@"Eau: Failed to initialize D-Bus menu registry instance, continuing without D-Bus");
+                }
+            }
+          else
+            {
+              EAULOG(@"Eau: No D-Bus menu registry class available, continuing without D-Bus");
+            }
+        }
+      @catch (NSException *exception)
+        {
+          EAULOG(@"Eau: Exception during D-Bus initialization: %@, continuing without D-Bus", exception);
+          menuRegistry = nil;
+        }
       
-      EAULOG(@"Eau: Deferred D-Bus initialization scheduled for after app launch");
+      EAULOG(@"Eau: Theme initialization completed (D-Bus %@)", menuRegistry ? @"enabled" : @"disabled");
 
       // Ensure alternating row background color is visible in Eau theme
       NSColorList *systemColors = [NSColorList colorListNamed: @"System"];
