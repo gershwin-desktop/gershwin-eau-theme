@@ -78,8 +78,10 @@ static Class _menuRegistryClass;
 
 - (id)initWithBundle:(NSBundle *)bundle
 {
+  EAULOG(@"Eau: >>> initWithBundle ENTRY (before super init)");
   if ((self = [super initWithBundle:bundle]) != nil)
     {
+      EAULOG(@"Eau: >>> initWithBundle after super init, self=%p", self);
       EAULOG(@"Eau: Initializing theme with bundle: %@", bundle);
       
       // Try to initialize D-Bus menu registry, but continue gracefully if it fails
@@ -121,16 +123,34 @@ static Class _menuRegistryClass;
       EAULOG(@"Eau: Theme initialization completed (D-Bus %@)", menuRegistry ? @"enabled" : @"disabled");
 
       // Ensure alternating row background color is visible in Eau theme
-      NSColorList *systemColors = [NSColorList colorListNamed: @"System"];
-      if (systemColors != nil)
+      // Note: System color list may be read-only, so we wrap in try-catch
+      EAULOG(@"Eau: >>> About to check system color list");
+      @try
         {
-          // Light gray with a touch of blue
-          [systemColors setColor: [NSColor colorWithCalibratedRed: 0.94 
-                                                             green: 0.95 
-                                                              blue: 0.97 
-                                                             alpha: 1.0]
-                           forKey: @"alternateRowBackgroundColor"];
+          NSColorList *systemColors = [NSColorList colorListNamed: @"System"];
+          EAULOG(@"Eau: >>> System color list: %p, isEditable: %d",
+                 systemColors, systemColors ? [systemColors isEditable] : -1);
+          if (systemColors != nil && [systemColors isEditable])
+            {
+              EAULOG(@"Eau: >>> Setting alternateRowBackgroundColor");
+              // Light gray with a touch of blue
+              [systemColors setColor: [NSColor colorWithCalibratedRed: 0.94
+                                                                 green: 0.95
+                                                                  blue: 0.97
+                                                                 alpha: 1.0]
+                               forKey: @"alternateRowBackgroundColor"];
+              EAULOG(@"Eau: >>> alternateRowBackgroundColor set successfully");
+            }
+          else
+            {
+              EAULOG(@"Eau: >>> Skipping color list modification (nil or not editable)");
+            }
         }
+      @catch (NSException *exception)
+        {
+          EAULOG(@"Eau: Could not set alternating row color: %@", [exception reason]);
+        }
+      EAULOG(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
 }    

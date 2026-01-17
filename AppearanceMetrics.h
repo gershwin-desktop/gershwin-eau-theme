@@ -80,6 +80,15 @@ static const float METRICS_TAB_SMALL_HEIGHT = 25.0;
 // Scroll bar width shall be 11px
 static const float METRICS_SCROLLBAR_WIDTH = 11.0;
 
+// Resize zone metrics
+// Corner zones (NW, NE, SE, SW) are square, matching scrollbar width for visual consistency
+static const float METRICS_RESIZE_CORNER_SIZE = 11.0;
+// Edge zones (N, S, E, W) are thin but usable
+static const float METRICS_RESIZE_EDGE_THICKNESS = 4.0;
+// Grow box zone size (invisible resize capture area in bottom-right corner)
+// Slightly larger than the visual grow box (drawn by EauGrowBoxView) for easier grabbing
+static const float METRICS_GROW_BOX_SIZE = 20.0;
+
 // Control Positioning in Dialogs
 // All spacing between dialog elements shall be a multiple of 4px (4, 8, 12, 16, 20, or 24).
 // Guidelines:

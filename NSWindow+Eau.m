@@ -1,5 +1,6 @@
 #include "Eau+Button.h"
 #include "EauWindowButton.h"
+#include "EauGrowBoxView.h"
 #include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSImage.h>
@@ -159,18 +160,21 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 - (void) eau_orderFront: (id)sender
 {
   EAUWindowLog(@"orderFront", self);
+  [EauGrowBoxView addToWindow:self];
   [self eau_orderFront: sender];
 }
 
 - (void) eau_orderFrontRegardless
 {
   EAUWindowLog(@"orderFrontRegardless", self);
+  [EauGrowBoxView addToWindow:self];
   [self eau_orderFrontRegardless];
 }
 
 - (void) eau_makeKeyAndOrderFront: (id)sender
 {
   EAUWindowLog(@"makeKeyAndOrderFront", self);
+  [EauGrowBoxView addToWindow:self];
   [self eau_makeKeyAndOrderFront: sender];
 }
 
