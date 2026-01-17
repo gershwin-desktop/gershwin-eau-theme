@@ -48,6 +48,9 @@ static id EAUGetAlertIvar(id obj, const char *name)
 #pragma mark - EauAlertPanel Implementation
 
 @implementation EauAlertPanel
+{
+    BOOL _isStoppingModal;
+}
 
 + (void) initialize
 {
@@ -143,6 +146,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
     
     result = NSAlertErrorReturn;
     isGreen = YES;
+    _isStoppingModal = NO;
     
     NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
     return self;
@@ -517,12 +521,20 @@ static id EAUGetAlertIvar(id obj, const char *name)
 
 - (void) buttonAction: (id)sender
 {
-    NSLog(@"Eau: buttonAction called, sender: %@, self retainCount: %lu", sender, (unsigned long)[self retainCount]);
+    NSLog(@"Eau: buttonAction called, sender: %@, self retainCount: %lu, _isStoppingModal: %d", sender, (unsigned long)[self retainCount], _isStoppingModal);
     if (sender == nil)
     {
         NSLog(@"Eau: WARNING - buttonAction called with nil sender");
         return;
     }
+    
+    // Prevent re-entrant calls while stopping modal
+    if (_isStoppingModal)
+    {
+        NSLog(@"Eau: WARNING - buttonAction called while already stopping modal, ignoring");
+        return;
+    }
+    
     NSInteger tag = [sender tag];
     NSLog(@"Eau: buttonAction tag: %ld", tag);
     if (![self isActivePanel])
@@ -530,12 +542,31 @@ static id EAUGetAlertIvar(id obj, const char *name)
         NSLog(@"Eau: WARNING - buttonAction called when not in modal loop");
         return;
     }
+    
     result = tag;
-    NSLog(@"Eau: buttonAction stopping modal with result: %ld, self retainCount before stop: %lu", result, (unsigned long)[self retainCount]);
-    // Retain self before stopping modal to prevent premature deallocation
+    _isStoppingModal = YES;
+    
+    NSLog(@"Eau: buttonAction will stop modal with result: %ld, self retainCount: %lu", result, (unsigned long)[self retainCount]);
+    
+    // CRITICAL FIX: Defer stopModal to next run loop iteration
+    // This prevents crashes when performClick: is still processing events
+    // The window must remain valid until all event handling completes
+    // Use NSRunLoopCommonModes to work in both modal panel and default run loop modes
     RETAIN(self);
+    [[NSRunLoop currentRunLoop] performSelector: @selector(_stopModalDeferred)
+                                         target: self
+                                       argument: nil
+                                          order: 0
+                                          modes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
+    NSLog(@"Eau: buttonAction scheduled deferred modal stop");
+}
+
+- (void) _stopModalDeferred
+{
+    NSLog(@"Eau: _stopModalDeferred executing, self retainCount: %lu", (unsigned long)[self retainCount]);
     [NSApp stopModalWithCode: result];
-    NSLog(@"Eau: buttonAction after stopModal, self retainCount: %lu", (unsigned long)[self retainCount]);
+    NSLog(@"Eau: _stopModalDeferred completed");
+    _isStoppingModal = NO;
     RELEASE(self);
 }
 
@@ -620,7 +651,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
     if (keyChar == '\r' && useControl(defButton))
     {
         EAULOG(@"Eau: keyDown Enter pressed, clicking default button");
-        [defButton performClick: self];
+        [self buttonAction: defButton];
         return;
     }
     
@@ -628,14 +659,14 @@ static id EAUGetAlertIvar(id obj, const char *name)
     if (keyChar == ' ' && useControl(defButton))
     {
         NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-        [defButton performClick: self];
+        [self buttonAction: defButton];
         return;
     }
     
     // Handle Escape for Cancel button
     if (keyChar == 0x1B && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
     {
-        [altButton performClick: self];
+        [self buttonAction: altButton];
         return;
     }
     
@@ -696,15 +727,15 @@ static id EAUGetAlertIvar(id obj, const char *name)
         if ([chars isEqualToString: @"\r"] && useControl(defButton))
         {
             NSLog(@"Eau: performKeyEquivalent Enter pressed, clicking default button");
-            [defButton performClick: self];
+            [self buttonAction: defButton];
             return YES;
         }
         
-        // Handle Spacebar for default button - CRITICAL for preventing app shortcuts
-        if ([chars isEqualToString: @" "] && useControl(defButton))
+        // Handle Spacebar for default button
+        if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
         {
             NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
-            [defButton performClick: self];
+            [self buttonAction: defButton];
             return YES;
         }
         
@@ -712,7 +743,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
             NSLog(@"Eau: performKeyEquivalent Escape pressed, clicking cancel button");
-            [altButton performClick: self];
+            [self buttonAction: altButton];
             return YES;
         }
         
@@ -753,7 +784,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
             if (keyChar == '\r' && useControl(defButton))
             {
                 NSLog(@"Eau: sendEvent Enter pressed, clicking default button");
-                [defButton performClick: self];
+                [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
             
@@ -761,7 +792,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
             if (keyChar == ' ' && useControl(defButton))
             {
                 NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
-                [defButton performClick: self];
+                [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
             
@@ -769,7 +800,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
             if (keyChar == 0x1B && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
             {
                 NSLog(@"Eau: sendEvent Escape pressed, clicking cancel button");
-                [altButton performClick: self];
+                [self buttonAction: altButton];
                 return;  // Don't call super - we handled it
             }
         }
