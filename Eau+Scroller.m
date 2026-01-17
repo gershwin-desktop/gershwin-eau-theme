@@ -131,7 +131,9 @@
 
 - (BOOL) scrollViewUseBottomCorner
 {
-  return YES;
+  // NO = leave gap at corner where h/v scrollers meet (for resize grip)
+  // YES = scrollers extend into corner (no gap)
+  return NO;
 }
 
 - (BOOL) scrollViewScrollersOverlapBorders
@@ -142,6 +144,13 @@
 - (BOOL) scrollViewShouldAutohideScrollers
 {
   return YES;
+}
+
+- (BOOL) scrollerArrowsSameEndForScroller: (NSScroller *)aScroller
+{
+  // NO = split arrows (one at each end of scroller)
+  // YES = both arrows grouped at one end
+  return NO;
 }
 
 @end

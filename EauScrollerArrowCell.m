@@ -95,7 +95,6 @@
   switch(scroller_arrow_type)
     {
       case EauScrollerArrowLeft:
-        cellFrame.origin.x += 1.0;
         [path appendBezierPathWithArcWithCenter: NSMakePoint(NSMinX(innerRect), NSMinY(innerRect))
                                          radius: r
                                      startAngle: 180
@@ -109,7 +108,6 @@
         [path closePath];
         break;
       case EauScrollerArrowRight:
-        cellFrame.origin.x -= 1.0;
         [path moveToPoint: NSMakePoint(NSMinX(cellFrame), NSMinY(cellFrame))];
         [path appendBezierPathWithArcWithCenter: NSMakePoint(NSMaxX(innerRect), NSMinY(innerRect))
                                          radius: r
@@ -120,11 +118,11 @@
                                      startAngle: 0
                                        endAngle: 90];
         [path lineToPoint: NSMakePoint(NSMinX(cellFrame), NSMaxY(cellFrame))];
+        [path closePath];
         break;
       case EauScrollerArrowDown:
-        cellFrame.origin.y -= 1.0;
         [path moveToPoint: NSMakePoint(NSMinX(cellFrame), NSMinY(cellFrame))];
-        [path moveToPoint: NSMakePoint(NSMaxX(cellFrame), NSMinY(cellFrame))];
+        [path lineToPoint: NSMakePoint(NSMaxX(cellFrame), NSMinY(cellFrame))];
         [path appendBezierPathWithArcWithCenter: NSMakePoint(NSMaxX(innerRect), NSMaxY(innerRect))
                                          radius: r
                                      startAngle: 0
@@ -133,10 +131,9 @@
                                          radius: r
                                      startAngle: 90
                                        endAngle: 180];
-        [path lineToPoint: NSMakePoint(NSMinX(cellFrame), NSMinY(cellFrame))];
+        [path closePath];
         break;
       case EauScrollerArrowUp:
-        cellFrame.origin.y += 1.0;
         [path appendBezierPathWithArcWithCenter: NSMakePoint(NSMinX(innerRect), NSMinY(innerRect))
                                          radius: r
                                      startAngle: 180
