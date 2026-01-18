@@ -78,16 +78,15 @@ static const float METRICS_TAB_HEIGHT = 30.0;
 static const float METRICS_TAB_SMALL_HEIGHT = 25.0;
 
 // Scroll bar width shall be 11px
-static const float METRICS_SCROLLBAR_WIDTH = 11.0;
+#define METRICS_SCROLLBAR_WIDTH 11.0
 
 // Resize zone metrics
-// Corner zones (NW, NE, SE, SW) are square, matching scrollbar width for visual consistency
-static const float METRICS_RESIZE_CORNER_SIZE = 11.0;
+// Corner zones (NW, NE, SE, SW) - small invisible capture areas
+#define METRICS_RESIZE_CORNER_SIZE 6.0
 // Edge zones (N, S, E, W) are thin but usable
 static const float METRICS_RESIZE_EDGE_THICKNESS = 4.0;
-// Grow box zone size (invisible resize capture area in bottom-right corner)
-// Slightly larger than the visual grow box (drawn by EauGrowBoxView) for easier grabbing
-static const float METRICS_GROW_BOX_SIZE = 20.0;
+// Grow box zone size (matches scrollbar width for visual consistency)
+#define METRICS_GROW_BOX_SIZE METRICS_SCROLLBAR_WIDTH
 
 // Window corner radii for rounded corners
 static const float METRICS_TITLEBAR_CORNER_RADIUS = 5.0;  // Matches Menu app corner radius
