@@ -1,12 +1,13 @@
 {
-	GSThemeDescription="A Theme for GNUstep";
+	GSThemeDescription="The Gershwin Desktop Experience";
 	GSThemeName="Eau";
     	GSThemeAuthors = (
+			   "Simon Peter",
 		       "Riccardo Canalicchio",
 		       "Alessandro Sangiuliano",
 		       "Bertrand Dekoninck"
     		       );		       
-    	GSThemeDetails = "A Theme for GNUstep";
+    	GSThemeDetails = "The Gershwin Desktop Experience";
     	GSThemeDomain = {
 		  NSScrollViewInterfaceStyle = NSMacintoshInterfaceStyle;
   	          NSScrollerInterfaceStyle = NSMacintoshInterfaceStyle;

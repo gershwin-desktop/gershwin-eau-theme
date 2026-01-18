@@ -2,78 +2,222 @@
 
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSWindowDecorationView.h>
+#import <GNUstepGUI/GSDisplayServer.h>
+#import <Foundation/NSConnection.h>
 #import "NSMenuItemCell+Eau.h"
 #import "Eau+Button.h"
 
-// cache the DBusMenu bundle's principal class
-static Class _menuRegistryClass;
-  
+@protocol GSGNUstepMenuServer
+- (oneway void)updateMenuForWindow:(NSNumber *)windowId
+                          menuData:(NSDictionary *)menuData
+                        clientName:(NSString *)clientName;
+- (oneway void)unregisterWindow:(NSNumber *)windowId
+                       clientName:(NSString *)clientName;
+@end
+
 @implementation Eau
 
-- (BOOL)_isDBusAvailable
+- (NSString *)_menuClientName
 {
-  // Check if D-Bus session bus address is set and valid
-  const char *dbusSessionBusAddress = getenv("DBUS_SESSION_BUS_ADDRESS");
-  
-  if (dbusSessionBusAddress == NULL || strlen(dbusSessionBusAddress) == 0)
+  if (menuClientName == nil)
     {
-      EAULOG(@"Eau: No DBUS_SESSION_BUS_ADDRESS environment variable set, D-Bus unavailable");
+      pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
+      menuClientName = [[NSString alloc] initWithFormat:@"org.gnustep.Gershwin.MenuClient.%d", pid];
+    }
+  return menuClientName;
+}
+
+- (BOOL)_ensureMenuClientRegistered
+{
+  if (menuClientConnection != nil)
+    {
+      return YES;
+    }
+
+  menuClientConnection = [[NSConnection alloc] init];
+  [menuClientConnection setRootObject:self];
+  
+  // Set up the connection to receive messages
+  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+                              forMode:NSDefaultRunLoopMode];
+  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+                              forMode:NSModalPanelRunLoopMode];
+  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+                              forMode:NSEventTrackingRunLoopMode];
+  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+                              forMode:NSRunLoopCommonModes];
+
+  NSString *clientName = [self _menuClientName];
+  BOOL registered = [menuClientConnection registerName:clientName];
+  if (!registered)
+    {
+      EAULOG(@"Eau: Failed to register GNUstep menu client name: %@", clientName);
+      [menuClientConnection release];
+      menuClientConnection = nil;
       return NO;
     }
-  
-  // Basic validation of the D-Bus address format
-  NSString *addressString = [NSString stringWithUTF8String:dbusSessionBusAddress];
-  if (![addressString hasPrefix:@"unix:"] && ![addressString hasPrefix:@"tcp:"])
-    {
-      EAULOG(@"Eau: Invalid DBUS_SESSION_BUS_ADDRESS format: %@, D-Bus unavailable", addressString);
-      return NO;
-    }
-  
-  EAULOG(@"Eau: D-Bus available with address: %@", addressString);
+
+  NSLog(@"Eau: Registered GNUstep menu client as %@ with receive port %@", clientName, [menuClientConnection receivePort]);
+  EAULOG(@"Eau: Registered GNUstep menu client as %@ with receive port added to run loop", clientName);
+  [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuClientConnection];
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(_menuClientConnectionDidDie:)
+                                               name:NSConnectionDidDieNotification
+                                             object:menuClientConnection];
   return YES;
 }
 
-- (Class)_findDBusMenuRegistryClass
+- (BOOL)_ensureMenuServerConnection
 {
-  NSString   *path;
-  NSBundle   *bundle;
-  NSArray    *paths = NSSearchPathForDirectoriesInDomains(
-                        NSLibraryDirectory, NSAllDomainsMask, YES);
-  NSUInteger  count = [paths count];
-
-  if (Nil != _menuRegistryClass)
-    return _menuRegistryClass;
-
-  // Don't attempt to load D-Bus bundle if D-Bus is not available
-  if (![self _isDBusAvailable])
+  if (menuServerConnection != nil && ![menuServerConnection isValid])
     {
-      EAULOG(@"Eau: D-Bus not available, skipping DBusMenu bundle loading");
-      return Nil;
+      [menuServerConnection release];
+      menuServerConnection = nil;
+      [menuServerProxy release];
+      menuServerProxy = nil;
+      menuServerAvailable = NO;
     }
 
-  while (count-- > 0)
+  if (menuServerProxy != nil)
     {
-      path = [paths objectAtIndex:count];
-      path = [path stringByAppendingPathComponent:@"Bundles"];
-      path = [path stringByAppendingPathComponent:@"DBusMenu"];
-      path = [path stringByAppendingPathExtension:@"bundle"];
-      bundle = [NSBundle bundleWithPath:path];
-      if (bundle)
+      return menuServerAvailable;
+    }
+
+  NSConnection *connection = [NSConnection connectionWithRegisteredName:@"org.gnustep.Gershwin.MenuServer"
+                                                                   host:nil];
+  if (connection == nil)
+    {
+      menuServerAvailable = NO;
+      return NO;
+    }
+
+  menuServerConnection = [connection retain];
+
+  id proxy = [menuServerConnection rootProxy];
+  if (proxy != nil)
+    {
+      [proxy setProtocolForProxy:@protocol(GSGNUstepMenuServer)];
+      menuServerProxy = [proxy retain];
+      menuServerAvailable = YES;
+      [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuServerConnection];
+      [[NSNotificationCenter defaultCenter] addObserver:self
+                                               selector:@selector(_menuServerConnectionDidDie:)
+                                                   name:NSConnectionDidDieNotification
+                                                 object:menuServerConnection];
+      EAULOG(@"Eau: Connected to GNUstep menu server");
+      return YES;
+    }
+
+  [menuServerConnection release];
+  menuServerConnection = nil;
+  menuServerAvailable = NO;
+  return NO;
+}
+
+- (NSNumber *)_windowIdentifierForWindow:(NSWindow *)window
+{
+  GSDisplayServer *server = GSServerForWindow(window);
+  if (server == nil)
+    {
+      return nil;
+    }
+
+  int internalNumber = [window windowNumber];
+  uint32_t deviceId = (uint32_t)(uintptr_t)[server windowDevice:internalNumber];
+  return [NSNumber numberWithUnsignedInt:deviceId];
+}
+
+- (NSDictionary *)_serializeMenuItem:(NSMenuItem *)item
+{
+  if (item == nil)
+    {
+      return nil;
+    }
+
+  if ([item isSeparatorItem])
+    {
+      return [NSDictionary dictionaryWithObject:[NSNumber numberWithBool:YES]
+                                         forKey:@"isSeparator"];
+    }
+
+  NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  [dict setObject:([item title] ?: @"") forKey:@"title"];
+  [dict setObject:[NSNumber numberWithBool:[item isEnabled]] forKey:@"enabled"];
+  [dict setObject:[NSNumber numberWithInteger:[item state]] forKey:@"state"];
+  [dict setObject:([item keyEquivalent] ?: @"") forKey:@"keyEquivalent"];
+  [dict setObject:[NSNumber numberWithUnsignedInteger:[item keyEquivalentModifierMask]]
+           forKey:@"keyEquivalentModifierMask"];
+
+  if ([item hasSubmenu])
+    {
+      NSDictionary *submenu = [self _serializeMenu:[item submenu]];
+      if (submenu != nil)
         {
-          if ((_menuRegistryClass = [bundle principalClass]) != Nil)
-            {
-              EAULOG(@"Eau: Successfully loaded DBusMenu bundle from: %@", path);
-              break;
-            }
+          [dict setObject:submenu forKey:@"submenu"];
         }
     }
-  
-  if (_menuRegistryClass == Nil)
+
+  return dict;
+}
+
+- (NSDictionary *)_serializeMenu:(NSMenu *)menu
+{
+  if (menu == nil)
     {
-      EAULOG(@"Eau: Could not find or load DBusMenu bundle, continuing without D-Bus menu support");
+      return nil;
     }
-  
-  return _menuRegistryClass;
+
+  NSMutableArray *items = [NSMutableArray array];
+  NSArray *itemArray = [menu itemArray];
+  NSUInteger count = [itemArray count];
+
+  for (NSUInteger i = 0; i < count; i++)
+    {
+      NSMenuItem *item = [itemArray objectAtIndex:i];
+      NSDictionary *serialized = [self _serializeMenuItem:item];
+      if (serialized != nil)
+        {
+          [items addObject:serialized];
+        }
+    }
+
+  return [NSDictionary dictionaryWithObjectsAndKeys:
+                      ([menu title] ?: @""), @"title",
+                      items, @"items",
+                      nil];
+}
+
+- (NSMenuItem *)_menuItemForIndexPath:(NSArray *)indexPath inMenu:(NSMenu *)menu
+{
+  if (menu == nil || indexPath == nil || [indexPath count] == 0)
+    {
+      return nil;
+    }
+
+  NSMenu *currentMenu = menu;
+  NSMenuItem *currentItem = nil;
+
+  for (NSUInteger i = 0; i < [indexPath count]; i++)
+    {
+      NSNumber *indexNumber = [indexPath objectAtIndex:i];
+      NSInteger index = [indexNumber integerValue];
+      if (index < 0 || index >= [currentMenu numberOfItems])
+        {
+          return nil;
+        }
+
+      currentItem = [currentMenu itemAtIndex:index];
+      if (i < [indexPath count] - 1)
+        {
+          if (![currentItem hasSubmenu])
+            {
+              return nil;
+            }
+          currentMenu = [currentItem submenu];
+        }
+    }
+
+  return currentItem;
 }
 
 - (id)initWithBundle:(NSBundle *)bundle
@@ -84,43 +228,23 @@ static Class _menuRegistryClass;
       EAULOG(@"Eau: >>> initWithBundle after super init, self=%p", self);
       EAULOG(@"Eau: Initializing theme with bundle: %@", bundle);
       
-      // Try to initialize D-Bus menu registry, but continue gracefully if it fails
-      @try 
-        {
-          Class menuRegistryClass = [self _findDBusMenuRegistryClass];
-          if (menuRegistryClass != Nil)
-            {
-              menuRegistry = [[menuRegistryClass alloc] init];
-              if (menuRegistry != nil)
-                {
-                  EAULOG(@"Eau: D-Bus menu registry initialized successfully");
-                  
-                  // Add notification observer for menu changes only if D-Bus is available
-                  [[NSNotificationCenter defaultCenter] 
-                    addObserver: self
-                       selector: @selector(macintoshMenuDidChange:)
-                           name: @"NSMacintoshMenuDidChangeNotification"
-                         object: nil];
-                  
-                  EAULOG(@"Eau: Menu change notification observer added");
-                }
-              else
-                {
-                  EAULOG(@"Eau: Failed to initialize D-Bus menu registry instance, continuing without D-Bus");
-                }
-            }
-          else
-            {
-              EAULOG(@"Eau: No D-Bus menu registry class available, continuing without D-Bus");
-            }
-        }
-      @catch (NSException *exception)
-        {
-          EAULOG(@"Eau: Exception during D-Bus initialization: %@, continuing without D-Bus", exception);
-          menuRegistry = nil;
-        }
-      
-      EAULOG(@"Eau: Theme initialization completed (D-Bus %@)", menuRegistry ? @"enabled" : @"disabled");
+      menuByWindowId = [[NSMutableDictionary alloc] init];
+      menuServerAvailable = NO;
+
+      // Register as a GNUstep menu client so Menu.app can call back for actions
+      [self _ensureMenuClientRegistered];
+
+      // Try to connect to Menu.app's GNUstep menu server (may not be running yet)
+      [self _ensureMenuServerConnection];
+
+      // Observe menu changes so Menu.app can stay in sync
+      [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(macintoshMenuDidChange:)
+               name:@"NSMacintoshMenuDidChangeNotification"
+             object:nil];
+      EAULOG(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
+             menuServerAvailable ? @"available" : @"unavailable");
 
       // Ensure alternating row background color is visible in Eau theme
       // Note: System color list may be read-only, so we wrap in try-catch
@@ -158,26 +282,43 @@ static Class _menuRegistryClass;
 - (void) dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
+  [menuByWindowId release];
+  [menuClientName release];
+  [menuClientConnection release];
+  [menuServerConnection release];
+  [menuServerProxy release];
   [super dealloc];
+}
+
+- (void)_menuClientConnectionDidDie:(NSNotification *)notification
+{
+  NSLog(@"Eau: Menu client connection died");
+  EAULOG(@"Eau: Menu client connection died");
+  [menuClientConnection release];
+  menuClientConnection = nil;
+}
+
+- (void)_menuServerConnectionDidDie:(NSNotification *)notification
+{
+  NSLog(@"Eau: Menu server connection died");
+  EAULOG(@"Eau: Menu server connection died");
+  [menuServerConnection release];
+  menuServerConnection = nil;
+  [menuServerProxy release];
+  menuServerProxy = nil;
+  menuServerAvailable = NO;
 }
 
 - (void) macintoshMenuDidChange: (NSNotification*)notification
 {
-  // Only handle menu changes if D-Bus is available
-  if (menuRegistry == nil)
-    {
-      EAULOG(@"Eau: Menu change notification received but D-Bus is not available, ignoring");
-      return;
-    }
-  
   NSMenu *menu = [notification object];
   
-  if (([NSApp mainMenu] == menu) && menuRegistry != nil)
+  if ([NSApp mainMenu] == menu)
     {
       NSWindow *keyWindow = [NSApp keyWindow];
       if (keyWindow != nil)
         {
-          EAULOG(@"Eau: Setting D-Bus menu for key window: %@", keyWindow);
+          EAULOG(@"Eau: Syncing GNUstep menu for key window: %@", keyWindow);
           [self setMenu: menu forWindow: keyWindow];
         }
       else
@@ -211,29 +352,177 @@ static Class _menuRegistryClass;
 
 - (void)setMenu:(NSMenu*)m forWindow:(NSWindow*)w
 {
-  if (nil != menuRegistry && m != nil && [m numberOfItems] > 0)
+  NSLog(@"Eau: setMenu:forWindow: called - menu=%@, window=%@", m, w);
+  NSNumber *windowId = [self _windowIdentifierForWindow:w];
+  if (windowId == nil)
     {
-      @try 
-        {
-          EAULOG(@"Eau: Setting D-Bus menu for window: %@", w);
-          [menuRegistry setMenu: m forWindow: w];
-          EAULOG(@"Eau: Successfully set D-Bus menu for window");
-        }
-      @catch (NSException *exception)
-        {
-          EAULOG(@"Eau: Exception setting D-Bus menu: %@, falling back to standard menu", exception);
-          [super setMenu: m forWindow: w];
-        }
+      NSLog(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
+      EAULOG(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
+      [super setMenu: m forWindow: w];
+      return;
     }
-  else if (nil == menuRegistry)
+  NSLog(@"Eau: Resolved windowId=%@", windowId);
+
+  if (m == nil || [m numberOfItems] == 0)
     {
-      EAULOG(@"Eau: No D-Bus menu registry, using standard menu for window: %@", w);
+      NSLog(@"Eau: Menu is nil or empty (items=%ld)", (long)[m numberOfItems]);
+      BOOL hadMenu = ([menuByWindowId objectForKey:windowId] != nil);
+      [menuByWindowId removeObjectForKey:windowId];
+
+      if (hadMenu && [self _ensureMenuServerConnection])
+        {
+          @try
+            {
+              NSLog(@"Eau: Unregistering window %@ from Menu.app", windowId);
+              [(id<GSGNUstepMenuServer>)menuServerProxy unregisterWindow:windowId
+                                                                clientName:[self _menuClientName]];
+            }
+          @catch (NSException *exception)
+            {
+              NSLog(@"Eau: Exception unregistering window %@: %@", windowId, exception);
+              EAULOG(@"Eau: Exception unregistering window %@: %@", windowId, exception);
+            }
+        }
+
+      EAULOG(@"Eau: Menu is nil or empty, using standard menu for window: %@", w);
+      [super setMenu: m forWindow: w];
+      return;
+    }
+
+  NSLog(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
+  [menuByWindowId setObject:m forKey:windowId];
+
+  if (![self _ensureMenuClientRegistered])
+    {
+      NSLog(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
+      EAULOG(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
+      [super setMenu: m forWindow: w];
+      return;
+    }
+
+  if (![self _ensureMenuServerConnection])
+    {
+      NSLog(@"Eau: GNUstep menu server unavailable, using standard menu for window: %@", w);
+      EAULOG(@"Eau: GNUstep menu server unavailable, using standard menu for window: %@", w);
+      [super setMenu: m forWindow: w];
+      return;
+    }
+
+  @try
+    {
+      NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
+      NSDictionary *menuData = [self _serializeMenu:m];
+      NSLog(@"Eau: Serialized menu data: %@", menuData);
+      [(id<GSGNUstepMenuServer>)menuServerProxy updateMenuForWindow:windowId
+                                                          menuData:menuData
+                                                        clientName:[self _menuClientName]];
+      NSLog(@"Eau: Successfully sent menu update to Menu.app");
+      EAULOG(@"Eau: Updated GNUstep menu for window %@", windowId);
+    }
+  @catch (NSException *exception)
+    {
+      EAULOG(@"Eau: Exception sending GNUstep menu: %@, falling back to standard menu", exception);
       [super setMenu: m forWindow: w];
     }
-  else
+}
+
+- (void)_performMenuActionFromIPC:(NSDictionary *)info
+{
+  NSLog(@"Eau: _performMenuActionFromIPC called with info: %@", info);
+  EAULOG(@"Eau: _performMenuActionFromIPC called with info: %@", info);
+  
+  NSNumber *windowId = [info objectForKey:@"windowId"];
+  NSArray *indexPath = [info objectForKey:@"indexPath"];
+
+  if (windowId == nil || indexPath == nil)
     {
-      EAULOG(@"Eau: Menu is nil or empty, not setting D-Bus menu for window: %@", w);
+      EAULOG(@"Eau: Invalid GNUstep menu action payload");
+      return;
     }
+
+  NSMenu *menu = [menuByWindowId objectForKey:windowId];
+  if (menu == nil)
+    {
+      EAULOG(@"Eau: No menu cached for window %@", windowId);
+      EAULOG(@"Eau: Available windows in cache: %@", [menuByWindowId allKeys]);
+      
+      // Fallback: if we only have one cached menu, use it
+      // This handles the case where the window ID doesn't match exactly
+      // (e.g., different X11 window ID than expected)
+      if ([menuByWindowId count] == 1)
+        {
+          menu = [[menuByWindowId allValues] firstObject];
+          EAULOG(@"Eau: Using fallback menu (only one cached menu)");
+        }
+      else if ([menuByWindowId count] > 0)
+        {
+          // Multiple windows cached - use the first one (usually the main window)
+          menu = [[menuByWindowId allValues] firstObject];
+          EAULOG(@"Eau: Using fallback menu (first of %lu cached menus)", (unsigned long)[menuByWindowId count]);
+        }
+      
+      if (menu == nil)
+        {
+          EAULOG(@"Eau: No cached menu available for fallback");
+          return;
+        }
+    }
+
+  EAULOG(@"Eau: Found menu for window %@, looking up item at path %@", windowId, indexPath);
+  
+  NSMenuItem *menuItem = [self _menuItemForIndexPath:indexPath inMenu:menu];
+  if (menuItem == nil)
+    {
+      EAULOG(@"Eau: Menu item not found for window %@ path %@", windowId, indexPath);
+      return;
+    }
+
+  EAULOG(@"Eau: Found menu item '%@', checking if enabled", [menuItem title]);
+  
+  if (![menuItem isEnabled])
+    {
+      EAULOG(@"Eau: Menu item '%@' disabled, ignoring", [menuItem title]);
+      return;
+    }
+
+  SEL action = [menuItem action];
+  id target = [menuItem target];
+  
+  EAULOG(@"Eau: Menu item '%@' - action: %@, target: %@", [menuItem title], NSStringFromSelector(action), target);
+  
+  if (action == NULL)
+    {
+      EAULOG(@"Eau: Menu item '%@' has no action", [menuItem title]);
+      return;
+    }
+
+  EAULOG(@"Eau: Sending action %@ to target %@ from menu item '%@'", NSStringFromSelector(action), target, [menuItem title]);
+  BOOL handled = [NSApp sendAction:action to:target from:menuItem];
+  NSLog(@"Eau: sendAction returned %@ for menu item '%@'", handled ? @"YES" : @"NO", [menuItem title]);
+  EAULOG(@"Eau: Action sent successfully");
+}
+
+- (oneway void)activateMenuItemAtPath:(NSArray *)indexPath forWindow:(NSNumber *)windowId
+{
+  NSLog(@"Eau: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);
+  EAULOG(@"Eau: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);
+  
+  NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
+                           indexPath ?: [NSArray array], @"indexPath",
+                           windowId ?: [NSNumber numberWithUnsignedInt:0], @"windowId",
+                           nil];
+
+  if (![NSThread isMainThread])
+    {
+      EAULOG(@"Eau: Not on main thread, dispatching to main thread");
+      [self performSelectorOnMainThread:@selector(_performMenuActionFromIPC:)
+                             withObject:payload
+                          waitUntilDone:NO];
+      return;
+    }
+
+  EAULOG(@"Eau: On main thread, calling _performMenuActionFromIPC directly");
+  [self _performMenuActionFromIPC:payload];
 }
 
 - (void)updateAllWindowsWithMenu: (NSMenu*)menu
@@ -243,30 +532,28 @@ static Class _menuRegistryClass;
 
 - (NSRect)modifyRect: (NSRect)rect forMenu: (NSMenu*)menu isHorizontal: (BOOL)horizontal
 {
-  NSInterfaceStyle style = NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", nil);
-  
-  if (style == NSMacintoshInterfaceStyle && menuRegistry != nil && ([NSApp mainMenu] == menu))
+  // Always use Menu.app IPC when available
+  if (menuServerAvailable && ([NSApp mainMenu] == menu))
     {
-      EAULOG(@"Eau: Modifying menu rect for Macintosh style with D-Bus: hiding menu bar");
+      EAULOG(@"Eau: Modifying menu rect for GNUstep IPC: hiding menu bar");
       return NSZeroRect;
     }
   
-  EAULOG(@"Eau: Using standard menu rect (D-Bus %@)", menuRegistry ? @"available" : @"unavailable");
+  EAULOG(@"Eau: Using standard menu rect (Menu.app %@)", menuServerAvailable ? @"available" : @"unavailable");
   return [super modifyRect: rect forMenu: menu isHorizontal: horizontal];
 }
 
 - (BOOL)proposedVisibility: (BOOL)visibility forMenu: (NSMenu*)menu
 {
-  NSInterfaceStyle style = NSInterfaceStyleForKey(@"NSMenuInterfaceStyle", nil);
-  
-  if (style == NSMacintoshInterfaceStyle && menuRegistry != nil && ([NSApp mainMenu] == menu))
+  // Always use Menu.app IPC when available
+  if (menuServerAvailable && ([NSApp mainMenu] == menu))
     {
-      EAULOG(@"Eau: Proposing menu visibility NO for Macintosh style with D-Bus");
+      EAULOG(@"Eau: Proposing menu visibility NO for GNUstep IPC");
       return NO;
     }
   
-  EAULOG(@"Eau: Proposing standard menu visibility %@ (D-Bus %@)", 
-         visibility ? @"YES" : @"NO", menuRegistry ? @"available" : @"unavailable");
+  EAULOG(@"Eau: Proposing standard menu visibility %@ (Menu.app %@)", 
+         visibility ? @"YES" : @"NO", menuServerAvailable ? @"available" : @"unavailable");
   return [super proposedVisibility: visibility forMenu: menu];
 }
 

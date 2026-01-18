@@ -18,15 +18,24 @@
 // number of pixels, usually in the range [4.0, 16.0].
 #define EAU_MENU_ITEM_PADDING 10.0
 
-@interface Eau: GSTheme
+@protocol GSGNUstepMenuClient <NSObject>
+- (oneway void)activateMenuItemAtPath:(NSArray *)indexPath
+                            forWindow:(NSNumber *)windowId;
+@end
+
+@interface Eau: GSTheme <GSGNUstepMenuClient>
 {
-    id menuRegistry;
+    NSMutableDictionary *menuByWindowId;
+    NSString *menuClientName;
+    NSConnection *menuClientConnection;
+    NSConnection *menuServerConnection;
+    id menuServerProxy;
+    BOOL menuServerAvailable;
 }
 + (NSColor *) controlStrokeColor;
 - (void) drawPathButton: (NSBezierPath*) path
                      in: (NSCell*)cell
 			            state: (GSThemeControlState) state;
-- (BOOL) _isDBusAvailable;
 @end
 
 
