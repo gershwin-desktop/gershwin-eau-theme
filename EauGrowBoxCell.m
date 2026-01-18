@@ -16,9 +16,9 @@
   [[NSColor colorWithCalibratedWhite:0.85 alpha:1.0] set];
   NSRectFill(cellFrame);
 
-  // Ridge colors
-  NSColor *darkColor = [NSColor colorWithCalibratedWhite:0.45 alpha:1.0];
-  NSColor *lightColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.8];
+  // Ridge colors - dark for good contrast
+  NSColor *darkColor = [NSColor colorWithCalibratedWhite:0.15 alpha:1.0];
+  NSColor *lightColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.9];
 
   CGFloat spacing = 3.0;  // Space between ridges
   CGFloat inset = 3.0;    // Offset from corner
