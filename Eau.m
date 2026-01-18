@@ -352,7 +352,24 @@
 
 - (void)setMenu:(NSMenu*)m forWindow:(NSWindow*)w
 {
-  NSLog(@"Eau: setMenu:forWindow: called - menu=%@, window=%@", m, w);
+  // Reduce verbose logging for frequent menu updates
+  static NSMutableDictionary *lastMenuUpdateTime = nil;
+  static NSMutableDictionary *lastMenuPointer = nil;
+  static NSMutableDictionary *firstMenuSent = nil;
+  static NSTimeInterval startupTime = 0;
+  if (!lastMenuUpdateTime) {
+    lastMenuUpdateTime = [[NSMutableDictionary alloc] init];
+  }
+  if (!lastMenuPointer) {
+    lastMenuPointer = [[NSMutableDictionary alloc] init];
+  }
+  if (!firstMenuSent) {
+    firstMenuSent = [[NSMutableDictionary alloc] init];
+  }
+  if (startupTime == 0) {
+    startupTime = [NSDate timeIntervalSinceReferenceDate];
+  }
+
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
   if (windowId == nil)
     {
@@ -361,7 +378,31 @@
       [super setMenu: m forWindow: w];
       return;
     }
-  NSLog(@"Eau: Resolved windowId=%@", windowId);
+  // NSLog(@"Eau: Resolved windowId=%@", windowId);
+
+  // Debounce repeated updates for the same menu during startup
+  NSNumber *lastTime = [lastMenuUpdateTime objectForKey:windowId];
+  NSValue *lastPtr = [lastMenuPointer objectForKey:windowId];
+  // During the first 15 seconds after startup, send only the first menu update per window
+  if (([NSDate timeIntervalSinceReferenceDate] - startupTime) < 15.0) {
+    if ([firstMenuSent objectForKey:windowId]) {
+      NSLog(@"Eau: Suppressing repeated menu updates during startup for window %@", windowId);
+      return;
+    }
+  }
+
+  if (lastTime) {
+    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
+    NSTimeInterval prev = [lastTime doubleValue];
+    if ((now - prev) < 2.0) {
+      if (lastPtr && [lastPtr pointerValue] == m) {
+        NSLog(@"Eau: Skipping duplicate menu update for window %@ (debounced)", windowId);
+        return;
+      }
+      NSLog(@"Eau: Throttling rapid menu updates for window %@", windowId);
+      return;
+    }
+  }
 
   if (m == nil || [m numberOfItems] == 0)
     {
@@ -389,7 +430,7 @@
       return;
     }
 
-  NSLog(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
+  // NSLog(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
   [menuByWindowId setObject:m forKey:windowId];
 
   if (![self _ensureMenuClientRegistered])
@@ -410,14 +451,19 @@
 
   @try
     {
-      NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
+      // NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
       NSDictionary *menuData = [self _serializeMenu:m];
-      NSLog(@"Eau: Serialized menu data: %@", menuData);
+      // NSLog(@"Eau: Serialized menu data: %@", menuData);
       [(id<GSGNUstepMenuServer>)menuServerProxy updateMenuForWindow:windowId
                                                           menuData:menuData
                                                         clientName:[self _menuClientName]];
-      NSLog(@"Eau: Successfully sent menu update to Menu.app");
+      // NSLog(@"Eau: Successfully sent menu update to Menu.app");
       EAULOG(@"Eau: Updated GNUstep menu for window %@", windowId);
+
+      // Record the update time and menu pointer for debouncing
+      [lastMenuUpdateTime setObject:@([NSDate timeIntervalSinceReferenceDate]) forKey:windowId];
+      [lastMenuPointer setObject:[NSValue valueWithPointer:m] forKey:windowId];
+      [firstMenuSent setObject:@YES forKey:windowId];
     }
   @catch (NSException *exception)
     {
