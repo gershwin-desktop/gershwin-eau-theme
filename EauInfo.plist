@@ -11,7 +11,7 @@
     	GSThemeDomain = {
 		  NSScrollViewInterfaceStyle = NSMacintoshInterfaceStyle;
   	          NSScrollerInterfaceStyle = NSMacintoshInterfaceStyle;
-	          NSMenuInterfaceStyle = NSMacintoshInterfaceStyle;
+	          NSMenuInterfaceStyle = NSWindows95InterfaceStyle;
     		      };
     	GSThemeIcon = "ThemeIcon.png";
 	GSThemePreview = "ThemePreview.png";
