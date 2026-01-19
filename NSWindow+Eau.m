@@ -15,7 +15,7 @@
 }
 
 @property (nonatomic, assign) BOOL reverse;
-@property (retain) NSButtonCell * defaultbuttoncell;
+@property (strong) NSButtonCell * defaultbuttoncell;
 
 @end
 
@@ -248,8 +248,8 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   NSButtonCell * buttoncell;
 }
 
-@property (retain) NSButtonCell * buttoncell;
-@property (retain) NSAnimation * animation;
+@property (strong) NSButtonCell * buttoncell;
+@property (strong) NSAnimation * animation;
 
 @end
 @implementation DefaultButtonAnimationController
@@ -259,7 +259,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 {
   EAULOG(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
   if (self = [super init]) {
-    buttoncell = cell;    EAULOG(@"DefaultButtonAnimationController: Initialized for button cell %p", cell);    
+    self.buttoncell = cell;    EAULOG(@"DefaultButtonAnimationController: Initialized for button cell %p", cell);    
     // Register for additional window notifications to handle visibility changes
     [[NSNotificationCenter defaultCenter] addObserver:self 
                                              selector:@selector(windowWillClose:) 
@@ -339,24 +339,33 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 {
   EAULOG(@"DefaultButtonAnimationController: dealloc called for cell %p", buttoncell);
   
-  // Stop animation and remove all notifications
-  [animation stopAnimation];
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
-  
-  // Remove KVO observer for enabled property
-  if ([buttoncell controlView]) {
-    NSControl *control = (NSControl *)[buttoncell controlView];
-    @try {
-      [control removeObserver:self forKeyPath:@"enabled"];
-      EAULOG(@"DefaultButtonAnimationController: Removed KVO observer for enabled property on control %p", control);
+  @try {
+    // Stop animation and remove all notifications
+    if (animation) {
+      [animation stopAnimation];
     }
-    @catch (NSException *exception) {
-      EAULOG(@"DefaultButtonAnimationController: ERROR removing KVO observer for enabled property: %@", exception);
+    [[NSNotificationCenter defaultCenter] removeObserver:self];
+    
+    // Remove KVO observer for enabled property
+    // Be very careful here - buttoncell might have been deallocated already
+    if (buttoncell) {
+      @try {
+        id controlView = [buttoncell controlView];
+        if (controlView) {
+          NSControl *control = (NSControl *)controlView;
+          [control removeObserver:self forKeyPath:@"enabled"];
+          EAULOG(@"DefaultButtonAnimationController: Removed KVO observer for enabled property on control %p", control);
+        }
+      } @catch (NSException *exception) {
+        EAULOG(@"DefaultButtonAnimationController: ERROR removing KVO observer: %@", exception);
+      }
     }
+  } @catch (NSException *exception) {
+    EAULOG(@"DefaultButtonAnimationController: ERROR in dealloc: %@", exception);
   }
   
-  [animation release];
-  [super dealloc];
+  animation = nil;
+  buttoncell = nil;
 }
 
 - (void) startPulse
@@ -596,7 +605,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   [newButton setImagePosition: NSImageOnly];
   [newButton setBordered: YES];
   [newButton setTag: button];
-  return AUTORELEASE(newButton);
+  return newButton;
 }
 
 - (void) _overrideNSWindowMethod_setDefaultButtonCell: (NSButtonCell *)aCell {
@@ -658,7 +667,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 {
   EAULOG(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p", aCell);
   
-  ASSIGN(_defaultButtonCell, aCell);
+  _defaultButtonCell = aCell;
   [self enableKeyEquivalentForDefaultButtonCell];
 
   [aCell setKeyEquivalent: @"\r"];
@@ -714,7 +723,6 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
   
   EAULOG(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
   [animationcontroller startPulse];
-  [animationcontroller release];
   
   EAULOG(@"NSWindow+Eau: Default button cell setup completed for cell %p", aCell);
 }

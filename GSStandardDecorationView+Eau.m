@@ -113,23 +113,26 @@ static char originalFrameKey;  // Store original frame before zoom
     // Get zoom button and set frame
     NSButton *zoomButton = [self zoomButton];
     if (zoomButton) {
+      NSButton *strongZoomButton = zoomButton;
       EAULOG(@"Updating zoom button frame: %@", NSStringFromRect(zoomButtonRect));
-      EAULOG(@"Before update - target: %@, action: %@, enabled: %d", [zoomButton target], NSStringFromSelector([zoomButton action]), [zoomButton isEnabled]);
+      EAULOG(@"Before update - target: %@, action: %@, enabled: %d", [strongZoomButton target], NSStringFromSelector([strongZoomButton action]), [strongZoomButton isEnabled]);
 
       // Ensure target and action are maintained
-      [zoomButton setTarget:self];
-      [zoomButton setAction:@selector(EAUzoomButtonClicked:)];
+      [strongZoomButton setTarget:self];
+      [strongZoomButton setAction:@selector(EAUzoomButtonClicked:)];
 
-      [zoomButton setFrame: zoomButtonRect];
-      [zoomButton setEnabled: YES];  // Ensure button stays enabled
-      [zoomButton setHidden: NO];    // Ensure button stays visible
-      [zoomButton setNeedsDisplay: YES];  // Force redraw
+      [strongZoomButton setFrame: zoomButtonRect];
+      [strongZoomButton setEnabled: YES];  // Ensure button stays enabled
+      [strongZoomButton setHidden: NO];    // Ensure button stays visible
+      [strongZoomButton setNeedsDisplay: YES];  // Force redraw
 
-      // Make sure the button is properly positioned in view hierarchy
-      [zoomButton removeFromSuperview];
-      [self addSubview: zoomButton];
+      // Ensure the button is attached without removing it unnecessarily
+      if ([strongZoomButton superview] != self)
+        {
+          [self addSubview: strongZoomButton];
+        }
 
-      EAULOG(@"After update - target: %@, action: %@, enabled: %d, hidden: %d", [zoomButton target], NSStringFromSelector([zoomButton action]), [zoomButton isEnabled], [zoomButton isHidden]);
+      EAULOG(@"After update - target: %@, action: %@, enabled: %d, hidden: %d", [strongZoomButton target], NSStringFromSelector([strongZoomButton action]), [strongZoomButton isEnabled], [strongZoomButton isHidden]);
     }
   }
 

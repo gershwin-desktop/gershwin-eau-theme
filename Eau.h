@@ -28,6 +28,7 @@
     NSMutableDictionary *menuByWindowId;
     NSString *menuClientName;
     NSConnection *menuClientConnection;
+    NSPort *menuClientReceivePort;
     NSConnection *menuServerConnection;
     id menuServerProxy;
     BOOL menuServerAvailable;

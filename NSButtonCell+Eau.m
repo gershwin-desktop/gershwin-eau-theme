@@ -153,14 +153,14 @@ static NSMutableSet *returnImageCells = nil;
 - (BOOL) isProcessingReturnButton
 {
   @synchronized(processingCells) {
-    return [processingCells containsObject:[NSValue valueWithPointer:self]];
+    return [processingCells containsObject:[NSValue valueWithPointer:(__bridge const void *)(self)]];
   }
 }
 
 - (void) setIsProcessingReturnButton:(BOOL)processing
 {
   @synchronized(processingCells) {
-    NSValue *cellPtr = [NSValue valueWithPointer:self];
+    NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
     if (processing) {
       [processingCells addObject:cellPtr];
     } else {
@@ -184,7 +184,7 @@ static NSMutableSet *returnImageCells = nil;
           // Remember that this cell is using the suppressed return image so
           // we can treat layout differently while it's highlighted.
           @synchronized(returnImageCells) {
-            [returnImageCells addObject:[NSValue valueWithPointer:self]];
+            [returnImageCells addObject:[NSValue valueWithPointer:(__bridge const void *)(self)]];
           }
 
           // Prevent infinite loops
@@ -215,7 +215,7 @@ static NSMutableSet *returnImageCells = nil;
       // Remember that this cell is using the suppressed return image so
       // we can treat layout differently while it's highlighted.
       @synchronized(returnImageCells) {
-        [returnImageCells addObject:[NSValue valueWithPointer:self]];
+        [returnImageCells addObject:[NSValue valueWithPointer:(__bridge const void *)(self)]];
       }
 
       // Prevent infinite loops
@@ -253,7 +253,7 @@ static NSMutableSet *returnImageCells = nil;
           // Remember that this cell is using the suppressed return image so
           // we can treat layout differently while it's highlighted.
           @synchronized(returnImageCells) {
-            [returnImageCells addObject:[NSValue valueWithPointer:self]];
+            [returnImageCells addObject:[NSValue valueWithPointer:(__bridge const void *)(self)]];
           }
 
           // Prevent infinite loops
@@ -283,7 +283,7 @@ static NSMutableSet *returnImageCells = nil;
       // Remember that this cell is using the suppressed return image so
       // we can treat layout differently while it's highlighted.
       @synchronized(returnImageCells) {
-        [returnImageCells addObject:[NSValue valueWithPointer:self]];
+        [returnImageCells addObject:[NSValue valueWithPointer:(__bridge const void *)(self)]];
       }
 
       // Prevent infinite loops
@@ -310,7 +310,7 @@ static NSMutableSet *returnImageCells = nil;
   @try {
     // Prevent multiple enablePulsing calls for the same cell
     @synchronized(defaultButtonSetCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       if ([defaultButtonSetCells containsObject:cellPtr]) {
         EAULOG(@"NSButtonCell+Eau: Button cell %p already enabled for pulsing, skipping", self);
         return;
@@ -341,7 +341,7 @@ static NSMutableSet *returnImageCells = nil;
   @try {
     // Prevent multiple attempts for the same cell
     @synchronized(defaultButtonSetCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       if ([defaultButtonSetCells containsObject:cellPtr]) {
         EAULOG(@"NSButtonCell+Eau: Button cell %p already processed, skipping", self);
         return;
@@ -368,20 +368,34 @@ static NSMutableSet *returnImageCells = nil;
     if ([self respondsToSelector:@selector(controlView)]) {
       controlView = [self controlView];
     }
-    if (controlView) {
-      NSWindow *window = [controlView window];
-      if (window) {
-        // Skip delayed attempts for panels (short-lived)
-        if ([window isKindOfClass:[NSPanel class]]) {
-          EAULOG(@"NSButtonCell+Eau: Button is in a panel, skipping delayed attempt for cell %p", self);
-          return;
-        }
-        // Skip delayed attempts for modal windows (short-lived, closed when modal session ends)
-        if ([NSApp modalWindow] == window) {
-          EAULOG(@"NSButtonCell+Eau: Button is in modal window, skipping delayed attempt for cell %p", self);
-          return;
-        }
-      }
+    if (!controlView || ![controlView isKindOfClass:[NSView class]]) {
+      EAULOG(@"NSButtonCell+Eau: Control view missing or invalid, skipping delayed attempt for cell %p", self);
+      return;
+    }
+
+    NSWindow *window = nil;
+    @try {
+      window = [controlView window];
+    } @catch (NSException *windowException) {
+      EAULOG(@"NSButtonCell+Eau: Exception getting window for cell %p: %@", self, windowException);
+      return;
+    }
+
+    if (!window || ![window isKindOfClass:[NSWindow class]]) {
+      EAULOG(@"NSButtonCell+Eau: Window missing or invalid, skipping delayed attempt for cell %p", self);
+      return;
+    }
+
+    // Skip delayed attempts for panels (short-lived)
+    if ([window isKindOfClass:[NSPanel class]]) {
+      EAULOG(@"NSButtonCell+Eau: Button is in a panel, skipping delayed attempt for cell %p", self);
+      return;
+    }
+
+    // Skip delayed attempts for modal windows (short-lived, closed when modal session ends)
+    if ([NSApp modalWindow] == window) {
+      EAULOG(@"NSButtonCell+Eau: Button is in modal window, skipping delayed attempt for cell %p", self);
+      return;
     }
     
     // Only schedule ONE delayed attempt to prevent loops
@@ -470,7 +484,7 @@ static NSMutableSet *returnImageCells = nil;
     
     // Check if already processed
     @synchronized(defaultButtonSetCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       if ([defaultButtonSetCells containsObject:cellPtr]) {
         EAULOG(@"NSButtonCell+Eau: Button cell %p already processed in final attempt", self);
         return;
@@ -504,7 +518,7 @@ static NSMutableSet *returnImageCells = nil;
 {
   BOOL hasReturnImage = NO;
   @synchronized(returnImageCells) {
-    NSValue *cellPtr = [NSValue valueWithPointer:self];
+    NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
     hasReturnImage = [returnImageCells containsObject:cellPtr];
   }
 
@@ -616,7 +630,7 @@ static NSMutableSet *returnImageCells = nil;
   NSCellImagePosition oldPos = [self imagePosition];
 
   @synchronized(returnImageCells) {
-    NSValue *cellPtr = [NSValue valueWithPointer:self];
+    NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
     if ([returnImageCells containsObject:cellPtr] && oldPos != NSNoImage) {
       shouldRemoveImagePosition = YES;
     }
@@ -700,7 +714,7 @@ static NSMutableSet *returnImageCells = nil;
 {
   @try {
     @synchronized(defaultButtonSetCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       [defaultButtonSetCells addObject:cellPtr];
       EAULOG(@"NSButtonCell+Eau: Marked button cell %p as default button set", self);
     }
@@ -846,12 +860,12 @@ static NSMutableSet *returnImageCells = nil;
     
     // Remove from tracking sets
     @synchronized(processingCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       [processingCells removeObject:cellPtr];
     }
     
     @synchronized(defaultButtonSetCells) {
-      NSValue *cellPtr = [NSValue valueWithPointer:self];
+      NSValue *cellPtr = [NSValue valueWithPointer:(__bridge const void *)(self)];
       [defaultButtonSetCells removeObject:cellPtr];
     }
     
@@ -860,8 +874,6 @@ static NSMutableSet *returnImageCells = nil;
   @catch (NSException *exception) {
     EAULOG(@"NSButtonCell+Eau: ERROR in dealloc for cell %p: %@", self, exception);
   }
-  
-  [super dealloc];
 }
 
 @end

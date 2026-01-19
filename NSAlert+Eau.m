@@ -39,7 +39,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
 // Private category to declare swizzled selectors so the compiler knows about them
 @interface EauAlertPanel (Swizzles)
 - (id)eau_initWithoutGModel;
-- (id)eau_initWithoutGModelHelper;
+- (id)eau_initWithoutGModelHelper __attribute__((objc_method_family(init)));
 - (NSInteger)eau_runModal;
 - (NSInteger)eau_runModalHelper;
 - (NSButton *)eau_getDefButton;
@@ -50,7 +50,10 @@ static id EAUGetAlertIvar(id obj, const char *name)
 @implementation EauAlertPanel
 {
     BOOL _isStoppingModal;
+    id _selfRetainer;
 }
+
+static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 + (void) initialize
 {
@@ -165,16 +168,16 @@ static id EAUGetAlertIvar(id obj, const char *name)
 - (id) eau_initWithoutGModelHelper
 {
     // Call the original implementation (which is now at this selector after swizzling)
-    self = [self eau_initWithoutGModel];
-    if (self == nil)
+    id panel = [self eau_initWithoutGModel];
+    if (panel == nil)
         return nil;
 
     // Apply Eau fonts to legacy GSAlertPanel controls
-    NSTextField *legacyTitleField = (NSTextField *)EAUGetAlertIvar(self, "titleField");
-    NSTextField *legacyMessageField = (NSTextField *)EAUGetAlertIvar(self, "messageField");
-    NSButton *legacyDefButton = (NSButton *)EAUGetAlertIvar(self, "defButton");
-    NSButton *legacyAltButton = (NSButton *)EAUGetAlertIvar(self, "altButton");
-    NSButton *legacyOthButton = (NSButton *)EAUGetAlertIvar(self, "othButton");
+    NSTextField *legacyTitleField = (NSTextField *)EAUGetAlertIvar(panel, "titleField");
+    NSTextField *legacyMessageField = (NSTextField *)EAUGetAlertIvar(panel, "messageField");
+    NSButton *legacyDefButton = (NSButton *)EAUGetAlertIvar(panel, "defButton");
+    NSButton *legacyAltButton = (NSButton *)EAUGetAlertIvar(panel, "altButton");
+    NSButton *legacyOthButton = (NSButton *)EAUGetAlertIvar(panel, "othButton");
 
     if (legacyTitleField != nil)
     {
@@ -201,7 +204,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
     }
     
     // Remove the horizontal line (NSBox with NSGrooveBorder)
-    NSView *content = [(NSPanel *)self contentView];
+    NSView *content = [(NSPanel *)panel contentView];
     NSArray *subviews = [[content subviews] copy];
     for (NSView *subview in subviews)
     {
@@ -216,9 +219,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
             }
         }
     }
-    [subviews release];
-    
-    return self;
+    return panel;
 }
 
 // Helper method to get the default button from GSAlertPanel
@@ -264,9 +265,19 @@ static id EAUGetAlertIvar(id obj, const char *name)
 - (void) dealloc
 {
     NSLog(@"Eau: EauAlertPanel dealloc called for panel: %@", self);
-    // Superclass GSAlertPanel already releases its ivars; avoid double-free.
-    NSLog(@"Eau: EauAlertPanel dealloc calling super");
-    [super dealloc];
+    
+    // In ARC, ivars are automatically released when the object is deallocated
+    // We don't need to explicitly release them, but we can set them to nil for safety
+    defButton = nil;
+    altButton = nil;
+    othButton = nil;
+    icoButton = nil;
+    titleField = nil;
+    messageField = nil;
+    scroll = nil;
+    
+    NSLog(@"Eau: EauAlertPanel dealloc cleaning up completed");
+    // In ARC, [super dealloc] is NOT called - it happens automatically
 }
 
 - (NSButton *) _makeButtonWithRect: (NSRect)rect tag: (NSInteger)tag
@@ -521,7 +532,7 @@ static id EAUGetAlertIvar(id obj, const char *name)
 
 - (void) buttonAction: (id)sender
 {
-    NSLog(@"Eau: buttonAction called, sender: %@, self retainCount: %lu, _isStoppingModal: %d", sender, (unsigned long)[self retainCount], _isStoppingModal);
+    NSLog(@"Eau: buttonAction called, sender: %@, _isStoppingModal: %d", sender, _isStoppingModal);
     if (sender == nil)
     {
         NSLog(@"Eau: WARNING - buttonAction called with nil sender");
@@ -546,13 +557,13 @@ static id EAUGetAlertIvar(id obj, const char *name)
     result = tag;
     _isStoppingModal = YES;
     
-    NSLog(@"Eau: buttonAction will stop modal with result: %ld, self retainCount: %lu", result, (unsigned long)[self retainCount]);
+    NSLog(@"Eau: buttonAction will stop modal with result: %ld", result);
     
     // CRITICAL FIX: Defer stopModal to next run loop iteration
     // This prevents crashes when performClick: is still processing events
     // The window must remain valid until all event handling completes
     // Use NSRunLoopCommonModes to work in both modal panel and default run loop modes
-    RETAIN(self);
+    _selfRetainer = self;
     [[NSRunLoop currentRunLoop] performSelector: @selector(_stopModalDeferred)
                                          target: self
                                        argument: nil
@@ -563,11 +574,11 @@ static id EAUGetAlertIvar(id obj, const char *name)
 
 - (void) _stopModalDeferred
 {
-    NSLog(@"Eau: _stopModalDeferred executing, self retainCount: %lu", (unsigned long)[self retainCount]);
+    NSLog(@"Eau: _stopModalDeferred executing");
     [NSApp stopModalWithCode: result];
     NSLog(@"Eau: _stopModalDeferred completed");
     _isStoppingModal = NO;
-    RELEASE(self);
+    _selfRetainer = nil;
 }
 
 - (NSInteger) result
@@ -1359,23 +1370,12 @@ static void setKeyEquivalent(NSButton *button)
             // Ignore if ivar doesn't exist
         }
 
-        // Destroy the window as original does (avoid KVC retain/release side effects)
-        Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-        if (windowIvar)
-        {
-            object_setIvar(self, windowIvar, nil);
-        }
-        else
-        {
-            @try {
-                [self setValue: nil forKey: @"_window"];
-            }
-            @catch (NSException *exception) {
-                // Ignore if ivar doesn't exist
-            }
-        }
-        [window release];
-
+        // Defer cleanup to next run loop to avoid use-after-free during modal teardown.
+        [[NSRunLoop currentRunLoop] performSelector: @selector(eau_cleanupPanel)
+                                             target: self
+                                           argument: nil
+                                              order: 0
+                                              modes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
         return result;
     }
     
@@ -1388,6 +1388,26 @@ static void setKeyEquivalent(NSButton *button)
         NSLog(@"Eau: Exception reason: %@", [exception reason]);
         NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
         return NSAlertErrorReturn;
+    }
+}
+
+// Cleanup helper to clear NSAlert's window after modal teardown.
+- (void)eau_cleanupPanel
+{
+    Ivar windowIvar = class_getInstanceVariable([self class], "_window");
+    if (windowIvar)
+    {
+        object_setIvar(self, windowIvar, nil);
+        objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, nil, OBJC_ASSOCIATION_ASSIGN);
+    }
+    else
+    {
+        @try {
+            [self setValue: nil forKey: @"_window"];
+        }
+        @catch (NSException *exception) {
+            // Ignore if ivar doesn't exist
+        }
     }
 }
 
@@ -1525,6 +1545,7 @@ static void setKeyEquivalent(NSButton *button)
         if (windowIvar)
         {
             object_setIvar(self, windowIvar, panel);
+            objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             NSLog(@"Eau: Successfully set _window via ivar");
         }
         else

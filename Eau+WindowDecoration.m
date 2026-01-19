@@ -178,8 +178,6 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
     mainColor, NSForegroundColorAttributeName,
     p, NSParagraphStyleAttributeName,
     nil];
-
-    RELEASE(p);
 }
 
 

@@ -36,15 +36,16 @@
 
   menuClientConnection = [[NSConnection alloc] init];
   [menuClientConnection setRootObject:self];
+  menuClientReceivePort = [menuClientConnection receivePort];
   
   // Set up the connection to receive messages
-  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
                               forMode:NSDefaultRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
                               forMode:NSModalPanelRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
                               forMode:NSEventTrackingRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:[menuClientConnection receivePort]
+  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
                               forMode:NSRunLoopCommonModes];
 
   NSString *clientName = [self _menuClientName];
@@ -52,7 +53,18 @@
   if (!registered)
     {
       EAULOG(@"Eau: Failed to register GNUstep menu client name: %@", clientName);
-      [menuClientConnection release];
+      if (menuClientReceivePort != nil)
+        {
+          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                         forMode:NSDefaultRunLoopMode];
+          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                         forMode:NSModalPanelRunLoopMode];
+          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                         forMode:NSEventTrackingRunLoopMode];
+          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                         forMode:NSRunLoopCommonModes];
+          menuClientReceivePort = nil;
+        }
       menuClientConnection = nil;
       return NO;
     }
@@ -71,9 +83,7 @@
 {
   if (menuServerConnection != nil && ![menuServerConnection isValid])
     {
-      [menuServerConnection release];
       menuServerConnection = nil;
-      [menuServerProxy release];
       menuServerProxy = nil;
       menuServerAvailable = NO;
     }
@@ -91,13 +101,13 @@
       return NO;
     }
 
-  menuServerConnection = [connection retain];
+  menuServerConnection = connection;
 
   id proxy = [menuServerConnection rootProxy];
   if (proxy != nil)
     {
       [proxy setProtocolForProxy:@protocol(GSGNUstepMenuServer)];
-      menuServerProxy = [proxy retain];
+      menuServerProxy = proxy;
       menuServerAvailable = YES;
       [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuServerConnection];
       [[NSNotificationCenter defaultCenter] addObserver:self
@@ -108,7 +118,6 @@
       return YES;
     }
 
-  [menuServerConnection release];
   menuServerConnection = nil;
   menuServerAvailable = NO;
   return NO;
@@ -282,19 +291,36 @@
 - (void) dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver: self];
-  [menuByWindowId release];
-  [menuClientName release];
-  [menuClientConnection release];
-  [menuServerConnection release];
-  [menuServerProxy release];
-  [super dealloc];
+  if (menuClientReceivePort != nil)
+    {
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSDefaultRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSModalPanelRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSEventTrackingRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSRunLoopCommonModes];
+      menuClientReceivePort = nil;
+    }
 }
 
 - (void)_menuClientConnectionDidDie:(NSNotification *)notification
 {
   NSLog(@"Eau: Menu client connection died");
   EAULOG(@"Eau: Menu client connection died");
-  [menuClientConnection release];
+  if (menuClientReceivePort != nil)
+    {
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSDefaultRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSModalPanelRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSEventTrackingRunLoopMode];
+      [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
+                                     forMode:NSRunLoopCommonModes];
+      menuClientReceivePort = nil;
+    }
   menuClientConnection = nil;
 }
 
@@ -302,9 +328,7 @@
 {
   NSLog(@"Eau: Menu server connection died");
   EAULOG(@"Eau: Menu server connection died");
-  [menuServerConnection release];
   menuServerConnection = nil;
-  [menuServerProxy release];
   menuServerProxy = nil;
   menuServerAvailable = NO;
 }
@@ -331,10 +355,10 @@
 + (NSColor *) controlStrokeColor
 {
 
-  return RETAIN([NSColor colorWithCalibratedRed: 0.4
-                                          green: 0.4
-                                           blue: 0.4
-                                          alpha: 1]);
+  return [NSColor colorWithCalibratedRed: 0.4
+                                   green: 0.4
+                                    blue: 0.4
+                                   alpha: 1];
 }
 
 - (void) drawPathButton: (NSBezierPath*) path
@@ -395,7 +419,7 @@
     NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
     NSTimeInterval prev = [lastTime doubleValue];
     if ((now - prev) < 2.0) {
-      if (lastPtr && [lastPtr pointerValue] == m) {
+      if (lastPtr && [lastPtr pointerValue] == (__bridge void *)m) {
         NSLog(@"Eau: Skipping duplicate menu update for window %@ (debounced)", windowId);
         return;
       }
@@ -462,7 +486,7 @@
 
       // Record the update time and menu pointer for debouncing
       [lastMenuUpdateTime setObject:@([NSDate timeIntervalSinceReferenceDate]) forKey:windowId];
-      [lastMenuPointer setObject:[NSValue valueWithPointer:m] forKey:windowId];
+      [lastMenuPointer setObject:[NSValue valueWithPointer:(__bridge const void *)m] forKey:windowId];
       [firstMenuSent setObject:@YES forKey:windowId];
     }
   @catch (NSException *exception)

@@ -67,7 +67,6 @@
                             if (sound) {
                                 NSLog(@"[Eau] Playing sound %@", soundPath);
                                 [sound play];
-                                [sound release];
                                 isPlaying = NO;
                                 return;
                             } else {

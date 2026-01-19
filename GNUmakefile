@@ -45,6 +45,7 @@ Eau_OBJC_FILES = \
 		GWDialog+Eau.m\
 		NSCell+Eau.m\
 		NSButtonCell+Eau.m\
+		NSButton+Eau.m\
 		NSTextFieldCell+Eau.m\
 		NSFont+Eau.m\
 		NSMenuItemCell+Eau.m\
@@ -52,6 +53,7 @@ Eau_OBJC_FILES = \
 		NSBox+Eau.m\
 		NSPopUpButton+Eau.m
 ADDITIONAL_TOOL_LIBS =
+ADDITIONAL_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions
 $(BUNDLE_NAME)_RESOURCE_FILES = \
 	./Resources/ThemeIcon.png\
 	./Resources/ThemePreview.png\

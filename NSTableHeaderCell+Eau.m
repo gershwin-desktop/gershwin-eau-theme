@@ -8,6 +8,10 @@
 - (NSTextAlignment) tableHeaderCellTextAlignment;
 @end
 
+@interface NSTableHeaderCell (EauInit)
+- (id)eau_initTextCell: (NSString *)aString __attribute__((objc_method_family(init)));
+@end
+
 @implementation NSTableHeaderCell (Eau)
 
 + (void) load

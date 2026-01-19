@@ -62,7 +62,6 @@
 	}
     }
   [self setName: name forElement: cell temporary: YES];
-  RELEASE(cell);
   return cell;
 }
 
@@ -84,7 +83,6 @@
     {
       [self setName: GSScrollerVerticalKnob forElement: cell temporary: YES];
     }
-  RELEASE(cell);
   return cell;
 }
 
@@ -120,7 +118,6 @@
       color = [NSColor scrollBarColor];
     }
   [cell setBackgroundColor: color];
-  RELEASE(cell);
   return cell;
 }
 // REMEMBER THIS SETTING

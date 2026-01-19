@@ -21,7 +21,6 @@
     [label setEditable:NO];
     [label setSelectable:NO];
     [[dialog contentView] addSubview:label];
-    [label release];
     
     NSButton *okButton = [[NSButton alloc] initWithFrame:NSMakeRect(120,20,80,32)];
     [okButton setTitle:@"OK"];
@@ -30,13 +29,11 @@
     [okButton setTarget:NSApp];
     [okButton setAction:@selector(stopModal:)];
     [[dialog contentView] addSubview:okButton];
-    [okButton release];
     
     [dialog center];
     NSInteger result = [NSApp runModalForWindow:dialog];
     NSLog(@"NSDialog result: %ld", result);
     [dialog orderOut:nil];
-    [dialog release];
     
     [NSApp terminate:nil];
 }
@@ -44,15 +41,13 @@
 
 int main(int argc, char **argv)
 {
-    NSAutoreleasePool *pool = [NSAutoreleasePool new];
-    [NSApplication sharedApplication];
-    
-    AppDelegate *delegate = [[AppDelegate alloc] init];
-    [NSApp setDelegate: delegate];
-    
-    [NSApp run];
-    
-    [delegate release];
-    [pool release];
+    @autoreleasepool {
+      [NSApplication sharedApplication];
+        
+      AppDelegate *delegate = [[AppDelegate alloc] init];
+      [NSApp setDelegate: delegate];
+        
+      [NSApp run];
+    }
     return 0;
 }

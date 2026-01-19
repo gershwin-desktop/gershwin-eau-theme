@@ -13,6 +13,12 @@
 - (id)eau_validRequestorForSendType:(NSString *)sendType returnType:(NSString *)returnType;
 @end
 
+@interface GWDialog (EauInit)
+- (id)eau_initWithTitle: (NSString *)title
+          editText: (NSString *)eText
+        switchTitle: (NSString *)swTitle __attribute__((objc_method_family(init)));
+@end
+
 
 // Helper to access ivars from GWDialog/GWDialogView safely via runtime.
 static id EAUGetIvarObject(id obj, const char *name)
@@ -283,14 +289,14 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   EAULOG(@"EauDialog: Eau-themed init starting for title='%@'", title);
   
   // Call the original implementation (which is now named eau_initWithTitle due to swizzling)
-  self = [self eau_initWithTitle: title editText: eText switchTitle: swTitle];
-  if (self != nil)
+  id dialog = [self eau_initWithTitle: title editText: eText switchTitle: swTitle];
+  if (dialog != nil)
     {
       EAULOG(@"EauDialog: Original init completed, applying Eau layout and focus setup");
-      EAULayoutGWDialog((GWDialog *)self);
-      EAULOG(@"EauDialog: Initialization complete for dialog %p", self);
+      EAULayoutGWDialog((GWDialog *)dialog);
+      EAULOG(@"EauDialog: Initialization complete for dialog %p", dialog);
     }
-  return self;
+  return dialog;
 }
 
 /* eau_runModal

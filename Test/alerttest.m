@@ -16,7 +16,6 @@
     
     NSInteger result = [alert runModal];
     NSLog(@"NSAlert result: %ld", result);
-    [alert release];
     
     [NSApp terminate: nil];
 }
@@ -24,15 +23,13 @@
 
 int main(int argc, char **argv)
 {
-    NSAutoreleasePool *pool = [NSAutoreleasePool new];
-    [NSApplication sharedApplication];
-    
-    AppDelegate *delegate = [[AppDelegate alloc] init];
-    [NSApp setDelegate: delegate];
-    
-    [NSApp run];
-    
-    [delegate release];
-    [pool release];
+    @autoreleasepool {
+        [NSApplication sharedApplication];
+        
+        AppDelegate *delegate = [[AppDelegate alloc] init];
+        [NSApp setDelegate: delegate];
+        
+        [NSApp run];
+    }
     return 0;
 }

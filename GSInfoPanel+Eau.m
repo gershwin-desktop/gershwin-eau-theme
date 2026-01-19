@@ -44,19 +44,19 @@
     }
 }
 
-- (id)eau_initWithDictionary:(NSDictionary *)dictionary
+- (id)eau_initWithDictionary:(NSDictionary *)dictionary __attribute__((objc_method_family(init)))
 {
   // Call the original implementation
-  self = [self eau_initWithDictionary:dictionary];
+  id result = [self eau_initWithDictionary:dictionary];
   
-  if (self) {
+  if (result) {
     EAULOG(@"GSInfoPanel+Eau: Removing background image from info panel");
     
     // Set plain background color
-    [self setBackgroundColor:[NSColor windowBackgroundColor]];
+    [result setBackgroundColor:[NSColor windowBackgroundColor]];
     
     // Remove the background image view
-    NSView *contentView = [self contentView];
+    NSView *contentView = [result contentView];
     NSArray *subviews = [[contentView subviews] copy];
     
     for (NSView *subview in subviews) {
@@ -74,10 +74,9 @@
       }
     }
     
-    [subviews release];
   }
   
-  return self;
+  return result;
 }
 
 @end

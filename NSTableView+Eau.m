@@ -7,6 +7,10 @@
 - (CGFloat) tableHeaderRowHeight;
 @end
 
+@interface NSTableView (EauInit)
+- (id)eau_initWithFrame: (NSRect)frameRect __attribute__((objc_method_family(init)));
+@end
+
 @implementation NSTableView (Eau)
 
 + (void) load

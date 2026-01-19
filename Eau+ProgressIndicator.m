@@ -21,7 +21,7 @@ static NSImage *spinningImages[MaxCount];
 
   // FIXME: Should come from defaults and should be reset when defaults change
   // FIXME: Should probably get the color from the color extension list (see NSToolbar)
-  fillColour = RETAIN([NSColor controlShadowColor]);
+  fillColour = [NSColor controlShadowColor];
 
   // Load images for indeterminate style
   for (i = 0; i < MaxCount; i++)
@@ -34,7 +34,7 @@ static NSImage *spinningImages[MaxCount];
           indeterminateMaxCount = i;
           break;
         }
-          indeterminateColors[i] = RETAIN([NSColor colorWithPatternImage: image]);
+          indeterminateColors[i] = [NSColor colorWithPatternImage: image];
     }
 
   // Load images for spinning style
@@ -48,7 +48,7 @@ static NSImage *spinningImages[MaxCount];
           spinningMaxCount = i;
           break;
         }
-      spinningImages[i] = RETAIN(image);
+      spinningImages[i] = image;
     }
 }
 

@@ -30,7 +30,6 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 - (void)dealloc
 {
   [[NSNotificationCenter defaultCenter] removeObserver:self];
-  [super dealloc];
 }
 
 // Called when any view adds a subview - check if it's our parent and re-raise
@@ -48,10 +47,9 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
       if (addedView != self)
         {
           // Re-add ourselves on top
-          [self retain];
-          [self removeFromSuperview];
-          [parentView addSubview:self positioned:NSWindowAbove relativeTo:nil];
-          [self release];
+          EauGrowBoxView *strongSelf = self;
+          [strongSelf removeFromSuperview];
+          [parentView addSubview:strongSelf positioned:NSWindowAbove relativeTo:nil];
           [self setNeedsDisplay:YES];
         }
     }
@@ -122,7 +120,6 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 {
   EauGrowBoxCell *cell = [[EauGrowBoxCell alloc] init];
   [cell drawWithFrame:[self bounds] inView:self];
-  RELEASE(cell);
 }
 
 + (void)addToWindow:(NSWindow *)window
@@ -143,10 +140,9 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
   if (existingGrowBox)
     {
       // Re-add to ensure it's on top of all other subviews
-      [existingGrowBox retain];
-      [existingGrowBox removeFromSuperview];
-      [contentView addSubview:existingGrowBox positioned:NSWindowAbove relativeTo:nil];
-      [existingGrowBox release];
+      NSView *strongGrowBox = existingGrowBox;
+      [strongGrowBox removeFromSuperview];
+      [contentView addSubview:strongGrowBox positioned:NSWindowAbove relativeTo:nil];
       return;
     }
 
@@ -195,7 +191,6 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
   [contentView setPostsFrameChangedNotifications:YES];
 
   [contentView addSubview:growBox positioned:NSWindowAbove relativeTo:nil];
-  RELEASE(growBox);
 }
 
 + (void)raiseInWindow:(NSWindow *)window
@@ -211,10 +206,9 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
   if (growBox)
     {
       // Re-add to ensure it's on top of all other subviews
-      [growBox retain];
-      [growBox removeFromSuperview];
-      [contentView addSubview:growBox positioned:NSWindowAbove relativeTo:nil];
-      [growBox release];
+      NSView *strongGrowBox = growBox;
+      [strongGrowBox removeFromSuperview];
+      [contentView addSubview:strongGrowBox positioned:NSWindowAbove relativeTo:nil];
       [growBox setNeedsDisplay:YES];
     }
 }

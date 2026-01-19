@@ -8,12 +8,12 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 @implementation NSButtonCell(EauDefaultButtonAnimation)
 - (void)setIsDefaultButton:(NSNumber*) val
 {
-  objc_setAssociatedObject(self, kEauIsDefaultButton, val, OBJC_ASSOCIATION_COPY);
+  objc_setAssociatedObject(self, (__bridge const void *)(kEauIsDefaultButton), val, OBJC_ASSOCIATION_COPY);
 }
 
 - (NSNumber *) isDefaultButton
 {
-	return objc_getAssociatedObject(self, kEauIsDefaultButton);
+  return objc_getAssociatedObject(self, (__bridge const void *)(kEauIsDefaultButton));
 }
 - (BOOL)defaultButton
 {
@@ -21,12 +21,12 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 }
 - (void)setPulseProgress:(NSNumber *)pulseProgress
 {
-	objc_setAssociatedObject(self, kEauPulseProgressKey, pulseProgress, OBJC_ASSOCIATION_COPY);
+  objc_setAssociatedObject(self, (__bridge const void *)(kEauPulseProgressKey), pulseProgress, OBJC_ASSOCIATION_COPY);
 }
 
 - (NSNumber*)pulseProgress
 {
-	return objc_getAssociatedObject(self, kEauPulseProgressKey);
+  return objc_getAssociatedObject(self, (__bridge const void *)(kEauPulseProgressKey));
 }
 @end
 
@@ -216,7 +216,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
         bezierPath = [self _roundBezierPath: frame
                                   withRadius: 4];
     }
-  return RETAIN(bezierPath);
+  return bezierPath;
 }
 - (void) drawButton: (NSRect) frame
 				 in: (NSCell*) cell
@@ -265,9 +265,9 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
         {
           NSDictionary *attributes = [NSDictionary dictionaryWithObject: [NSFont controlContentFontOfSize: 0]
                       forKey: NSFontAttributeName];
-          NSAttributedString *questionMark = [[[NSAttributedString alloc]
+          NSAttributedString *questionMark = [[NSAttributedString alloc]
                   initWithString: _(@"?")
-                attributes: attributes] autorelease];
+                attributes: attributes];
 
           NSRect textRect;
           textRect.size = [questionMark size];
