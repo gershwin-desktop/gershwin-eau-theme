@@ -50,6 +50,7 @@ Eau_OBJC_FILES = \
 		NSFont+Eau.m\
 		NSMenuItemCell+Eau.m\
 		NSMenuView+Eau.m\
+		NSMenu+Eau.m\
 		NSBox+Eau.m\
 		NSPopUpButton+Eau.m
 ADDITIONAL_TOOL_LIBS =
