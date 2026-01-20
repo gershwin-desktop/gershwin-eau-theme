@@ -1,6 +1,7 @@
 #import "Eau.h"
 
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 #import <Foundation/NSConnection.h>
@@ -252,6 +253,14 @@
            selector:@selector(macintoshMenuDidChange:)
                name:@"NSMacintoshMenuDidChangeNotification"
              object:nil];
+
+      // Observe window activation so Menu.app gets menus for newly active windows
+      [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(windowDidBecomeKey:)
+               name:@"NSWindowDidBecomeKeyNotification"
+             object:nil];
+
       EAULOG(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
              menuServerAvailable ? @"available" : @"unavailable");
 
@@ -349,6 +358,24 @@
         {
           EAULOG(@"Eau: No key window available for menu change notification");
         }
+    }
+}
+
+- (void) windowDidBecomeKey: (NSNotification*)notification
+{
+  NSWindow *window = [notification object];
+  
+  // When a window becomes key, send its menu to Menu.app
+  // This ensures menus are available when the Menu component scans after window activation
+  NSMenu *mainMenu = [NSApp mainMenu];
+  if (mainMenu != nil && [mainMenu numberOfItems] > 0)
+    {
+      EAULOG(@"Eau: Window became key, syncing GNUstep menu: %@", window);
+      [self setMenu: mainMenu forWindow: window];
+    }
+  else
+    {
+      EAULOG(@"Eau: Window became key but no main menu available: %@", window);
     }
 }
 
@@ -585,9 +612,9 @@
   if (![NSThread isMainThread])
     {
       EAULOG(@"Eau: Not on main thread, dispatching to main thread");
-      [self performSelectorOnMainThread:@selector(_performMenuActionFromIPC:)
-                             withObject:payload
-                          waitUntilDone:NO];
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [self _performMenuActionFromIPC:payload];
+      });
       return;
     }
 

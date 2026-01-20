@@ -16,6 +16,7 @@
 #import "Eau+Button.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
+#import <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
 // Prevent the specific "return" images from ever being drawn by intercepting common draw methods.
@@ -401,7 +402,9 @@ static NSMutableSet *returnImageCells = nil;
     // Only schedule ONE delayed attempt to prevent loops
     EAULOG(@"NSButtonCell+Eau: Scheduling single delayed attempt for button cell %p", self);
     @try {
-      [self performSelector:@selector(finalAttemptSetAsDefaultButton) withObject:nil afterDelay:1.0];
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [self finalAttemptSetAsDefaultButton];
+      });
     }
     @catch (NSException *performException) {
       EAULOG(@"NSButtonCell+Eau: ERROR scheduling delayed attempt for cell %p: %@", self, performException);

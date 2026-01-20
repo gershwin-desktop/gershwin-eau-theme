@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import <dispatch/dispatch.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
 #import "AppearanceMetrics.h"
@@ -1254,17 +1255,11 @@ static void setKeyEquivalent(NSButton *button)
 
     if (![NSThread isMainThread])
     {
-        [self performSelectorOnMainThread: _cmd withObject: nil waitUntilDone: YES];
-        @try {
-            NSNumber *resultValue = [self valueForKey: @"_result"];
-            if (resultValue != nil)
-            {
-                return [resultValue integerValue];
-            }
-        } @catch (NSException *exception) {
-            // Ignore and fall through
-        }
-        return NSAlertErrorReturn;
+        __block NSInteger result;
+        dispatch_sync(dispatch_get_main_queue(), ^{
+            result = [self eau_runModal];
+        });
+        return result;
     }
     
     // Call _setupPanel - this invokes the Eau custom setup since methods were swizzled

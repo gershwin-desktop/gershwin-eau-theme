@@ -10,6 +10,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import <dispatch/dispatch.h>
 
 @implementation NSApplication (EauApplication)
 
