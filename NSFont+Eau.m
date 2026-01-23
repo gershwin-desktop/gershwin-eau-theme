@@ -1,5 +1,6 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import "Eau.h"
 
 // Category on NSFont used for method swizzling
 @interface NSFont (EauSwizzling)
@@ -44,7 +45,7 @@ __attribute__((constructor))
 static void initFontSwizzling(void) {
   Class fontClass = [NSFont class];
   if (!fontClass) {
-    NSLog(@"NSFont+Eau: ERROR - NSFont class not found");
+    EAULOG(@"NSFont+Eau: ERROR - NSFont class not found");
     return;
   }
 
@@ -65,10 +66,10 @@ static void initFontSwizzling(void) {
     }
   } else {
     if (!originalMenuBarFontMethod) {
-      NSLog(@"NSFont+Eau: ERROR - Could not find original menuBarFontOfSize: method");
+      EAULOG(@"NSFont+Eau: ERROR - Could not find original menuBarFontOfSize: method");
     }
     if (!swizzledMenuBarFontMethod) {
-      NSLog(@"NSFont+Eau: ERROR - Could not find eau_menuBarFontOfSize: method on NSFont");
+      EAULOG(@"NSFont+Eau: ERROR - Could not find eau_menuBarFontOfSize: method on NSFont");
     }
   }
 
@@ -89,10 +90,10 @@ static void initFontSwizzling(void) {
     }
   } else {
     if (!originalMenuFontMethod) {
-      NSLog(@"NSFont+Eau: ERROR - Could not find original menuFontOfSize: method");
+      EAULOG(@"NSFont+Eau: ERROR - Could not find original menuFontOfSize: method");
     }
     if (!swizzledMenuFontMethod) {
-      NSLog(@"NSFont+Eau: ERROR - Could not find eau_menuFontOfSize: method on NSFont");
+      EAULOG(@"NSFont+Eau: ERROR - Could not find eau_menuFontOfSize: method on NSFont");
     }
   }
 }

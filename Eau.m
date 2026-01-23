@@ -70,7 +70,7 @@
       return NO;
     }
 
-  NSLog(@"Eau: Registered GNUstep menu client as %@ with receive port %@", clientName, [menuClientConnection receivePort]);
+  EAULOG(@"Eau: Registered GNUstep menu client as %@ with receive port %@", clientName, [menuClientConnection receivePort]);
   EAULOG(@"Eau: Registered GNUstep menu client as %@ with receive port added to run loop", clientName);
   [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuClientConnection];
   [[NSNotificationCenter defaultCenter] addObserver:self

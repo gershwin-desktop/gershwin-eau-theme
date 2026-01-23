@@ -4,7 +4,7 @@
 #import "NSTableView+Eau.h"
 
 // To enable debugging messages in the _overrideClassMethod_foo mechanism
-#if 1
+#if 0
 #define EAULOG(args...) NSDebugLog(args)
 #else
 #define EAULOG(args...)

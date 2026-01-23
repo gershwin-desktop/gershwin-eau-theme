@@ -10,7 +10,7 @@
 
 - (NSPoint)eau_locationForSubmenu:(NSMenu *)aSubmenu
 {
-  NSLog(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
+  EAULOG(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
 
   NSMenuView *menuView = (NSMenuView *)self;
 
@@ -21,7 +21,7 @@
 
   // If this menu view itself is horizontal (the menu bar), use original positioning entirely
   if ([menuView isHorizontal]) {
-    NSLog(@"NSMenuView+Eau: Menu is horizontal, using original submenu position {%.1f, %.1f}",
+    EAULOG(@"NSMenuView+Eau: Menu is horizontal, using original submenu position {%.1f, %.1f}",
           originalPoint.x, originalPoint.y);
     return originalPoint;
   }
@@ -30,7 +30,7 @@
   // Keep the original Y position which correctly aligns with the parent item
   NSWindow *window = [menuView window];
   if (!window) {
-    NSLog(@"NSMenuView+Eau: No window for menu view, using original submenu position {%.1f, %.1f}",
+    EAULOG(@"NSMenuView+Eau: No window for menu view, using original submenu position {%.1f, %.1f}",
           originalPoint.x, originalPoint.y);
     return originalPoint;
   }
@@ -43,7 +43,7 @@
   // Y position: use the original calculation which correctly handles item position
   CGFloat yPos = originalPoint.y;
 
-  NSLog(@"NSMenuView+Eau: Adjusted submenu position from {%.1f, %.1f} to {%.1f, %.1f}",
+  EAULOG(@"NSMenuView+Eau: Adjusted submenu position from {%.1f, %.1f} to {%.1f, %.1f}",
         originalPoint.x, originalPoint.y, xPos, yPos);
 
   return NSMakePoint(xPos, yPos);
@@ -58,7 +58,7 @@ static void initMenuViewSwizzling(void) {
 
   Class menuViewClass = objc_getClass("NSMenuView");
   if (!menuViewClass) {
-    NSLog(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
+    EAULOG(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
     return;
   }
 
@@ -70,12 +70,12 @@ static void initMenuViewSwizzling(void) {
   Method swizzledMethod = class_getInstanceMethod(menuViewClass, swizzledSelector);
 
   if (!originalMethod) {
-    NSLog(@"NSMenuView+Eau: ERROR - Could not find original locationForSubmenu: method");
+    EAULOG(@"NSMenuView+Eau: ERROR - Could not find original locationForSubmenu: method");
     return;
   }
 
   if (!swizzledMethod) {
-    NSLog(@"NSMenuView+Eau: ERROR - Could not find eau_locationForSubmenu: method on NSMenuView");
+    EAULOG(@"NSMenuView+Eau: ERROR - Could not find eau_locationForSubmenu: method on NSMenuView");
     return;
   }
 
@@ -83,7 +83,7 @@ static void initMenuViewSwizzling(void) {
   IMP originalIMP = method_getImplementation(originalMethod);
   IMP swizzledIMP = method_getImplementation(swizzledMethod);
   if (originalIMP == swizzledIMP) {
-    NSLog(@"NSMenuView+Eau: Swizzling skipped - implementations already identical");
+    EAULOG(@"NSMenuView+Eau: Swizzling skipped - implementations already identical");
     return;
   }
 

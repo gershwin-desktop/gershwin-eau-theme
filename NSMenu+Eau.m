@@ -121,13 +121,13 @@ static void swizzleNSMenuMethod(Class menuClass,
 
   if (!originalMethod)
     {
-      NSLog(@"Eau: Cannot swizzle NSMenu -%s: original method not found", methodName);
+      EAULOG(@"Eau: Cannot swizzle NSMenu -%s: original method not found", methodName);
       return;
     }
 
   if (!swizzledMethod)
     {
-      NSLog(@"Eau: Cannot swizzle NSMenu -%s: swizzled method not found", methodName);
+      EAULOG(@"Eau: Cannot swizzle NSMenu -%s: swizzled method not found", methodName);
       return;
     }
 
@@ -156,7 +156,7 @@ static void initNSMenuSwizzling(void)
   Class menuClass = objc_getClass("NSMenu");
   if (!menuClass)
     {
-      NSLog(@"Eau: Failed to get NSMenu class for swizzling");
+      EAULOG(@"Eau: Failed to get NSMenu class for swizzling");
       return;
     }
 
