@@ -619,9 +619,6 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
             NSLog(@"Eau: EauAlertPanel sizePanelToFit completed");
         }
     
-    // Ensure we're the key window and can handle events
-    [self center];
-    
     // Raise the window to ensure it gets input focus
     [NSApp activateIgnoringOtherApps: YES];
     [self orderFrontRegardless];
@@ -1343,7 +1340,6 @@ static void setKeyEquivalent(NSButton *button)
         else
         {
             [NSApp activateIgnoringOtherApps: YES];
-            [window center];
             [window orderFrontRegardless];
             [window makeKeyAndOrderFront: nil];
             

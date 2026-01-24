@@ -549,7 +549,6 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 // TS: forward dec
 @interface NSWindow(EauTheme)
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell;
-- (void) EAUcenter;
 @end
 
 @implementation Eau(NSWindow)
@@ -612,13 +611,6 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   EAULOG(@"_overrideNSWindowMethod_setDefaultButtonCell:");
   NSWindow *xself = (NSWindow*)self;
   [xself EAUsetDefaultButtonCell:aCell];
-}
-
-// Override the center method to position windows using golden ratio
-- (void) _overrideNSWindowMethod_center {
-  EAULOG(@"_overrideNSWindowMethod_center: Positioning window with golden ratio");
-  NSWindow *xself = (NSWindow*)self;
-  [xself EAUcenter];
 }
 
 @end
@@ -729,62 +721,6 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 
 - (void) animateDefaultButton: (id)sender
 {
-}
-
-// Golden ratio positioning method
-- (void) EAUcenter
-{
-  EAULOG(@"NSWindow+Eau: EAUcenter called - applying golden ratio positioning");
-  
-  NSScreen *screen = [self screen];
-  if (!screen) {
-    screen = [NSScreen mainScreen];
-  }
-  
-  if (!screen) {
-    EAULOG(@"NSWindow+Eau: No screen available, using standard center");
-    [self center];
-    return;
-  }
-  
-  NSRect screenFrame = [screen visibleFrame];
-  NSRect windowFrame = [self frame];
-  
-  EAULOG(@"NSWindow+Eau: Screen frame: %@", NSStringFromRect(screenFrame));
-  EAULOG(@"NSWindow+Eau: Window frame: %@", NSStringFromRect(windowFrame));
-  
-  // Golden ratio ≈ 1.618, inverse ≈ 0.618
-  // Position the window vertically at the golden ratio point
-  const CGFloat goldenRatio = 1.618033988749;
-  const CGFloat goldenRatioInverse = 1.0 / goldenRatio; // ≈ 0.618
-  
-  // Calculate horizontal center (keep this centered)
-  CGFloat x = screenFrame.origin.x + (screenFrame.size.width - windowFrame.size.width) / 2.0;
-  
-  // Calculate vertical position using golden ratio
-  // Position the window so that the ratio of space above to space below follows golden ratio
-  // This places the window slightly above center, which is more visually pleasing
-  CGFloat availableHeight = screenFrame.size.height - windowFrame.size.height;
-  CGFloat y = screenFrame.origin.y + availableHeight * goldenRatioInverse;
-  
-  // Ensure the window stays within screen bounds
-  if (x < screenFrame.origin.x) {
-    x = screenFrame.origin.x;
-  } else if (x + windowFrame.size.width > screenFrame.origin.x + screenFrame.size.width) {
-    x = screenFrame.origin.x + screenFrame.size.width - windowFrame.size.width;
-  }
-  
-  if (y < screenFrame.origin.y) {
-    y = screenFrame.origin.y;
-  } else if (y + windowFrame.size.height > screenFrame.origin.y + screenFrame.size.height) {
-    y = screenFrame.origin.y + screenFrame.size.height - windowFrame.size.height;
-  }
-  
-  NSRect newFrame = NSMakeRect(x, y, windowFrame.size.width, windowFrame.size.height);
-  
-  EAULOG(@"NSWindow+Eau: New window frame with golden ratio: %@", NSStringFromRect(newFrame));
-  
-  [self setFrame:newFrame display:YES];
 }
 
 @end

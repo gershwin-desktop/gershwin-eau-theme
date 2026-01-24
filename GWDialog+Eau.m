@@ -193,9 +193,6 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   [dialog setInitialFirstResponder: editField];
   EAULOG(@"EauDialog: Set initial first responder to edit field %p", editField);
 
-  // Position dialog using golden ratio centering.
-  [dialog center];
-
   // Log dialog content for diagnostics.
   EAULOG(@"EauDialog: GWDialog layout title='%@' edit='%@' switch='%@'", 
          [titleField stringValue],
