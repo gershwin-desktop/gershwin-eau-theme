@@ -53,7 +53,8 @@ Eau_OBJC_FILES = \
 		NSMenuView+Eau.m\
 		NSMenu+Eau.m\
 		NSBox+Eau.m\
-		NSPopUpButton+Eau.m
+		NSPopUpButton+Eau.m\
+	NSUserDefaults+EauSystemFallback.m
 ADDITIONAL_TOOL_LIBS =
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions
 $(BUNDLE_NAME)_RESOURCE_FILES = \
