@@ -1,4 +1,5 @@
 #import "Eau.h"
+#import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
 
 @interface Eau(EauWindowDecoration)
@@ -72,25 +73,54 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
     }
 
   NSRect workRect;
+  CGFloat titlebarWidth = titleRect.size.width;
+  BOOL isActive = (inputState == 0);  // 0 = key window (active)
 
   workRect = titleRect;
   workRect.origin.x -= 0.5;
   workRect.origin.y -= 0.5;
   [self drawTitleBarBackground:workRect];
 
+  // Draw edge buttons
+  if (styleMask & NSClosableWindowMask)
+    {
+      NSRect closeRect = [self closeButtonRectForTitlebarWidth:titlebarWidth];
+      closeRect.origin.y = titleRect.origin.y;
+      [self drawCloseButtonInRect:closeRect state:GSThemeNormalState active:isActive];
+    }
+
+  if (styleMask & NSMiniaturizableWindowMask)
+    {
+      NSRect minRect = [self minimizeButtonRectForTitlebarWidth:titlebarWidth];
+      minRect.origin.y += titleRect.origin.y;
+      [self drawMinimizeButtonInRect:minRect state:GSThemeNormalState active:isActive];
+    }
+
+  if (styleMask & NSResizableWindowMask)
+    {
+      NSRect zoomRect = [self maximizeButtonRectForTitlebarWidth:titlebarWidth];
+      zoomRect.origin.y += titleRect.origin.y;
+      [self drawMaximizeButtonInRect:zoomRect state:GSThemeNormalState active:isActive];
+    }
+
   // Draw the title.
   if (styleMask & NSTitledWindowMask)
     {
       NSSize titleSize;
-      if (styleMask & NSMiniaturizableWindowMask)
-        {
-          workRect.origin.x += 17;
-          workRect.size.width -= 17;
-        }
+      workRect = titleRect;
+
+      // Adjust for close button on left
       if (styleMask & NSClosableWindowMask)
         {
-          workRect.size.width -= 17;
+          workRect.origin.x += METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
+          workRect.size.width -= METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
         }
+      // Adjust for stacked buttons on right
+      if ((styleMask & NSMiniaturizableWindowMask) || (styleMask & NSResizableWindowMask))
+        {
+          workRect.size.width -= METRICS_TITLEBAR_STACKED_REGION_WIDTH;
+        }
+
       titleSize = [title sizeWithAttributes: titleTextAttributes[inputState]];
       if (titleSize.width <= workRect.size.width)
         workRect.origin.x = NSMidX(workRect) - titleSize.width / 2;
@@ -153,10 +183,9 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   [p setLineBreakMode: NSLineBreakByClipping];
 
 
-  normalColor = [NSColor colorWithCalibratedRed: 0.1 green: 0.1 blue: 0.1 alpha: 1];
-
-  mainColor = normalColor;
-  keyColor = normalColor;
+  keyColor = [NSColor colorWithCalibratedRed: 0.1 green: 0.1 blue: 0.1 alpha: 1];
+  normalColor = [NSColor colorWithCalibratedRed: 0.45 green: 0.45 blue: 0.45 alpha: 1];  // Lighter for unfocused
+  mainColor = keyColor;
 
   titleTextAttributes[0] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:
