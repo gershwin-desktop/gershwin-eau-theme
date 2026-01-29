@@ -37,7 +37,9 @@
 - (void) drawPathButton: (NSBezierPath*) path
                      in: (NSCell*)cell
 			            state: (GSThemeControlState) state;
-@end
 
+/* Safely convert colors to calibrated RGB. Use this where code previously used
+   colorUsingColorSpaceName: NSCalibratedRGBColorSpace to avoid exceptions when
+   colors are in non-RGB color spaces (pattern, device, etc.). */
+NSColor *EauSafeCalibratedRGB(NSColor *c);
 
-#import "Eau+Drawings.h"

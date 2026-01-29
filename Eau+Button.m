@@ -48,7 +48,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   if (!isEnabled) {
     // Return normal color for disabled buttons (no blue pulse)
     EAULOG(@"pulseColorInCell: Button is disabled, returning normal color");
-    return [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+    return [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
   }
   
   NSColor * color;
@@ -57,7 +57,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   // Double-check pulse progress - if it's 0, return normal color
   if (pulse <= 0.0) {
     EAULOG(@"pulseColorInCell: Pulse progress is 0, returning normal color");
-    return [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+    return [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
   }
   
   color = [NSColor colorWithCalibratedRed: 0.62 green: 0.82 blue: 0.965 alpha: 1];
@@ -75,7 +75,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
     {
       if (state == GSThemeNormalState)
         {
-          color = [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+          color = [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
         }
       else if (state == GSThemeHighlightedState
 	       || state == GSThemeHighlightedFirstResponderState)
@@ -89,7 +89,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
         }
       else
         {
-          color = [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+          color = [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
         }
     }
     //PULSE ANIMATION COLOR IF IS PRESSED DONT ANIMATE..

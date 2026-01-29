@@ -21,7 +21,7 @@ NSRoundRectFill(NSRect r, float radius)
 
 - (NSGradient *) _bezelGradientWithColor:(NSColor*) baseColor
 {
-  baseColor = [baseColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+  baseColor = EauSafeCalibratedRGB(baseColor);
 
   NSColor* baseColorLight = [baseColor highlightWithLevel: 0.8];
   NSColor* baseColorLight2 = [baseColor highlightWithLevel: 0.5];
@@ -38,7 +38,7 @@ NSRoundRectFill(NSRect r, float radius)
 }
 - (NSGradient *) _buttonGradientWithColor:(NSColor*) baseColor
 {
-  baseColor = [baseColor colorUsingColorSpaceName: NSCalibratedRGBColorSpace];
+  baseColor = EauSafeCalibratedRGB(baseColor);
 
   NSColor* baseColorLight = [baseColor highlightWithLevel: 0.8];
   NSColor* baseColorLight2 = [baseColor highlightWithLevel: 0.5];

@@ -5,8 +5,42 @@
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 #import <Foundation/NSConnection.h>
+#import <Foundation/NSPortNameServer.h>
 #import "NSMenuItemCell+Eau.h"
 #import "Eau+Button.h"
+
+// Implementation of safe color conversion helper
+NSColor *EauSafeCalibratedRGB(NSColor *c)
+{
+  if (!c) return nil;
+
+  @try {
+    if ([c respondsToSelector:@selector(colorUsingColorSpaceName:)]) {
+      NSColor *rgb = [c colorUsingColorSpaceName:NSCalibratedRGBColorSpace];
+      if (rgb) return rgb;
+    }
+  } @catch (NSException *ex) {
+    NSLog(@"EauSafeCalibratedRGB: conversion threw: %@, falling back", ex);
+  }
+
+  // Try grayscale fallback
+  @try {
+    if ([c respondsToSelector:@selector(whiteComponent)]) {
+      CGFloat w = [c whiteComponent];
+      CGFloat a = ([c respondsToSelector:@selector(alphaComponent)] ? [c alphaComponent] : 1.0);
+      return [NSColor colorWithCalibratedWhite:w alpha:a];
+    }
+  } @catch (NSException *ex) {
+    NSLog(@"EauSafeCalibratedRGB: whiteComponent threw: %@, falling back", ex);
+  }
+
+  // Final fallback: light control background
+  return [NSColor colorWithCalibratedWhite:0.95 alpha:1.0];
+}
+
+// Expose UIBridge-friendly API from theme so the UIBridge server can talk to the
+// theme process directly (avoids needing to inject an agent into each app).
+#import "../gershwin-components/UIBridge/Common/UIBridgeProtocol.h"
 
 @protocol GSGNUstepMenuServer
 - (oneway void)updateMenuForWindow:(NSNumber *)windowId
@@ -16,7 +50,213 @@
                        clientName:(NSString *)clientName;
 @end
 
+// Dedicated UIBridge proxy object to expose the Eau theme's UIBridgeProtocol methods
+// This is needed because Distributed Objects requires explicit protocol conformance
+@interface EauUIBridgeProxy : NSObject <UIBridgeProtocol>
+{
+  Eau *theme;
+}
+- (id)initWithTheme:(Eau *)t;
+@end
+
+@interface Eau () <UIBridgeProtocol>
+@end
+
+@implementation EauUIBridgeProxy
+
+- (id)initWithTheme:(Eau *)t
+{
+  if ((self = [super init]) != nil) {
+    theme = t;
+  }
+  return self;
+}
+
+// Forward all protocol methods to the Eau theme
+- (bycopy NSString *)rootObjectsJSON {
+  return [theme rootObjectsJSON];
+}
+
+- (bycopy NSString *)detailsForObjectJSON:(NSString *)objID {
+  return [theme detailsForObjectJSON:objID];
+}
+
+- (bycopy NSString *)fullTreeForObjectJSON:(NSString *)objID {
+  return [theme fullTreeForObjectJSON:objID];
+}
+
+- (bycopy NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
+  return [theme invokeSelectorJSON:selectorName onObject:objID withArgs:args];
+}
+
+- (bycopy id)rootObjects {
+  return [theme rootObjects];
+}
+
+- (bycopy id)detailsForObject:(NSString *)objID {
+  return [theme detailsForObject:objID];
+}
+
+- (bycopy id)fullTreeForObject:(NSString *)objID {
+  return [theme fullTreeForObject:objID];
+}
+
+- (bycopy id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args {
+  return [theme invokeSelector:selectorName onObject:objID withArgs:args];
+}
+
+- (bycopy NSArray *)listMenus {
+  return [theme listMenus];
+}
+
+- (bycopy NSString *)listMenusJSON {
+  return [theme listMenusJSON];
+}
+
+- (BOOL)invokeMenuItem:(NSString *)objID {
+  return [theme invokeMenuItem:objID];
+}
+
+@end
+
+
+// Connection delegate to enable multi-threading on child connections
+@interface EauConnectionDelegate : NSObject
+@end
+
+@implementation EauConnectionDelegate
+- (NSConnection *)connection:(NSConnection *)parentConnection didConnect:(NSConnection *)newConnection
+{
+    // Enable multi-threading on all child connections immediately
+    [newConnection enableMultipleThreads];
+    [newConnection setIndependentConversationQueueing:YES];
+    NSLog(@"Eau: [Delegate] Enabled multi-threading on new connection: %@ (parent: %@)", newConnection, parentConnection);
+    return newConnection;
+}
+
+- (BOOL)connection:(NSConnection *)parentConnection shouldMakeNewConnection:(NSConnection *)newConnection
+{
+    // Enable multi-threading before the connection becomes active
+    [newConnection enableMultipleThreads];
+    [newConnection setIndependentConversationQueueing:YES];
+    NSLog(@"Eau: [Delegate] shouldMakeNewConnection - enabled multi-threading on: %@", newConnection);
+    return YES;
+}
+@end
+
+static EauConnectionDelegate *gUIBridgeConnectionDelegate = nil;
+
+// Connection used to expose UIBridgeProtocol methods from theme (per-PID service)
+static NSConnection *gUIBridgeThemeConnection = nil;
+static EauUIBridgeProxy *gUIBridgeProxy = nil;
+
 @implementation Eau
++ (void)load
+{
+  NSLog(@"Eau: +load called");
+  // Schedule UIBridge service registration after a delay to ensure run loop is active
+  // Using dispatch_after ensures this runs even if performSelector isn't processed
+  dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+    [self _registerUIBridgeService:nil];
+  });
+}
+
++ (void)_handleNewConnection:(NSNotification *)notification
+{
+  NSConnection *conn = [notification object];
+  // Enable multi-threading on all new connections to handle cross-process requests
+  [conn enableMultipleThreads];
+  [conn setIndependentConversationQueueing:YES];
+  NSLog(@"Eau: Enabled multi-threading on new connection: %@", conn);
+}
+
+// Static variable to hold the shared Eau instance for UIBridge
+static Eau *gSharedEauInstance = nil;
+
++ (void)_registerUIBridgeService:(id)unused
+{
+  // Check if we have a valid Eau instance
+  if (!gSharedEauInstance) {
+    // Try to get from GSTheme
+    id themeObj = (id)[GSTheme theme];
+    if ([themeObj isKindOfClass:[Eau class]]) {
+      gSharedEauInstance = (Eau *)themeObj;
+    } else {
+      NSLog(@"Eau: _registerUIBridgeService called but no Eau instance available yet (got %@)", [themeObj class]);
+      return;
+    }
+  }
+  
+  // Already registered?
+  if (gUIBridgeThemeConnection) {
+    NSLog(@"Eau: UIBridge service already registered, skipping");
+    return;
+  }
+  
+  pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
+  // Register per-PID service so each app has its own unique UIBridge service
+  NSString *name = [NSString stringWithFormat:@"org.gershwin.Gershwin.Theme.UIBridge.%d", pid];
+  NSLog(@"Eau: Registering per-PID UIBridge theme service: %@", name);
+  
+  @try {
+    NSLog(@"Eau: Theme object class: %@, responds to listMenus: %d", 
+          [gSharedEauInstance class], 
+          (int)[gSharedEauInstance respondsToSelector:@selector(listMenus)]);
+    
+    // Create a proxy object that explicitly implements UIBridgeProtocol
+    gUIBridgeProxy = [[EauUIBridgeProxy alloc] initWithTheme:gSharedEauInstance];
+    NSLog(@"Eau: Created UIBridge proxy: %@", gUIBridgeProxy);
+    
+    // Create connection delegate to handle child connections
+    gUIBridgeConnectionDelegate = [[EauConnectionDelegate alloc] init];
+    
+    gUIBridgeThemeConnection = [[NSConnection alloc] init];
+    NSLog(@"Eau: Connection created - receivePort: %@, sendPort: %@", 
+          [gUIBridgeThemeConnection receivePort], 
+          [gUIBridgeThemeConnection sendPort]);
+    [gUIBridgeThemeConnection setRootObject:gUIBridgeProxy];
+    // Set delegate to enable multi-threading on child connections BEFORE they process messages
+    [gUIBridgeThemeConnection setDelegate:gUIBridgeConnectionDelegate];
+    // Allow independent request handling for thread safety
+    [gUIBridgeThemeConnection setIndependentConversationQueueing:YES];
+    // Enable multiple threads to allow handling requests from external processes
+    [gUIBridgeThemeConnection enableMultipleThreads];
+    
+    // Also keep notification handler as backup
+    [[NSNotificationCenter defaultCenter] addObserver:[self class]
+                                             selector:@selector(_handleNewConnection:)
+                                                 name:NSConnectionDidInitializeNotification
+                                               object:nil];
+    
+    // Add ports to the main runloop BEFORE registration
+    NSPort *recvPort = [gUIBridgeThemeConnection receivePort];
+    NSPort *sendPort = [gUIBridgeThemeConnection sendPort];
+    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSDefaultRunLoopMode];
+    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSModalPanelRunLoopMode];
+    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSEventTrackingRunLoopMode];
+    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSRunLoopCommonModes];
+    if (sendPort && sendPort != recvPort) {
+      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSDefaultRunLoopMode];
+      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSModalPanelRunLoopMode];
+      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSEventTrackingRunLoopMode];
+      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSRunLoopCommonModes];
+    }
+    
+    NSLog(@"Eau: Ports added to main runloop");
+    
+    BOOL ok = [gUIBridgeThemeConnection registerName:name];
+    NSLog(@"Eau: registerName returned: %d", ok);
+    if (ok) {
+      NSLog(@"Eau: Successfully registered per-PID UIBridge theme service: %@", name);
+    } else {
+      NSLog(@"Eau: Failed to register per-PID UIBridge service as %@", name);
+      gUIBridgeThemeConnection = nil;
+    }
+  } @catch (NSException *e) {
+    NSLog(@"Eau: Exception during UIBridge registration: %@", e);
+    gUIBridgeThemeConnection = nil;
+  }
+}
 
 - (NSString *)_menuClientName
 {
@@ -197,6 +437,39 @@
                       nil];
 }
 
+// Helper: serialize menu with index-paths so remote clients can refer to specific
+// menu items deterministically.
+- (NSDictionary *)_serializeMenuWithIndexPaths:(NSMenu *)menu
+{
+  if (menu == nil) return nil;
+  NSMutableArray *items = [NSMutableArray array];
+  NSArray *itemArray = [menu itemArray];
+  for (NSUInteger i = 0; i < [itemArray count]; i++) {
+    NSMenuItem *item = itemArray[i];
+    NSMutableDictionary *d = [NSMutableDictionary dictionary];
+    d[@"title"] = ([item title] ?: @"");
+    d[@"enabled"] = @([item isEnabled]);
+    d[@"state"] = @([item state]);
+    d[@"isSeparator"] = @([item isSeparatorItem]);
+    d[@"indexPath"] = @[@(i)];
+    if ([item hasSubmenu]) {
+      d[@"submenu"] = [self _serializeMenuWithIndexPaths:[item submenu]];
+    }
+    [items addObject:d];
+  }
+  return @{ @"title": ([menu title] ?: @""), @"items": items };
+}
+
+// Helper: walk a serialized menu item tree and generate a unique ID for each
+// item. Format: menuitem:<windowId>:<idx0>.<idx1>...
+- (NSString *)_menuItemIDForWindow:(NSNumber *)windowId indexPath:(NSArray *)indexPath
+{
+  NSMutableArray *parts = [NSMutableArray array];
+  for (NSNumber *n in indexPath) [parts addObject:[n stringValue]];
+  NSString *path = [parts componentsJoinedByString:@"."];
+  return [NSString stringWithFormat:@"menuitem:%@:%@", windowId ?: @0, path ?: @"0"];
+}
+
 - (NSMenuItem *)_menuItemForIndexPath:(NSArray *)indexPath inMenu:(NSMenu *)menu
 {
   if (menu == nil || indexPath == nil || [indexPath count] == 0)
@@ -238,6 +511,9 @@
       EAULOG(@"Eau: >>> initWithBundle after super init, self=%p", self);
       EAULOG(@"Eau: Initializing theme with bundle: %@", bundle);
       
+      // Set shared instance for UIBridge service
+      gSharedEauInstance = self;
+      
       menuByWindowId = [[NSMutableDictionary alloc] init];
       menuServerAvailable = NO;
 
@@ -246,6 +522,10 @@
 
       // Try to connect to Menu.app's GNUstep menu server (may not be running yet)
       [self _ensureMenuServerConnection];
+      
+      // Register UIBridge service so server can query menus from theme
+      NSLog(@"Eau: Registering UIBridge service from initWithBundle");
+      [[self class] _registerUIBridgeService:nil];
 
       // Observe menu changes so Menu.app can stay in sync
       [[NSNotificationCenter defaultCenter]
@@ -598,6 +878,423 @@
   NSLog(@"Eau: sendAction returned %@ for menu item '%@'", handled ? @"YES" : @"NO", [menuItem title]);
   EAULOG(@"Eau: Action sent successfully");
 }
+
+#pragma mark - UIBridgeProtocol (exposes only the frontmost/active window)
+
+- (bycopy NSArray *)listMenus
+{
+  __block NSMutableArray *result = nil;
+  
+  void (^block)(void) = ^{
+    result = [NSMutableArray array];
+    
+    // Get the key (frontmost) window
+    NSWindow *keyWindow = [NSApp keyWindow];
+    if (!keyWindow && [NSApp windows] && [[NSApp windows] count] > 0) {
+      // Fallback to first window if no key window
+      keyWindow = [[NSApp windows] objectAtIndex:0];
+    }
+    
+    if (keyWindow) {
+      NSNumber *winId = [self _windowIdentifierForWindow:keyWindow];
+      if (winId) {
+        NSMenu *m = [menuByWindowId objectForKey:winId];
+        if (!m && [menuByWindowId count] > 0) {
+          // Fallback: use the first cached menu
+          m = [[menuByWindowId allValues] firstObject];
+        }
+        if (m) {
+          NSDictionary *menuData = [self _serializeMenuWithIndexPaths:m];
+          [result addObject:@{ @"windowId": winId, @"menu": menuData }];
+        }
+      }
+    }
+
+    // Also include the application's main menu (Application menu) as a global fallback
+    NSMenu *appMainMenu = [NSApp mainMenu];
+    if (appMainMenu) {
+      NSLog(@"Eau: Including application mainMenu as fallback");
+      NSDictionary *appMenuData = [self _serializeMenuWithIndexPaths:appMainMenu];
+      // Use nil windowId to indicate it's the global app menu
+      [result addObject:@{ @"windowId": [NSNull null], @"menu": appMenuData }];
+    }
+  };
+  
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), block);
+  }
+  
+  return result ?: [NSArray array];
+}
+
+- (bycopy NSString *)listMenusJSON
+{
+  NSArray *menus = [self listMenus];
+  NSData *d = [NSJSONSerialization dataWithJSONObject:menus options:0 error:nil];
+  if (!d) return @"null";
+  return [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding];
+}
+
+- (BOOL)invokeMenuItem:(NSString *)objID
+{
+  if (!objID || ![objID hasPrefix:@"menuitem:"]) return NO;
+  
+  // Expected format: menuitem:<windowId>:<idx0>.<idx1>...
+  NSArray *parts = [objID componentsSeparatedByString:@":"];
+  if ([parts count] < 3) return NO;
+  NSString *windowStr = parts[1];
+  NSString *pathStr = parts[2];
+  NSNumber *windowId = @([windowStr longLongValue]);
+  NSArray *components = [pathStr componentsSeparatedByString:@"."];
+  NSMutableArray *indexPath = [NSMutableArray array];
+  for (NSString *c in components) { [indexPath addObject:@([c integerValue])]; }
+  
+  // Call into existing menu activation code from main thread
+  __block BOOL handled = NO;
+  if ([NSThread isMainThread]) {
+    @try {
+      [self activateMenuItemAtPath:indexPath forWindow:windowId];
+      handled = YES;
+    } @catch (NSException *e) {
+      NSLog(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
+      handled = NO;
+    }
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), ^{
+      @try {
+        [self activateMenuItemAtPath:indexPath forWindow:windowId];
+        handled = YES;
+      } @catch (NSException *e) {
+        NSLog(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
+        handled = NO;
+      }
+    });
+  }
+  
+  return handled;
+}
+
+- (bycopy id)rootObjects
+{
+  __block NSDictionary *result = nil;
+  
+  void (^block)(void) = ^{
+    NSMutableArray *wins = [NSMutableArray array];
+    for (NSWindow *w in [NSApp windows]) {
+      NSMutableDictionary *d = [NSMutableDictionary dictionary];
+      d[@"object_id"] = [self _objectIDForObject:w];
+      d[@"class"] = NSStringFromClass([w class]);
+      d[@"title"] = [w title] ?: @"";
+      d[@"frame"] = NSStringFromRect([w frame]);
+      d[@"windowNumber"] = @([w windowNumber]);
+      d[@"hidden"] = @(![w isVisible]);
+      [wins addObject:d];
+    }
+    result = @{
+      @"NSApp": [self _objectIDForObject:NSApp],
+      @"windows": wins
+    };
+  };
+  
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), block);
+  }
+  
+  return result ?: @{ @"NSApp": @"", @"windows": @[] };
+}
+
+#pragma mark - UIBridge Object Serialization Helpers
+
+- (NSString *)_objectIDForObject:(id)obj
+{
+  if (!obj) return @"";
+  return [NSString stringWithFormat:@"objc:%p", obj];
+}
+
+- (id)_objectForID:(NSString *)objID
+{
+  if (![objID hasPrefix:@"objc:"]) return nil;
+  unsigned long long ptrVal;
+  NSScanner *scanner = [NSScanner scannerWithString:[objID substringFromIndex:5]];
+  if ([scanner scanHexLongLong:&ptrVal]) {
+    return (__bridge id)(void *)ptrVal;
+  }
+  return nil;
+}
+
+- (id)_serializeObject:(id)obj detailed:(BOOL)detailed depth:(int)depth
+{
+  if (!obj || obj == [NSNull null] || depth < 0) return [NSNull null];
+  if ([obj isKindOfClass:[NSString class]] || [obj isKindOfClass:[NSNumber class]]) return obj;
+  
+  NSString *className = @"Unknown";
+  @try { className = NSStringFromClass([obj class]); } @catch (NSException *e) { }
+  
+  NSMutableDictionary *dict = [NSMutableDictionary dictionary];
+  dict[@"object_id"] = [self _objectIDForObject:obj];
+  dict[@"class"] = className;
+  
+  // Handle NSView
+  if ([obj isKindOfClass:[NSView class]]) {
+    NSView *view = (NSView *)obj;
+    NSRect frame = [view frame];
+    dict[@"frame"] = NSStringFromRect(frame);
+    dict[@"hidden"] = @([view isHidden]);
+    
+    // Get title for buttons
+    if ([view respondsToSelector:@selector(title)]) {
+      id title = [view performSelector:@selector(title)];
+      if (title && ![title isEqual:@""]) dict[@"title"] = title;
+    }
+    // Get string value for text fields
+    if ([view isKindOfClass:[NSTextField class]]) {
+      NSTextField *tf = (NSTextField *)view;
+      dict[@"stringValue"] = [tf stringValue] ?: @"";
+      dict[@"string"] = [tf stringValue] ?: @"";
+    }
+    
+    // Computed screen coordinates
+    @try {
+      if ([view window]) {
+        NSRect winRect = [view convertRect:[view bounds] toView:nil];
+        dict[@"window_frame"] = NSStringFromRect(winRect);
+        
+        NSRect screenRect = [[view window] convertRectToScreen:winRect];
+        dict[@"screen_frame"] = NSStringFromRect(screenRect);
+      }
+    } @catch (NSException *e) { }
+    
+    // Control-specific properties
+    if ([view isKindOfClass:[NSControl class]]) {
+      NSControl *control = (NSControl *)view;
+      dict[@"enabled"] = @([control isEnabled]);
+      dict[@"tag"] = @([control tag]);
+    }
+    
+    // Button-specific properties
+    if ([view isKindOfClass:[NSButton class]]) {
+      NSButton *button = (NSButton *)view;
+      dict[@"keyEquivalent"] = [button keyEquivalent] ?: @"";
+      dict[@"keyModifiers"] = @([button keyEquivalentModifierMask]);
+    }
+    
+    // Recurse subviews if detailed
+    if (detailed && depth > 0) {
+      NSMutableArray *subviews = [NSMutableArray array];
+      for (NSView *sub in [view subviews]) {
+        [subviews addObject:[self _serializeObject:sub detailed:YES depth:depth - 1]];
+      }
+      dict[@"subviews"] = subviews;
+    }
+  }
+  
+  // Handle NSWindow
+  if ([obj isKindOfClass:[NSWindow class]]) {
+    NSWindow *win = (NSWindow *)obj;
+    dict[@"title"] = [win title] ?: @"";
+    dict[@"frame"] = NSStringFromRect([win frame]);
+    dict[@"hidden"] = @(![win isVisible]);
+    
+    if (detailed && depth > 0) {
+      dict[@"contentView"] = [self _serializeObject:[win contentView] detailed:YES depth:depth - 1];
+    }
+  }
+  
+  // Handle NSApplication
+  if ([obj isKindOfClass:[NSApplication class]]) {
+    NSApplication *app = (NSApplication *)obj;
+    if (detailed && depth > 0) {
+      NSMutableArray *wins = [NSMutableArray array];
+      for (NSWindow *win in [app windows]) {
+        [wins addObject:[self _serializeObject:win detailed:YES depth:depth - 1]];
+      }
+      dict[@"windows"] = wins;
+    }
+  }
+  
+  // Handle NSMenu
+  if ([obj isKindOfClass:[NSMenu class]]) {
+    NSMenu *menu = (NSMenu *)obj;
+    dict[@"title"] = [menu title] ?: @"";
+    if (detailed && depth > 0) {
+      NSMutableArray *items = [NSMutableArray array];
+      for (NSMenuItem *item in [menu itemArray]) {
+        [items addObject:[self _serializeObject:item detailed:YES depth:depth - 1]];
+      }
+      dict[@"items"] = items;
+    }
+  }
+  
+  // Handle NSMenuItem
+  if ([obj isKindOfClass:[NSMenuItem class]]) {
+    NSMenuItem *item = (NSMenuItem *)obj;
+    dict[@"title"] = [item title] ?: @"";
+    dict[@"enabled"] = @([item isEnabled]);
+    dict[@"hasSubmenu"] = @([item hasSubmenu]);
+    dict[@"isSeparator"] = @([item isSeparatorItem]);
+    if ([item action]) dict[@"action"] = NSStringFromSelector([item action]);
+    if ([item keyEquivalent]) dict[@"keyEquivalent"] = [item keyEquivalent];
+    dict[@"keyModifiers"] = @([item keyEquivalentModifierMask]);
+    dict[@"tag"] = @([item tag]);
+    dict[@"state"] = @([item state]);
+    if ([item hasSubmenu] && detailed && depth > 0) {
+      dict[@"submenu"] = [self _serializeObject:[item submenu] detailed:YES depth:depth - 1];
+    }
+  }
+  
+  return dict;
+}
+
+- (bycopy id)detailsForObject:(NSString *)objID
+{
+  __block id result = nil;
+  
+  void (^block)(void) = ^{
+    // Handle menuitem: IDs
+    if (objID && [objID hasPrefix:@"menuitem:"]) {
+      NSArray *parts = [objID componentsSeparatedByString:@":"];
+      if ([parts count] >= 3) {
+        NSNumber *windowId = @([parts[1] longLongValue]);
+        NSString *pathStr = parts[2];
+        NSArray *components = [pathStr componentsSeparatedByString:@"."];
+        NSMutableArray *indexPath = [NSMutableArray array];
+        for (NSString *c in components) [indexPath addObject:@([c integerValue])];
+        NSMenu *menu = [menuByWindowId objectForKey:windowId];
+        if (!menu && [menuByWindowId count] > 0) menu = [[menuByWindowId allValues] firstObject];
+        NSMenuItem *it = [self _menuItemForIndexPath:indexPath inMenu:menu];
+        if (it) {
+          result = [self _serializeObject:it detailed:YES depth:2];
+          return;
+        }
+      }
+    }
+    
+    // Handle objc: IDs
+    id obj = [self _objectForID:objID];
+    if (obj) {
+      result = [self _serializeObject:obj detailed:YES depth:2];
+    } else {
+      result = [NSNull null];
+    }
+  };
+  
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), block);
+  }
+  
+  return result ?: [NSNull null];
+}
+
+- (bycopy id)fullTreeForObject:(NSString *)objID
+{
+  __block id result = nil;
+  
+  void (^block)(void) = ^{
+    id obj = nil;
+    if (!objID || [objID length] == 0 || [objID isEqualToString:@"NSApp"]) {
+      obj = NSApp;
+    } else {
+      obj = [self _objectForID:objID];
+    }
+    
+    if (obj) {
+      result = [self _serializeObject:obj detailed:YES depth:15];
+    } else {
+      // Fallback to menu tree for backwards compatibility
+      result = @{ @"menus": [self listMenus] };
+    }
+  };
+  
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), block);
+  }
+  
+  return result ?: [NSNull null];
+}
+
+- (bycopy id)invokeSelector:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args
+{
+  __block id result = nil;
+  
+  void (^block)(void) = ^{
+    // Handle invokeMenuItemByID: special case
+    if (selectorName && [selectorName isEqualToString:@"invokeMenuItemByID:"] && args && [args count] > 0) {
+      NSString *menuId = args[0];
+      BOOL ok = [self invokeMenuItem:menuId];
+      result = ok ? @YES : @NO;
+      return;
+    }
+    
+    // General selector invocation
+    id obj = [self _objectForID:objID];
+    if (!obj) {
+      result = @{ @"error": @{ @"code": @-32000, @"message": @"Object not found" } };
+      return;
+    }
+    
+    SEL sel = NSSelectorFromString(selectorName);
+    if (![obj respondsToSelector:sel]) {
+      result = @{ @"error": @{ @"code": @-32601, @"message": @"Selector not found" } };
+      return;
+    }
+    
+    NSMethodSignature *sig = [obj methodSignatureForSelector:sel];
+    NSInvocation *inv = [NSInvocation invocationWithMethodSignature:sig];
+    [inv setTarget:obj];
+    [inv setSelector:sel];
+    
+    if (args && [args isKindOfClass:[NSArray class]]) {
+      for (NSUInteger i = 0; i < [args count]; i++) {
+        if (i + 2 >= [sig numberOfArguments]) break;
+        id arg = args[i];
+        if (arg == [NSNull null]) arg = nil;
+        [inv setArgument:&arg atIndex:i + 2];
+      }
+    }
+    
+    @try {
+      [inv invoke];
+      
+      if ([sig methodReturnLength] > 0) {
+        const char *retType = [sig methodReturnType];
+        if (retType[0] == '@' || retType[0] == '#') {
+          id retVal = nil;
+          [inv getReturnValue:&retVal];
+          result = [self _serializeObject:retVal detailed:NO depth:1];
+        } else {
+          result = @"OK";
+        }
+      } else {
+        result = @"OK";
+      }
+    } @catch (NSException *e) {
+      result = @{ @"error": @{ @"code": @-32001, @"message": [e description] } };
+    }
+  };
+  
+  if ([NSThread isMainThread]) {
+    block();
+  } else {
+    dispatch_sync(dispatch_get_main_queue(), block);
+  }
+  
+  return result ?: [NSNull null];
+}
+
+// JSON variants for compatibility
+- (bycopy NSString *)rootObjectsJSON { NSData *d = [NSJSONSerialization dataWithJSONObject:[self rootObjects] options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
+- (bycopy NSString *)detailsForObjectJSON:(NSString *)objID { NSData *d = [NSJSONSerialization dataWithJSONObject:[self detailsForObject:objID] options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
+- (bycopy NSString *)fullTreeForObjectJSON:(NSString *)objID { NSData *d = [NSJSONSerialization dataWithJSONObject:[self fullTreeForObject:objID] options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
+- (bycopy NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args { id r = [self invokeSelector:selectorName onObject:objID withArgs:args]; NSData *d = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
+
 
 - (oneway void)activateMenuItemAtPath:(NSArray *)indexPath forWindow:(NSNumber *)windowId
 {

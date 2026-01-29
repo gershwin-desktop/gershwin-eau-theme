@@ -62,7 +62,7 @@
       NSDivideRect(aRect, &divide, &rect, 1.0, NSMinYEdge);
     }
 
-      NSColor * basecolor = [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+      NSColor * basecolor = [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
       NSGradient* buttonBackgroundGradient = [self _bezelGradientWithColor: basecolor];
       [buttonBackgroundGradient drawInRect: rect angle: -90];
       NSBezierPath* linesPath = [NSBezierPath bezierPath];
@@ -102,7 +102,7 @@
         }
       else
         {
-          basecolor = [[NSColor controlBackgroundColor] shadowWithLevel: 0.1];
+          basecolor = [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
         }
         NSGradient* buttonBackgroundGradient = [self _bezelGradientWithColor: basecolor];
         [buttonBackgroundGradient drawInRect: cellFrame angle: -90];
