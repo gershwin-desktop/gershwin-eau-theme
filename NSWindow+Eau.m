@@ -1,5 +1,6 @@
 #include "Eau+Button.h"
 #include "EauWindowButton.h"
+#include "EauTitleBarButton.h"
 #include "EauGrowBoxView.h"
 #include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
@@ -559,51 +560,52 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 - (NSButton *) standardWindowButton: (NSWindowButton)button
                        forStyleMask: (NSUInteger) mask
 {
-  EauWindowButton *newButton;
+  EauTitleBarButton *newButton;
 
   EAULOG(@"NSWindow+Eau standardWindowButton:forStyleMask:");
 
   switch (button)
     {
       case NSWindowCloseButton:
-        newButton = [[EauWindowButton alloc] init];
-        [newButton setBaseColor: [NSColor colorWithCalibratedRed: 0.97 green: 0.26 blue: 0.23 alpha: 1.0]];
-        [newButton setImage: [NSImage imageNamed: @"common_Close"]];
-        [newButton setAlternateImage: [NSImage imageNamed: @"common_CloseH"]];
+        newButton = [EauTitleBarButton closeButton];
         [newButton setAction: @selector(performClose:)];
         break;
       case NSWindowMiniaturizeButton:
-        newButton = [[EauWindowButton alloc] init];
-        [newButton setBaseColor: [NSColor colorWithCalibratedRed: 0.9 green: 0.7 blue: 0.3 alpha: 1]];
-        [newButton setImage: [NSImage imageNamed: @"common_Miniaturize"]];
-        [newButton setAlternateImage: [NSImage imageNamed: @"common_MiniaturizeH"]];
+        newButton = [EauTitleBarButton minimizeButton];
         [newButton setAction: @selector(miniaturize:)];
         break;
 
       case NSWindowZoomButton:
-        newButton = [[EauWindowButton alloc] init];
-        [newButton setBaseColor: [NSColor colorWithCalibratedRed: 0.322 green: 0.778 blue: 0.244 alpha: 1]];
-        [newButton setImage: [NSImage imageNamed: @"common_Zoom"]];
-        [newButton setAlternateImage: [NSImage imageNamed: @"common_ZoomH"]];
+        newButton = [EauTitleBarButton maximizeButton];
         [newButton setAction: @selector(zoom:)];
         break;
 
       case NSWindowToolbarButton:
-        // FIXME
-        newButton = [[EauWindowButton alloc] init];
-        [newButton setAction: @selector(toggleToolbarShown:)];
-        break;
+        // FIXME - fallback to old style for toolbar button
+        {
+          EauWindowButton *oldButton = [[EauWindowButton alloc] init];
+          [oldButton setAction: @selector(toggleToolbarShown:)];
+          [oldButton setRefusesFirstResponder: YES];
+          [oldButton setButtonType: NSMomentaryChangeButton];
+          [oldButton setImagePosition: NSImageOnly];
+          [oldButton setBordered: YES];
+          [oldButton setTag: button];
+          return oldButton;
+        }
       case NSWindowDocumentIconButton:
       default:
-        newButton = [[EauWindowButton alloc] init];
-        // FIXME
-        break;
+        // FIXME - fallback to old style for document icon
+        {
+          EauWindowButton *oldButton = [[EauWindowButton alloc] init];
+          [oldButton setRefusesFirstResponder: YES];
+          [oldButton setButtonType: NSMomentaryChangeButton];
+          [oldButton setImagePosition: NSImageOnly];
+          [oldButton setBordered: YES];
+          [oldButton setTag: button];
+          return oldButton;
+        }
     }
 
-  [newButton setRefusesFirstResponder: YES];
-  [newButton setButtonType: NSMomentaryChangeButton];
-  [newButton setImagePosition: NSImageOnly];
-  [newButton setBordered: YES];
   [newButton setTag: button];
   return newButton;
 }
