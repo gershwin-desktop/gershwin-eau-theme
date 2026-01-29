@@ -65,6 +65,7 @@
 }
 
 // Swizzled implementation that prevents creation of NSIconWindow
+// https://github.com/gnustep/apps-gworkspace/issues/8
 - (void)eau_appIconInit
 {
   // Do nothing to prevent creation of app icon window
