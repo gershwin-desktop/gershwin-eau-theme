@@ -10,20 +10,21 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
-#import <dispatch/dispatch.h>
 
 @implementation NSApplication (EauApplication)
 
 + (void)load {
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
-        Class cls = [self class];
-        Method orig = class_getInstanceMethod(cls, @selector(_lastWindowClosed));
-        Method swiz = class_getInstanceMethod(cls, @selector(eau_lastWindowClosed));
-        if (orig && swiz) {
-            method_exchangeImplementations(orig, swiz);
-        }
-    });
+    Class cls = [self class];
+    Method orig1 = class_getInstanceMethod(cls, @selector(_lastWindowClosed));
+    Method swiz1 = class_getInstanceMethod(cls, @selector(eau_lastWindowClosed));
+    if (orig1 && swiz1) {
+        method_exchangeImplementations(orig1, swiz1);
+    }
+    Method orig2 = class_getInstanceMethod(cls, @selector(_appIconInit));
+    Method swiz2 = class_getInstanceMethod(cls, @selector(eau_appIconInit));
+    if (orig2 && swiz2) {
+        method_exchangeImplementations(orig2, swiz2);
+    }
 }
 
 // Swizzled implementation that terminates by default when last window closes
@@ -61,6 +62,12 @@
       // https://github.com/gnustep/libs-gui/blob/402a94295ad56ab6219a6b18fdf9d9624834983f/Source/NSApplication.m#L4187C1-L4205C2
       [self terminate: self];
     }
+}
+
+// Swizzled implementation that prevents creation of NSIconWindow
+- (void)eau_appIconInit
+{
+  // Do nothing to prevent creation of app icon window
 }
 
 @end
