@@ -38,8 +38,17 @@
                      in: (NSCell*)cell
 			            state: (GSThemeControlState) state;
 
+/* Private methods */
+- (NSGradient *) _bezelGradientWithColor:(NSColor*) baseColor;
+- (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style;
+- (NSGradient *) _windowTitlebarGradient;
+- (NSRect) drawInnerGrayBezel: (NSRect)border withClip: (NSRect)clip;
+- (NSGradient *) _buttonGradientWithColor:(NSColor*) baseColor;
+
 /* Safely convert colors to calibrated RGB. Use this where code previously used
    colorUsingColorSpaceName: NSCalibratedRGBColorSpace to avoid exceptions when
    colors are in non-RGB color spaces (pattern, device, etc.). */
 NSColor *EauSafeCalibratedRGB(NSColor *c);
+
+@end
 
