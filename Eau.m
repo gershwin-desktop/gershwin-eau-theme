@@ -9,6 +9,10 @@
 #import "NSMenuItemCell+Eau.h"
 #import "Eau+Button.h"
 
+// Expose UIBridge-friendly API from theme so the UIBridge server can talk to the
+// theme process directly (avoids needing to inject an agent into each app).
+#import "UIBridgeProtocol.h"
+
 // Implementation of safe color conversion helper
 NSColor *EauSafeCalibratedRGB(NSColor *c)
 {
@@ -37,10 +41,6 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   // Final fallback: light control background
   return [NSColor colorWithCalibratedWhite:0.95 alpha:1.0];
 }
-
-// Expose UIBridge-friendly API from theme so the UIBridge server can talk to the
-// theme process directly (avoids needing to inject an agent into each app).
-#import "../gershwin-components/UIBridge/Common/UIBridgeProtocol.h"
 
 @protocol GSGNUstepMenuServer
 - (oneway void)updateMenuForWindow:(NSNumber *)windowId
