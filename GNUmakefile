@@ -14,6 +14,7 @@ Eau_OBJC_FILES = \
 		Eau+Button.m\
 		Eau+FocusFrame.m\
 		Eau+WindowDecoration.m\
+		Eau+TitleBarButtons.m\
 		Eau+Menu.m\
 		Eau+Slider.m\
 		Eau+ProgressIndicator.m\
@@ -36,6 +37,8 @@ Eau_OBJC_FILES = \
 		NSTableHeaderCell+Eau.m\
 		EauWindowButton.m\
 		EauWindowButtonCell.m\
+		EauTitleBarButton.m\
+		EauTitleBarButtonCell.m\
 		EauScrollerKnobCell.m\
 		EauScrollerKnobSlotCell.m\
 		EauScrollerArrowCell.m\
