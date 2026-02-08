@@ -184,26 +184,26 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
 
   keyColor = [NSColor colorWithCalibratedRed: 0.1 green: 0.1 blue: 0.1 alpha: 1];
-  normalColor = [NSColor colorWithCalibratedRed: 0.45 green: 0.45 blue: 0.45 alpha: 1];  // Lighter for unfocused
+  normalColor = [NSColor colorWithCalibratedRed: 0.50 green: 0.50 blue: 0.50 alpha: 1];  // Lighter for unfocused
   mainColor = keyColor;
 
   titleTextAttributes[0] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:
-      [NSFont titleBarFontOfSize: 0], NSFontAttributeName,
+      [NSFont systemFontOfSize: 0], NSFontAttributeName,
       keyColor, NSForegroundColorAttributeName,
       p, NSParagraphStyleAttributeName,
       nil];
 
   titleTextAttributes[1] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:
-    [NSFont titleBarFontOfSize: 0], NSFontAttributeName,
+    [NSFont systemFontOfSize: 0], NSFontAttributeName,
     normalColor, NSForegroundColorAttributeName,
     p, NSParagraphStyleAttributeName,
     nil];
 
   titleTextAttributes[2] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:
-    [NSFont titleBarFontOfSize: 0], NSFontAttributeName,
+    [NSFont systemFontOfSize: 0], NSFontAttributeName,
     mainColor, NSForegroundColorAttributeName,
     p, NSParagraphStyleAttributeName,
     nil];
