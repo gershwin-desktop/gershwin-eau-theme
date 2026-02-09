@@ -8,9 +8,8 @@
 @implementation Eau(EauMenu)
 
 - (NSColor *) menuBorderColor
-{ 
-  NSColor *color = [NSColor colorWithCalibratedRed: 0.212 green: 0.184 blue: 0.176 alpha: 1.0];
-  return color;
+{
+  return [Eau controlStrokeColor];
 }
 - (NSColor *) menuBackgroundColor
 {
@@ -109,9 +108,6 @@
       NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
       [menuGradient drawInRect: bounds angle: -90];
 
-      NSBezierPath * strokemenuPath = [NSBezierPath bezierPathWithRect: bounds];
-      [borderColor setStroke];
-      [strokemenuPath stroke];
     }
   // Draw the menu cells.
   for (i = 0; i < howMany; i++)
@@ -124,6 +120,13 @@
           aCell = [menuView menuItemCellForItemAtIndex: i];
           [aCell drawWithFrame: aRect inView: menuView];
         }
+    }
+  // Draw the border on top of cells for vertical (dropdown/context) menus
+  if (!horizontal)
+    {
+      NSBezierPath * strokemenuPath = [NSBezierPath bezierPathWithRect: NSInsetRect(bounds, 0.5, 0.5)];
+      [borderColor setStroke];
+      [strokemenuPath stroke];
     }
 }
 
