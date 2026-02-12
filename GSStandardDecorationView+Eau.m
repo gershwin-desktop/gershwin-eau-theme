@@ -3,6 +3,8 @@
 #import <objc/runtime.h>
 #import "Eau.h"
 #import "EauTitleBarButton.h"
+#import "EauWindowButton.h"
+#import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
 
 // Associated object keys for zoom button support
@@ -34,13 +36,28 @@ static char originalFrameKey;  // Store original frame before zoom
   GSTheme *theme = [GSTheme theme];
   CGFloat viewWidth = [self bounds].size.width;
   CGFloat viewHeight = [self bounds].size.height;
+  BOOL isOrb = EauTitleBarButtonStyleIsOrb();
 
-  // Initialize zoom button if not already done
-  EAULOG(@"Checking zoom button creation: hasZoomButton=%d, hasTitleBar=%d", [self hasZoomButton], hasTitleBar);
-  if (![self hasZoomButton] && hasTitleBar) {
+  // Initialize zoom button if not already done (only for resizable windows)
+  NSUInteger styleMask = [[self window] styleMask];
+  EAULOG(@"Checking zoom button creation: hasZoomButton=%d, hasTitleBar=%d, resizable=%d", [self hasZoomButton], hasTitleBar, (int)(styleMask & NSResizableWindowMask));
+  if (![self hasZoomButton] && hasTitleBar && (styleMask & NSResizableWindowMask)) {
     EAULOG(@"Creating zoom button for window decoration view");
-    // Create zoom button using new edge button style
-    EauTitleBarButton *zButton = [EauTitleBarButton maximizeButton];
+    NSButton *zButton;
+    if (isOrb) {
+      EauWindowButton *orbButton = [[EauWindowButton alloc] init];
+      [orbButton setBaseColor: [NSColor colorWithCalibratedRed:0.322 green:0.778 blue:0.244 alpha:1]];
+      [orbButton setRefusesFirstResponder: YES];
+      [orbButton setButtonType: NSMomentaryChangeButton];
+      [orbButton setImagePosition: NSImageOnly];
+      [orbButton setBordered: YES];
+      [orbButton setTag: NSWindowZoomButton];
+      [orbButton setImage: [NSImage imageNamed: @"common_Zoom"]];
+      [orbButton setAlternateImage: [NSImage imageNamed: @"common_ZoomH"]];
+      zButton = orbButton;
+    } else {
+      zButton = [EauTitleBarButton maximizeButton];
+    }
     if (zButton) {
       EAULOG(@"Zoom button created successfully, setting up target and action");
       [self setZoomButton:zButton];
@@ -66,78 +83,122 @@ static char originalFrameKey;  // Store original frame before zoom
       resizeBarRect = NSMakeRect(0.0, 0.0, viewWidth, [theme resizebarHeight]);
     }
 
-  // Calculate button positions using edge button layout
   CGFloat titleBarY = viewHeight - METRICS_TITLEBAR_HEIGHT;
 
-  // Close button at left edge, full titlebar height
-  if (hasCloseButton)
-  {
-    closeButtonRect = NSMakeRect(
-      0,
-      titleBarY,
-      METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
-    [closeButton setFrame: closeButtonRect];
+  if (isOrb) {
+    // Orb style: all 3 buttons on left, 15x15, vertically centered
+    CGFloat buttonY = titleBarY + (METRICS_TITLEBAR_HEIGHT - METRICS_TITLEBAR_ORB_BUTTON_SIZE) / 2.0;
+    CGFloat x = METRICS_TITLEBAR_ORB_PADDING_LEFT;
 
-    // Update to use new button style if it's an EauTitleBarButton
-    if ([closeButton isKindOfClass:[EauTitleBarButton class]]) {
-      [(EauTitleBarButton *)closeButton setTitleBarButtonType:EauTitleBarButtonTypeClose];
-      [(EauTitleBarButton *)closeButton setTitleBarButtonPosition:EauTitleBarButtonPositionLeft];
+    if (hasCloseButton)
+    {
+      closeButtonRect = NSMakeRect(x, buttonY,
+        METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
+      [closeButton setFrame: closeButtonRect];
+      x += METRICS_TITLEBAR_ORB_BUTTON_SIZE + METRICS_TITLEBAR_ORB_BUTTON_SPACING;
     }
-  }
 
-  // Miniaturize button - inner of two side-by-side buttons on right
-  if (hasMiniaturizeButton)
-  {
-    CGFloat x = viewWidth - METRICS_TITLEBAR_RIGHT_REGION_WIDTH;
-    miniaturizeButtonRect = NSMakeRect(
-      x, titleBarY,
-      METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
-    [miniaturizeButton setFrame: miniaturizeButtonRect];
-
-    // Update to use new button style if it's an EauTitleBarButton
-    if ([miniaturizeButton isKindOfClass:[EauTitleBarButton class]]) {
-      [(EauTitleBarButton *)miniaturizeButton setTitleBarButtonType:EauTitleBarButtonTypeMinimize];
-      [(EauTitleBarButton *)miniaturizeButton setTitleBarButtonPosition:EauTitleBarButtonPositionRightInner];
+    if (hasMiniaturizeButton)
+    {
+      miniaturizeButtonRect = NSMakeRect(x, buttonY,
+        METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
+      [miniaturizeButton setFrame: miniaturizeButtonRect];
+      x += METRICS_TITLEBAR_ORB_BUTTON_SIZE + METRICS_TITLEBAR_ORB_BUTTON_SPACING;
     }
-  }
 
-  // Zoom button - outer (rightmost) of two side-by-side buttons on right
-  if ([self hasZoomButton])
-  {
-    CGFloat x = viewWidth - METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
-    NSRect zoomButtonRect = NSMakeRect(
-      x, titleBarY,
-      METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
+    if ([self hasZoomButton])
+    {
+      NSRect zoomRect = NSMakeRect(x, buttonY,
+        METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
 
-    // Store the rect as associated object
-    NSValue *rectValue = [NSValue valueWithRect:zoomButtonRect];
-    objc_setAssociatedObject(self, &zoomButtonRectKey, rectValue, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+      NSValue *rectValue = [NSValue valueWithRect:zoomRect];
+      objc_setAssociatedObject(self, &zoomButtonRectKey, rectValue, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
-    // Get zoom button and set frame
-    NSButton *zoomButton = [self zoomButton];
-    if (zoomButton) {
-      EAULOG(@"Updating zoom button frame: %@", NSStringFromRect(zoomButtonRect));
-
-      // Ensure target and action are maintained
-      [zoomButton setTarget:self];
-      [zoomButton setAction:@selector(EAUzoomButtonClicked:)];
-
-      [zoomButton setFrame: zoomButtonRect];
-      [zoomButton setEnabled: YES];
-      [zoomButton setHidden: NO];
-      [zoomButton setNeedsDisplay: YES];
-
-      // Update button properties if it's the new type
-      if ([zoomButton isKindOfClass:[EauTitleBarButton class]]) {
-        [(EauTitleBarButton *)zoomButton setTitleBarButtonType:EauTitleBarButtonTypeMaximize];
-        [(EauTitleBarButton *)zoomButton setTitleBarButtonPosition:EauTitleBarButtonPositionRightOuter];
-      }
-
-      // Ensure the button is attached
-      if ([zoomButton superview] != self)
-        {
+      NSButton *zoomButton = [self zoomButton];
+      if (zoomButton) {
+        [zoomButton setTarget:self];
+        [zoomButton setAction:@selector(EAUzoomButtonClicked:)];
+        [zoomButton setFrame: zoomRect];
+        [zoomButton setEnabled: YES];
+        [zoomButton setHidden: NO];
+        [zoomButton setNeedsDisplay: YES];
+        if ([zoomButton superview] != self) {
           [self addSubview: zoomButton];
         }
+      }
+    }
+  } else {
+    // Edge style: close on left, minimize+maximize on right
+
+    // Close button at left edge, full titlebar height
+    if (hasCloseButton)
+    {
+      closeButtonRect = NSMakeRect(
+        0,
+        titleBarY,
+        METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
+      [closeButton setFrame: closeButtonRect];
+
+      if ([closeButton isKindOfClass:[EauTitleBarButton class]]) {
+        [(EauTitleBarButton *)closeButton setTitleBarButtonType:EauTitleBarButtonTypeClose];
+        [(EauTitleBarButton *)closeButton setTitleBarButtonPosition:EauTitleBarButtonPositionLeft];
+      }
+    }
+
+    // Miniaturize button - position depends on whether zoom button exists
+    if (hasMiniaturizeButton)
+    {
+      CGFloat x;
+      EauTitleBarButtonPosition position;
+      if ([self hasZoomButton]) {
+        x = viewWidth - METRICS_TITLEBAR_RIGHT_REGION_WIDTH;
+        position = EauTitleBarButtonPositionRightInner;
+      } else {
+        x = viewWidth - METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
+        position = EauTitleBarButtonPositionRightOuter;
+      }
+      miniaturizeButtonRect = NSMakeRect(
+        x, titleBarY,
+        METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
+      [miniaturizeButton setFrame: miniaturizeButtonRect];
+
+      if ([miniaturizeButton isKindOfClass:[EauTitleBarButton class]]) {
+        [(EauTitleBarButton *)miniaturizeButton setTitleBarButtonType:EauTitleBarButtonTypeMinimize];
+        [(EauTitleBarButton *)miniaturizeButton setTitleBarButtonPosition:position];
+      }
+    }
+
+    // Zoom button - outer (rightmost) of two side-by-side buttons on right
+    if ([self hasZoomButton])
+    {
+      CGFloat x = viewWidth - METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
+      NSRect zoomButtonRect = NSMakeRect(
+        x, titleBarY,
+        METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
+
+      NSValue *rectValue = [NSValue valueWithRect:zoomButtonRect];
+      objc_setAssociatedObject(self, &zoomButtonRectKey, rectValue, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+      NSButton *zoomButton = [self zoomButton];
+      if (zoomButton) {
+        EAULOG(@"Updating zoom button frame: %@", NSStringFromRect(zoomButtonRect));
+
+        [zoomButton setTarget:self];
+        [zoomButton setAction:@selector(EAUzoomButtonClicked:)];
+        [zoomButton setFrame: zoomButtonRect];
+        [zoomButton setEnabled: YES];
+        [zoomButton setHidden: NO];
+        [zoomButton setNeedsDisplay: YES];
+
+        if ([zoomButton isKindOfClass:[EauTitleBarButton class]]) {
+          [(EauTitleBarButton *)zoomButton setTitleBarButtonType:EauTitleBarButtonTypeMaximize];
+          [(EauTitleBarButton *)zoomButton setTitleBarButtonPosition:EauTitleBarButtonPositionRightOuter];
+        }
+
+        if ([zoomButton superview] != self) {
+          [self addSubview: zoomButton];
+        }
+      }
     }
   }
 

@@ -6,6 +6,18 @@
 #import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
 
+BOOL EauTitleBarButtonStyleIsOrb(void)
+{
+    static BOOL isOrb = NO;
+    static dispatch_once_t onceToken;
+    dispatch_once(&onceToken, ^{
+        NSString *style = [[NSUserDefaults standardUserDefaults]
+                           stringForKey:@"EauTitleBarButtonStyle"];
+        isOrb = [style isEqualToString:@"orb"];
+    });
+    return isOrb;
+}
+
 @implementation Eau (TitleBarButtons)
 
 #pragma mark - Geometry Queries
@@ -17,12 +29,23 @@
 
 - (NSRect)closeButtonRectForTitlebarWidth:(CGFloat)width
 {
+    if (EauTitleBarButtonStyleIsOrb()) {
+        CGFloat buttonY = (METRICS_TITLEBAR_HEIGHT - METRICS_TITLEBAR_ORB_BUTTON_SIZE) / 2.0;
+        return NSMakeRect(METRICS_TITLEBAR_ORB_PADDING_LEFT, buttonY,
+                          METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
+    }
     // Close button at left edge, full height
     return NSMakeRect(0, 0, METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
 }
 
 - (NSRect)minimizeButtonRectForTitlebarWidth:(CGFloat)width
 {
+    if (EauTitleBarButtonStyleIsOrb()) {
+        CGFloat buttonY = (METRICS_TITLEBAR_HEIGHT - METRICS_TITLEBAR_ORB_BUTTON_SIZE) / 2.0;
+        CGFloat x = METRICS_TITLEBAR_ORB_PADDING_LEFT + METRICS_TITLEBAR_ORB_BUTTON_SIZE + METRICS_TITLEBAR_ORB_BUTTON_SPACING;
+        return NSMakeRect(x, buttonY,
+                          METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
+    }
     // Minimize button - inner of two side-by-side buttons on right
     CGFloat x = width - METRICS_TITLEBAR_RIGHT_REGION_WIDTH;
     return NSMakeRect(x, 0,
@@ -32,6 +55,13 @@
 
 - (NSRect)maximizeButtonRectForTitlebarWidth:(CGFloat)width
 {
+    if (EauTitleBarButtonStyleIsOrb()) {
+        CGFloat buttonY = (METRICS_TITLEBAR_HEIGHT - METRICS_TITLEBAR_ORB_BUTTON_SIZE) / 2.0;
+        CGFloat x = METRICS_TITLEBAR_ORB_PADDING_LEFT
+                    + (METRICS_TITLEBAR_ORB_BUTTON_SIZE + METRICS_TITLEBAR_ORB_BUTTON_SPACING) * 2;
+        return NSMakeRect(x, buttonY,
+                          METRICS_TITLEBAR_ORB_BUTTON_SIZE, METRICS_TITLEBAR_ORB_BUTTON_SIZE);
+    }
     // Maximize button - outer (rightmost) of two side-by-side buttons on right
     CGFloat x = width - METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
     return NSMakeRect(x, 0,
@@ -41,6 +71,9 @@
 
 - (NSRect)rightButtonRegionRectForTitlebarWidth:(CGFloat)width
 {
+    if (EauTitleBarButtonStyleIsOrb()) {
+        return NSZeroRect;
+    }
     return NSMakeRect(width - METRICS_TITLEBAR_RIGHT_REGION_WIDTH, 0,
                       METRICS_TITLEBAR_RIGHT_REGION_WIDTH, METRICS_TITLEBAR_HEIGHT);
 }
@@ -55,9 +88,17 @@
     NSRect rightRegion = [self rightButtonRegionRectForTitlebarWidth:width];
 
     // Draw titlebar background (main area between buttons)
-    NSRect titleRect = NSMakeRect(NSMaxX(closeRect), 0,
-                                  NSMinX(rightRegion) - NSMaxX(closeRect),
-                                  METRICS_TITLEBAR_HEIGHT);
+    NSRect titleRect;
+    if (EauTitleBarButtonStyleIsOrb()) {
+        // Orb style: all buttons on left, title area after orb region
+        titleRect = NSMakeRect(METRICS_TITLEBAR_ORB_REGION_WIDTH, 0,
+                               width - METRICS_TITLEBAR_ORB_REGION_WIDTH,
+                               METRICS_TITLEBAR_HEIGHT);
+    } else {
+        titleRect = NSMakeRect(NSMaxX(closeRect), 0,
+                               NSMinX(rightRegion) - NSMaxX(closeRect),
+                               METRICS_TITLEBAR_HEIGHT);
+    }
 
     // Draw titlebar background gradient
     NSColor *gradientColor1 = [NSColor colorWithCalibratedRed:0.833 green:0.833 blue:0.833 alpha:1];
@@ -81,6 +122,17 @@
 - (void)drawCloseButtonInRect:(NSRect)rect state:(GSThemeControlState)state active:(BOOL)active
 {
     BOOL hovered = (state == GSThemeHighlightedState);
+    if (EauTitleBarButtonStyleIsOrb()) {
+        [self drawOrbInRect:rect
+              withBaseColor:[NSColor colorWithCalibratedRed:0.97 green:0.26 blue:0.23 alpha:1]
+                     active:active
+                    hovered:hovered];
+        if (active && hovered) {
+            [self drawCloseIconInRect:NSInsetRect(rect, 3.0, 3.0)
+                            withColor:[self iconColorForActive:active highlighted:hovered]];
+        }
+        return;
+    }
     [self drawEdgeButtonInRect:rect
                       position:EauTitleBarButtonPositionLeft
                     buttonType:0
@@ -93,6 +145,17 @@
 - (void)drawMinimizeButtonInRect:(NSRect)rect state:(GSThemeControlState)state active:(BOOL)active
 {
     BOOL hovered = (state == GSThemeHighlightedState);
+    if (EauTitleBarButtonStyleIsOrb()) {
+        [self drawOrbInRect:rect
+              withBaseColor:[NSColor colorWithCalibratedRed:0.9 green:0.7 blue:0.3 alpha:1]
+                     active:active
+                    hovered:hovered];
+        if (active && hovered) {
+            [self drawMinimizeIconInRect:NSInsetRect(rect, 3.0, 3.0)
+                               withColor:[self iconColorForActive:active highlighted:hovered]];
+        }
+        return;
+    }
     [self drawEdgeButtonInRect:rect
                       position:EauTitleBarButtonPositionRightInner
                     buttonType:1
@@ -105,6 +168,17 @@
 - (void)drawMaximizeButtonInRect:(NSRect)rect state:(GSThemeControlState)state active:(BOOL)active
 {
     BOOL hovered = (state == GSThemeHighlightedState);
+    if (EauTitleBarButtonStyleIsOrb()) {
+        [self drawOrbInRect:rect
+              withBaseColor:[NSColor colorWithCalibratedRed:0.322 green:0.778 blue:0.244 alpha:1]
+                     active:active
+                    hovered:hovered];
+        if (active && hovered) {
+            [self drawMaximizeIconInRect:NSInsetRect(rect, 3.0, 3.0)
+                               withColor:[self iconColorForActive:active highlighted:hovered]];
+        }
+        return;
+    }
     [self drawEdgeButtonInRect:rect
                       position:EauTitleBarButtonPositionRightOuter
                     buttonType:2
@@ -194,6 +268,98 @@
 }
 
 #pragma mark - Private Helpers
+
+- (void)drawOrbInRect:(NSRect)rect
+        withBaseColor:(NSColor *)baseColor
+               active:(BOOL)active
+              hovered:(BOOL)hovered
+{
+    // Inactive windows get a gray orb
+    NSColor *color;
+    if (!active) {
+        color = [NSColor colorWithCalibratedRed:0.75 green:0.75 blue:0.75 alpha:1];
+    } else if (hovered) {
+        color = [baseColor shadowWithLevel:0.2];
+    } else {
+        color = baseColor;
+    }
+
+    // Draw the 3D ball using the same approach as EauWindowButtonCell
+    NSRect frame = NSInsetRect(rect, 0.5, 0.5);
+    float luminosity = hovered ? 0.3 : 0.5;
+
+    NSColor *gradientDownColor1 = [color highlightWithLevel:luminosity];
+    NSColor *gradientDownColor2 = [color colorWithAlphaComponent:0];
+    NSColor *shadowColor1 = [color shadowWithLevel:0.4];
+    NSColor *shadowColor2 = [color shadowWithLevel:0.6];
+    NSColor *gradientStrokeColor2 = [shadowColor1 highlightWithLevel:luminosity];
+    NSColor *gradientUpColor1 = [color highlightWithLevel:luminosity + 0.2];
+    NSColor *gradientUpColor2 = [gradientUpColor1 colorWithAlphaComponent:0.5];
+    NSColor *gradientUpColor3 = [gradientUpColor1 colorWithAlphaComponent:0];
+    NSColor *light1 = [NSColor whiteColor];
+    NSColor *light2 = [light1 colorWithAlphaComponent:0];
+
+    NSGradient *gradientUp = [[NSGradient alloc] initWithColorsAndLocations:
+        gradientUpColor1, 0.1, gradientUpColor2, 0.3, gradientUpColor3, 1.0, nil];
+    NSGradient *gradientDown = [[NSGradient alloc] initWithColorsAndLocations:
+        gradientDownColor1, 0.0, gradientDownColor2, 1.0, nil];
+    NSGradient *baseGradient = [[NSGradient alloc] initWithColorsAndLocations:
+        color, 0.0, shadowColor1, 0.80, nil];
+    NSGradient *gradientStroke = [[NSGradient alloc] initWithColorsAndLocations:
+        light1, 0.2, light2, 1.0, nil];
+    NSGradient *gradientStroke2 = [[NSGradient alloc] initWithColorsAndLocations:
+        shadowColor2, 0.47, gradientStrokeColor2, 1.0, nil];
+
+    // Outer stroke rings
+    NSBezierPath *outerRing = [NSBezierPath bezierPathWithOvalInRect:frame];
+    [gradientStroke drawInBezierPath:outerRing angle:90];
+    NSRect innerRingRect = NSInsetRect(frame, 0.5, 0.5);
+    NSBezierPath *innerRing = [NSBezierPath bezierPathWithOvalInRect:innerRingRect];
+    [gradientStroke2 drawInBezierPath:innerRing angle:-90];
+
+    // Base circle
+    NSRect baseRect = NSInsetRect(frame, 1.5, 1.5);
+    NSBezierPath *basePath = [NSBezierPath bezierPathWithOvalInRect:baseRect];
+    CGFloat resizeRatio = MIN(NSWidth(baseRect) / 13.0, NSHeight(baseRect) / 13.0);
+    [NSGraphicsContext saveGraphicsState];
+    [basePath addClip];
+    [baseGradient drawFromCenter:NSMakePoint(NSMidX(baseRect), NSMidY(baseRect))
+                          radius:2.85 * resizeRatio
+                        toCenter:NSMakePoint(NSMidX(baseRect), NSMidY(baseRect))
+                          radius:7.32 * resizeRatio
+                         options:NSGradientDrawsBeforeStartingLocation | NSGradientDrawsAfterEndingLocation];
+    [NSGraphicsContext restoreGraphicsState];
+
+    // Bottom highlight
+    [NSGraphicsContext saveGraphicsState];
+    NSBezierPath *basePath2 = [NSBezierPath bezierPathWithOvalInRect:baseRect];
+    [basePath2 addClip];
+    [gradientDown drawFromCenter:NSMakePoint(NSMidX(baseRect) - 0.98 * resizeRatio,
+                                             NSMidY(baseRect) - 6.5 * resizeRatio)
+                          radius:1.54 * resizeRatio
+                        toCenter:NSMakePoint(NSMidX(baseRect) - 1.86 * resizeRatio,
+                                             NSMidY(baseRect) - 8.73 * resizeRatio)
+                          radius:8.65 * resizeRatio
+                         options:NSGradientDrawsBeforeStartingLocation | NSGradientDrawsAfterEndingLocation];
+    [NSGraphicsContext restoreGraphicsState];
+
+    // Top specular highlight (half-circle)
+    NSBezierPath *halfcircle = [NSBezierPath bezierPath];
+    NSRect f = frame;
+    [halfcircle moveToPoint:NSMakePoint(NSMinX(f) + 0.93316 * NSWidth(f), NSMinY(f) + 0.46157 * NSHeight(f))];
+    [halfcircle curveToPoint:NSMakePoint(NSMinX(f) + 0.78652 * NSWidth(f), NSMinY(f) + 0.81548 * NSHeight(f))
+               controlPoint1:NSMakePoint(NSMinX(f) + 0.93316 * NSWidth(f), NSMinY(f) + 0.46157 * NSHeight(f))
+               controlPoint2:NSMakePoint(NSMinX(f) + 0.94476 * NSWidth(f), NSMinY(f) + 0.66376 * NSHeight(f))];
+    [halfcircle curveToPoint:NSMakePoint(NSMinX(f) + 0.21348 * NSWidth(f), NSMinY(f) + 0.81548 * NSHeight(f))
+               controlPoint1:NSMakePoint(NSMinX(f) + 0.62828 * NSWidth(f), NSMinY(f) + 0.96721 * NSHeight(f))
+               controlPoint2:NSMakePoint(NSMinX(f) + 0.37172 * NSWidth(f), NSMinY(f) + 0.96721 * NSHeight(f))];
+    [halfcircle curveToPoint:NSMakePoint(NSMinX(f) + 0.06684 * NSWidth(f), NSMinY(f) + 0.46157 * NSHeight(f))
+               controlPoint1:NSMakePoint(NSMinX(f) + 0.05524 * NSWidth(f), NSMinY(f) + 0.66376 * NSHeight(f))
+               controlPoint2:NSMakePoint(NSMinX(f) + 0.06684 * NSWidth(f), NSMinY(f) + 0.46157 * NSHeight(f))];
+    [halfcircle lineToPoint:NSMakePoint(NSMinX(f) + 0.93316 * NSWidth(f), NSMinY(f) + 0.46157 * NSHeight(f))];
+    [halfcircle closePath];
+    [gradientUp drawInBezierPath:halfcircle angle:-90];
+}
 
 // buttonType: 0=close, 1=minimize, 2=maximize
 - (void)drawEdgeButtonInRect:(NSRect)rect

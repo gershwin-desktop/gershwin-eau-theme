@@ -6,6 +6,8 @@
 #import "Eau.h"
 #import "EauTitleBarButtonCell.h"
 
+BOOL EauTitleBarButtonStyleIsOrb(void);
+
 @interface Eau (TitleBarButtons)
 
 // Geometry queries for window manager
@@ -25,5 +27,12 @@
 - (void)drawCloseIconInRect:(NSRect)rect withColor:(NSColor *)color;
 - (void)drawMinimizeIconInRect:(NSRect)rect withColor:(NSColor *)color;
 - (void)drawMaximizeIconInRect:(NSRect)rect withColor:(NSColor *)color;
+- (NSColor *)iconColorForActive:(BOOL)active highlighted:(BOOL)highlighted;
+
+// Orb button drawing
+- (void)drawOrbInRect:(NSRect)rect
+        withBaseColor:(NSColor *)baseColor
+               active:(BOOL)active
+              hovered:(BOOL)hovered;
 
 @end

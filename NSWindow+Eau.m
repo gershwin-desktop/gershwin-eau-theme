@@ -1,6 +1,7 @@
 #include "Eau+Button.h"
 #include "EauWindowButton.h"
 #include "EauTitleBarButton.h"
+#include "Eau+TitleBarButtons.h"
 #include "EauGrowBoxView.h"
 #include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
@@ -605,9 +606,46 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 - (NSButton *) standardWindowButton: (NSWindowButton)button
                        forStyleMask: (NSUInteger) mask
 {
-  EauTitleBarButton *newButton;
-
   EAULOG(@"NSWindow+Eau standardWindowButton:forStyleMask:");
+
+  if (EauTitleBarButtonStyleIsOrb()) {
+    EauWindowButton *orbButton = [[EauWindowButton alloc] init];
+    [orbButton setRefusesFirstResponder: YES];
+    [orbButton setButtonType: NSMomentaryChangeButton];
+    [orbButton setImagePosition: NSImageOnly];
+    [orbButton setBordered: YES];
+    [orbButton setTag: button];
+
+    switch (button) {
+      case NSWindowCloseButton:
+        [orbButton setBaseColor: [NSColor colorWithCalibratedRed:0.97 green:0.26 blue:0.23 alpha:1]];
+        [orbButton setImage: [NSImage imageNamed: @"common_Close"]];
+        [orbButton setAlternateImage: [NSImage imageNamed: @"common_CloseH"]];
+        [orbButton setAction: @selector(performClose:)];
+        break;
+      case NSWindowMiniaturizeButton:
+        [orbButton setBaseColor: [NSColor colorWithCalibratedRed:0.9 green:0.7 blue:0.3 alpha:1]];
+        [orbButton setImage: [NSImage imageNamed: @"common_Miniaturize"]];
+        [orbButton setAlternateImage: [NSImage imageNamed: @"common_MiniaturizeH"]];
+        [orbButton setAction: @selector(miniaturize:)];
+        break;
+      case NSWindowZoomButton:
+        [orbButton setBaseColor: [NSColor colorWithCalibratedRed:0.322 green:0.778 blue:0.244 alpha:1]];
+        [orbButton setImage: [NSImage imageNamed: @"common_Zoom"]];
+        [orbButton setAlternateImage: [NSImage imageNamed: @"common_ZoomH"]];
+        [orbButton setAction: @selector(zoom:)];
+        break;
+      case NSWindowToolbarButton:
+        [orbButton setAction: @selector(toggleToolbarShown:)];
+        break;
+      case NSWindowDocumentIconButton:
+      default:
+        break;
+    }
+    return orbButton;
+  }
+
+  EauTitleBarButton *newButton;
 
   switch (button)
     {

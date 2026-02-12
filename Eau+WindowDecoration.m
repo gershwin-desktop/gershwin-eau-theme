@@ -65,6 +65,10 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
       [self prepareTitleTextAttributes];
     }
 
+  // Map GSThemeControlState to titleTextAttributes index (0=active, 1=inactive, 2=main)
+  // GSThemeNormalState=0 → active, GSThemeSelectedState=6 → inactive, anything else → inactive
+  int attrIndex = (inputState == 0) ? 0 : 1;
+
   NSRect workRect;
   CGFloat titlebarWidth = titleRect.size.width;
   BOOL isActive = (inputState == 0);  // 0 = key window (active)
@@ -78,13 +82,20 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   if (styleMask & NSClosableWindowMask)
     {
       NSRect closeRect = [self closeButtonRectForTitlebarWidth:titlebarWidth];
-      closeRect.origin.y = titleRect.origin.y;
+      closeRect.origin.y += titleRect.origin.y;
       [self drawCloseButtonInRect:closeRect state:GSThemeNormalState active:isActive];
     }
 
   if (styleMask & NSMiniaturizableWindowMask)
     {
-      NSRect minRect = [self minimizeButtonRectForTitlebarWidth:titlebarWidth];
+      NSRect minRect;
+      if (styleMask & NSResizableWindowMask) {
+        minRect = [self minimizeButtonRectForTitlebarWidth:titlebarWidth];
+      } else {
+        // Solo minimize: position at right edge
+        minRect = NSMakeRect(titlebarWidth - METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, 0,
+                             METRICS_TITLEBAR_EDGE_BUTTON_WIDTH, METRICS_TITLEBAR_HEIGHT);
+      }
       minRect.origin.y += titleRect.origin.y;
       [self drawMinimizeButtonInRect:minRect state:GSThemeNormalState active:isActive];
     }
@@ -102,25 +113,45 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
       NSSize titleSize;
       workRect = titleRect;
 
-      // Adjust for close button on left
-      if (styleMask & NSClosableWindowMask)
-        {
-          workRect.origin.x += METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
-          workRect.size.width -= METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
-        }
-      // Adjust for right button region
-      if ((styleMask & NSMiniaturizableWindowMask) || (styleMask & NSResizableWindowMask))
-        {
-          workRect.size.width -= METRICS_TITLEBAR_RIGHT_REGION_WIDTH;
-        }
+      if (EauTitleBarButtonStyleIsOrb()) {
+        // Orb style: all buttons on left, reserve orb region
+        workRect.origin.x += METRICS_TITLEBAR_ORB_REGION_WIDTH;
+        workRect.size.width -= METRICS_TITLEBAR_ORB_REGION_WIDTH;
+      } else {
+        // Edge style: close on left, minimize+maximize on right
+        if (styleMask & NSClosableWindowMask)
+          {
+            workRect.origin.x += METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
+            workRect.size.width -= METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;
+          }
+        if ((styleMask & NSMiniaturizableWindowMask) && (styleMask & NSResizableWindowMask))
+          {
+            workRect.size.width -= METRICS_TITLEBAR_RIGHT_REGION_WIDTH;  // two buttons
+          }
+        else if ((styleMask & NSMiniaturizableWindowMask) || (styleMask & NSResizableWindowMask))
+          {
+            workRect.size.width -= METRICS_TITLEBAR_EDGE_BUTTON_WIDTH;   // one button
+          }
+      }
 
-      titleSize = [title sizeWithAttributes: titleTextAttributes[inputState]];
+      titleSize = [title sizeWithAttributes: titleTextAttributes[attrIndex]];
       if (titleSize.width <= workRect.size.width)
-        workRect.origin.x = NSMidX(workRect) - titleSize.width / 2;
+        {
+          if (EauTitleBarButtonStyleIsOrb()) {
+            // Center in full titlebar width, clamp to not overlap orb region
+            CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
+            workRect.origin.x = MAX(centeredX, titleRect.origin.x + METRICS_TITLEBAR_ORB_REGION_WIDTH);
+          } else {
+            CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
+            CGFloat minX = workRect.origin.x;
+            CGFloat maxX = NSMaxX(workRect) - titleSize.width;
+            workRect.origin.x = MAX(minX, MIN(centeredX, maxX));
+          }
+        }
       workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
       workRect.size.height = titleSize.height;
       [title drawInRect: workRect
-          withAttributes: titleTextAttributes[inputState]];
+          withAttributes: titleTextAttributes[attrIndex]];
     }
 }
 

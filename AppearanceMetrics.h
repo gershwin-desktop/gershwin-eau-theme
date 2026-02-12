@@ -98,7 +98,13 @@ static const float METRICS_TITLEBAR_EDGE_BUTTON_WIDTH = 28.0;       // Width of 
 static const float METRICS_TITLEBAR_RIGHT_REGION_WIDTH = 56.0;      // Width of minimize+maximize region on right
 static const float METRICS_TITLEBAR_BUTTON_INNER_RADIUS = 5.0;      // Rounded corner on inner edge only
 static const float METRICS_TITLEBAR_ICON_STROKE = 1.5;              // Stroke width for button icons
-static const float METRICS_TITLEBAR_ICON_INSET = 8.0;               // Inset from button edges to icon
+static const float METRICS_TITLEBAR_ICON_INSET = 9.0;               // Inset from button edges to icon
+
+// Titlebar orb button metrics (round traffic-light buttons, all on left)
+static const float METRICS_TITLEBAR_ORB_BUTTON_SIZE = 15.0;
+static const float METRICS_TITLEBAR_ORB_PADDING_LEFT = 10.5;
+static const float METRICS_TITLEBAR_ORB_BUTTON_SPACING = 4.0;
+static const float METRICS_TITLEBAR_ORB_REGION_WIDTH = 68.0;    // Left region reserved for 3 orbs + padding
 
 // Control Positioning in Dialogs
 // All spacing between dialog elements shall be a multiple of 4px (4, 8, 12, 16, 20, or 24).
