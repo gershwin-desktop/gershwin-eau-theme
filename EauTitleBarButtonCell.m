@@ -183,11 +183,6 @@
 
 - (void)drawIconInRect:(NSRect)frame
 {
-    // Don't draw icons on inactive windows
-    if (!_isActive) {
-        return;
-    }
-
     // Use standard icon inset for all full-height buttons
     NSRect iconRect = NSInsetRect(frame, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET);
 
@@ -197,8 +192,13 @@
         iconRect = NSInsetRect(iconRect, extraHInset, 0);
     }
 
-    // Darker icon color for active windows (0.20)
-    NSColor *iconColor = [NSColor colorWithCalibratedRed:0.20 green:0.20 blue:0.20 alpha:1.0];
+    // Use lighter icon color for inactive windows
+    NSColor *iconColor;
+    if (!_isActive) {
+        iconColor = [NSColor colorWithCalibratedRed:0.55 green:0.55 blue:0.55 alpha:1.0];
+    } else {
+        iconColor = [NSColor colorWithCalibratedRed:0.20 green:0.20 blue:0.20 alpha:1.0];
+    }
 
     if (_cell.is_highlighted) {
         iconColor = [iconColor shadowWithLevel:0.2];

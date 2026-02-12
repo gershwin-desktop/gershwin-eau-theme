@@ -514,13 +514,12 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
 
 - (NSColor *)iconColorForActive:(BOOL)active highlighted:(BOOL)highlighted
 {
-    // Don't draw icons on inactive windows
+    NSColor *color;
     if (!active) {
-        return nil;
+        color = [NSColor colorWithCalibratedRed:0.55 green:0.55 blue:0.55 alpha:1.0];
+    } else {
+        color = [NSColor colorWithCalibratedRed:0.20 green:0.20 blue:0.20 alpha:1.0];
     }
-
-    // Darker icon color for active windows (0.20)
-    NSColor *color = [NSColor colorWithCalibratedRed:0.20 green:0.20 blue:0.20 alpha:1.0];
 
     if (highlighted) {
         color = [color shadowWithLevel:0.2];
