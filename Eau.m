@@ -151,6 +151,7 @@ static NSConnection *gUIBridgeThemeConnection = nil;
 static EauUIBridgeProxy *gUIBridgeProxy = nil;
 
 @implementation Eau
+
 + (void)load
 {
   NSLog(@"Eau: +load called");
@@ -417,6 +418,9 @@ static Eau *gSharedEauInstance = nil;
       return nil;
     }
 
+  // TOM: update 'enabled' states
+  [menu update];
+
   NSMutableArray *items = [NSMutableArray array];
   NSArray *itemArray = [menu itemArray];
   NSUInteger count = [itemArray count];
@@ -648,6 +652,7 @@ static Eau *gSharedEauInstance = nil;
   // When a window becomes key, send its menu to Menu.app
   // This ensures menus are available when the Menu component scans after window activation
   NSMenu *mainMenu = [NSApp mainMenu];
+
   if (mainMenu != nil && [mainMenu numberOfItems] > 0)
     {
       EAULOG(@"Eau: Window became key, syncing GNUstep menu: %@", window);
@@ -681,26 +686,35 @@ static Eau *gSharedEauInstance = nil;
   [path stroke];
 }
 
-- (void)setMenu:(NSMenu*)m forWindow:(NSWindow*)w
-{
-  // Reduce verbose logging for frequent menu updates
-  static NSMutableDictionary *lastMenuUpdateTime = nil;
-  static NSMutableDictionary *lastMenuPointer = nil;
-  static NSMutableDictionary *firstMenuSent = nil;
-  static NSTimeInterval startupTime = 0;
-  if (!lastMenuUpdateTime) {
-    lastMenuUpdateTime = [[NSMutableDictionary alloc] init];
-  }
-  if (!lastMenuPointer) {
-    lastMenuPointer = [[NSMutableDictionary alloc] init];
-  }
-  if (!firstMenuSent) {
-    firstMenuSent = [[NSMutableDictionary alloc] init];
-  }
-  if (startupTime == 0) {
-    startupTime = [NSDate timeIntervalSinceReferenceDate];
-  }
+- (void) sendMenu:(NSWindow*)w {
 
+  NSLog(@"Eau: sendMenu");
+
+  NSNumber *windowId = [self _windowIdentifierForWindow:w];
+  NSMenu *m = [menuByWindowId objectForKey:windowId];
+
+  @try
+    {
+      // NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
+      NSDictionary *menuData = [self _serializeMenu:m];
+
+      [(id<GSGNUstepMenuServer>)menuServerProxy updateMenuForWindow:windowId
+							   menuData:menuData
+							 clientName:[self _menuClientName]];
+      NSLog(@"Eau: Successfully sent menu update to Menu.app");
+      EAULOG(@"Eau: Updated GNUstep menu for window %@", windowId);
+    }
+  @catch (NSException *exception)
+    {
+      EAULOG(@"Eau: Exception sending GNUstep menu: %@, falling back to standard menu", exception);
+       [super setMenu: m forWindow: w];
+    }
+  
+
+}
+
+- (void) setMenu:(NSMenu*)m forWindow:(NSWindow*)w
+{
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
   if (windowId == nil)
     {
@@ -709,31 +723,6 @@ static Eau *gSharedEauInstance = nil;
       [super setMenu: m forWindow: w];
       return;
     }
-  // NSLog(@"Eau: Resolved windowId=%@", windowId);
-
-  // Debounce repeated updates for the same menu during startup
-  NSNumber *lastTime = [lastMenuUpdateTime objectForKey:windowId];
-  NSValue *lastPtr = [lastMenuPointer objectForKey:windowId];
-  // During the first 15 seconds after startup, send only the first menu update per window
-  if (([NSDate timeIntervalSinceReferenceDate] - startupTime) < 15.0) {
-    if ([firstMenuSent objectForKey:windowId]) {
-      NSLog(@"Eau: Suppressing repeated menu updates during startup for window %@", windowId);
-      return;
-    }
-  }
-
-  if (lastTime) {
-    NSTimeInterval now = [NSDate timeIntervalSinceReferenceDate];
-    NSTimeInterval prev = [lastTime doubleValue];
-    if ((now - prev) < 2.0) {
-      if (lastPtr && [lastPtr pointerValue] == (__bridge void *)m) {
-        NSLog(@"Eau: Skipping duplicate menu update for window %@ (debounced)", windowId);
-        return;
-      }
-      NSLog(@"Eau: Throttling rapid menu updates for window %@", windowId);
-      return;
-    }
-  }
 
   if (m == nil || [m numberOfItems] == 0)
     {
@@ -762,6 +751,9 @@ static Eau *gSharedEauInstance = nil;
     }
 
   // NSLog(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
+  // TOM: i believe this is redundant
+  // [m update];
+
   [menuByWindowId setObject:m forKey:windowId];
 
   if (![self _ensureMenuClientRegistered])
@@ -780,27 +772,10 @@ static Eau *gSharedEauInstance = nil;
       return;
     }
 
-  @try
-    {
-      // NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
-      NSDictionary *menuData = [self _serializeMenu:m];
-      // NSLog(@"Eau: Serialized menu data: %@", menuData);
-      [(id<GSGNUstepMenuServer>)menuServerProxy updateMenuForWindow:windowId
-                                                          menuData:menuData
-                                                        clientName:[self _menuClientName]];
-      // NSLog(@"Eau: Successfully sent menu update to Menu.app");
-      EAULOG(@"Eau: Updated GNUstep menu for window %@", windowId);
+  // Rate-limited menu updating
+  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendMenu:) object:w];
+  [self performSelector:@selector(sendMenu:) withObject:w afterDelay:0.1];
 
-      // Record the update time and menu pointer for debouncing
-      [lastMenuUpdateTime setObject:@([NSDate timeIntervalSinceReferenceDate]) forKey:windowId];
-      [lastMenuPointer setObject:[NSValue valueWithPointer:(__bridge const void *)m] forKey:windowId];
-      [firstMenuSent setObject:@YES forKey:windowId];
-    }
-  @catch (NSException *exception)
-    {
-      EAULOG(@"Eau: Exception sending GNUstep menu: %@, falling back to standard menu", exception);
-      [super setMenu: m forWindow: w];
-    }
 }
 
 - (void)_performMenuActionFromIPC:(NSDictionary *)info
