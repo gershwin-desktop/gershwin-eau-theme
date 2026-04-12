@@ -10,6 +10,7 @@ Eau_PRINCIPAL_CLASS = Eau
 
 Eau_OBJC_FILES = \
 		Eau.m\
+		EauMenuRelaunchManager.m\
 		Eau+Drawings.m\
 		Eau+Button.m\
 		Eau+FocusFrame.m\

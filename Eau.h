@@ -32,6 +32,7 @@
     NSConnection *menuServerConnection;
     id menuServerProxy;
     BOOL menuServerAvailable;
+    BOOL menuServerConnected;
 }
 + (NSColor *) controlStrokeColor;
 - (void) drawPathButton: (NSBezierPath*) path

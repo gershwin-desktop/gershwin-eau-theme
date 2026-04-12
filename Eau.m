@@ -8,6 +8,22 @@
 #import <Foundation/NSPortNameServer.h>
 #import "NSMenuItemCell+Eau.h"
 #import "Eau+Button.h"
+#import "EauMenuRelaunchManager.h"
+
+static BOOL gForceExternalMenuByEnv = NO;
+
+static BOOL EauEnvironmentContainsAppMenuToken(void)
+{
+  NSDictionary *env = [[NSProcessInfo processInfo] environment];
+  for (NSString *value in [env allValues])
+    {
+      if ([value rangeOfString:@"appmenu" options:NSCaseInsensitiveSearch].location != NSNotFound)
+        {
+          return YES;
+        }
+    }
+  return NO;
+}
 
 // Expose UIBridge-friendly API from theme so the UIBridge server can talk to the
 // theme process directly (avoids needing to inject an agent into each app).
@@ -154,6 +170,11 @@ static EauUIBridgeProxy *gUIBridgeProxy = nil;
 
 + (void)load
 {
+  gForceExternalMenuByEnv = EauEnvironmentContainsAppMenuToken();
+  if (gForceExternalMenuByEnv)
+    {
+      NSLog(@"Eau: appmenu token detected in environment, forcing external menu mode");
+    }
   NSLog(@"Eau: +load called");
   // Schedule UIBridge service registration after a delay to ensure run loop is active
   // Using dispatch_after ensures this runs even if performSelector isn't processed
@@ -327,7 +348,7 @@ static Eau *gSharedEauInstance = nil;
     {
       menuServerConnection = nil;
       menuServerProxy = nil;
-      menuServerAvailable = NO;
+      menuServerConnected = NO;
     }
 
   if (menuServerProxy != nil)
@@ -339,7 +360,7 @@ static Eau *gSharedEauInstance = nil;
                                                                    host:nil];
   if (connection == nil)
     {
-      menuServerAvailable = NO;
+      menuServerConnected = NO;
       return NO;
     }
 
@@ -350,7 +371,9 @@ static Eau *gSharedEauInstance = nil;
     {
       [proxy setProtocolForProxy:@protocol(GSGNUstepMenuServer)];
       menuServerProxy = proxy;
-      menuServerAvailable = YES;
+      menuServerConnected = YES;
+      if (!menuServerAvailable)
+        menuServerAvailable = YES;
       [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuServerConnection];
       [[NSNotificationCenter defaultCenter] addObserver:self
                                                selector:@selector(_menuServerConnectionDidDie:)
@@ -361,7 +384,7 @@ static Eau *gSharedEauInstance = nil;
     }
 
   menuServerConnection = nil;
-  menuServerAvailable = NO;
+  menuServerConnected = NO;
   return NO;
 }
 
@@ -520,6 +543,10 @@ static Eau *gSharedEauInstance = nil;
       
       menuByWindowId = [[NSMutableDictionary alloc] init];
       menuServerAvailable = NO;
+      menuServerConnected = NO;
+
+      // Snapshot the current Menu process launch details so restarts can match.
+      [[EauMenuRelaunchManager sharedManager] captureMenuProcessSnapshotIfAvailable];
 
       // Register as a GNUstep menu client so Menu.app can call back for actions
       [self _ensureMenuClientRegistered];
@@ -623,7 +650,8 @@ static Eau *gSharedEauInstance = nil;
   EAULOG(@"Eau: Menu server connection died");
   menuServerConnection = nil;
   menuServerProxy = nil;
-  menuServerAvailable = NO;
+  menuServerConnected = NO;
+  [[EauMenuRelaunchManager sharedManager] relaunchMenuProcessIfSnapshotAvailable];
 }
 
 - (void) macintoshMenuDidChange: (NSNotification*)notification
@@ -707,7 +735,10 @@ static Eau *gSharedEauInstance = nil;
   @catch (NSException *exception)
     {
       EAULOG(@"Eau: Exception sending GNUstep menu: %@, falling back to standard menu", exception);
-       [super setMenu: m forWindow: w];
+      if (!gForceExternalMenuByEnv)
+        {
+          [super setMenu: m forWindow: w];
+        }
     }
   
 
@@ -720,7 +751,10 @@ static Eau *gSharedEauInstance = nil;
     {
       NSLog(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
       EAULOG(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
-      [super setMenu: m forWindow: w];
+      if (!gForceExternalMenuByEnv)
+        {
+          [super setMenu: m forWindow: w];
+        }
       return;
     }
 
@@ -746,7 +780,10 @@ static Eau *gSharedEauInstance = nil;
         }
 
       EAULOG(@"Eau: Menu is nil or empty, using standard menu for window: %@", w);
-      [super setMenu: m forWindow: w];
+      if (!gForceExternalMenuByEnv)
+        {
+          [super setMenu: m forWindow: w];
+        }
       return;
     }
 
@@ -760,15 +797,18 @@ static Eau *gSharedEauInstance = nil;
     {
       NSLog(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
       EAULOG(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
-      [super setMenu: m forWindow: w];
+      if (!gForceExternalMenuByEnv)
+        {
+          [super setMenu: m forWindow: w];
+        }
       return;
     }
 
   if (![self _ensureMenuServerConnection])
     {
-      NSLog(@"Eau: GNUstep menu server unavailable, using standard menu for window: %@", w);
-      EAULOG(@"Eau: GNUstep menu server unavailable, using standard menu for window: %@", w);
-      [super setMenu: m forWindow: w];
+      NSLog(@"Eau: GNUstep menu server unavailable, launching Menu.app and suppressing local menu bar for window: %@", w);
+      EAULOG(@"Eau: GNUstep menu server unavailable, launching Menu.app and suppressing local menu bar for window: %@", w);
+      [[EauMenuRelaunchManager sharedManager] relaunchMenuProcessIfSnapshotAvailable];
       return;
     }
 
@@ -1302,7 +1342,7 @@ static Eau *gSharedEauInstance = nil;
 - (NSRect)modifyRect: (NSRect)rect forMenu: (NSMenu*)menu isHorizontal: (BOOL)horizontal
 {
   // Always use Menu.app IPC when available
-  if (menuServerAvailable && ([NSApp mainMenu] == menu))
+  if ((menuServerAvailable || gForceExternalMenuByEnv) && ([NSApp mainMenu] == menu))
     {
       EAULOG(@"Eau: Modifying menu rect for GNUstep IPC: hiding menu bar");
       return NSZeroRect;
@@ -1315,7 +1355,7 @@ static Eau *gSharedEauInstance = nil;
 - (BOOL)proposedVisibility: (BOOL)visibility forMenu: (NSMenu*)menu
 {
   // Always use Menu.app IPC when available
-  if (menuServerAvailable && ([NSApp mainMenu] == menu))
+  if ((menuServerAvailable || gForceExternalMenuByEnv) && ([NSApp mainMenu] == menu))
     {
       EAULOG(@"Eau: Proposing menu visibility NO for GNUstep IPC");
       return NO;
