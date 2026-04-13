@@ -4,6 +4,8 @@
 #import <dispatch/dispatch.h>
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import <GNUstepGUI/GSDisplayServer.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
 #import <Foundation/NSConnection.h>
 #import <Foundation/NSPortNameServer.h>
 #import "NSMenuItemCell+Eau.h"
@@ -572,6 +574,10 @@ static Eau *gSharedEauInstance = nil;
                name:@"NSWindowDidBecomeKeyNotification"
              object:nil];
 
+      /* No app-active/resign observers needed for the slot-bar model;
+         libs-gui handles show/hide on its own via NSApplicationWill...
+         notifications inside NSMenu. */
+
       EAULOG(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
              menuServerAvailable ? @"available" : @"unavailable");
 
@@ -656,8 +662,15 @@ static Eau *gSharedEauInstance = nil;
 
 - (void) macintoshMenuDidChange: (NSNotification*)notification
 {
+  /* Slot-bar architecture: the GNUstep app draws its OWN menu items
+     inside Menu.app's advertised slot via libs-gui. We must not push the
+     menu to Menu.app over DO — doing so causes Menu.app's AppMenuWidget
+     to render a duplicate copy at its bar's left edge. The early-return
+     here neutralises every push call site without removing the
+     supporting code (which still serves NSMenuView lifecycle hooks). */
+  return;
   NSMenu *menu = [notification object];
-  
+
   if ([NSApp mainMenu] == menu)
     {
       NSWindow *keyWindow = [NSApp keyWindow];
@@ -675,21 +688,51 @@ static Eau *gSharedEauInstance = nil;
 
 - (void) windowDidBecomeKey: (NSNotification*)notification
 {
-  NSWindow *window = [notification object];
-  
-  // When a window becomes key, send its menu to Menu.app
-  // This ensures menus are available when the Menu component scans after window activation
-  NSMenu *mainMenu = [NSApp mainMenu];
+  /* No-op for the slot-bar model: libs-gui's NSMacintoshInterfaceStyle
+     handles show-on-active automatically (NSApplicationWillBecomeActive
+     -> -[NSMenu display]). The slot-aware modifyRect:forMenu: above sees
+     to it that the panel renders inside Menu.app's reserved region. No
+     cross-process push, no XEmbed reparent. */
+  EAULOG(@"Eau: windowDidBecomeKey (slot-bar model, no IPC): %@",
+         [notification object]);
+}
 
-  if (mainMenu != nil && [mainMenu numberOfItems] > 0)
+#pragma mark - Menu slot lookup
+
+/* Read the slot rect (in screen coordinates) advertised by Menu.app via
+   the _GERSHWIN_MENU_SLOT_GEOMETRY property on the X11 root window. The
+   four cardinals are screen-x, screen-y (X11 top-left origin), width,
+   height. Eau's modifyRect:forMenu:isHorizontal: turns those into the
+   bottom-left-origin NSWindow frame libs-gui expects. */
++ (NSRect)_eauMenuSlotScreenRect
+{
+  Display *dpy = XOpenDisplay(NULL);
+  if (!dpy) return NSZeroRect;
+  Window root = DefaultRootWindow(dpy);
+  Atom geomAtom = XInternAtom(dpy, "_GERSHWIN_MENU_SLOT_GEOMETRY", False);
+
+  Atom actualType;
+  int actualFormat;
+  unsigned long nItems = 0, bytesAfter = 0;
+  unsigned char *prop = NULL;
+  NSRect rect = NSZeroRect;
+
+  if (XGetWindowProperty(dpy, root, geomAtom, 0, 4, False, XA_CARDINAL,
+                         &actualType, &actualFormat, &nItems, &bytesAfter,
+                         &prop) == Success
+      && prop && nItems >= 4)
     {
-      EAULOG(@"Eau: Window became key, syncing GNUstep menu: %@", window);
-      [self setMenu: mainMenu forWindow: window];
+      long *vals = (long *)prop;
+      /* Convert X11 top-left-origin to NSWindow bottom-left-origin. */
+      CGFloat screenH = [[NSScreen mainScreen] frame].size.height;
+      rect.origin.x    = (CGFloat)vals[0];
+      rect.size.width  = (CGFloat)vals[2];
+      rect.size.height = (CGFloat)vals[3];
+      rect.origin.y    = screenH - (CGFloat)vals[1] - rect.size.height;
     }
-  else
-    {
-      EAULOG(@"Eau: Window became key but no main menu available: %@", window);
-    }
+  if (prop) XFree(prop);
+  XCloseDisplay(dpy);
+  return rect;
 }
 
 + (NSColor *) controlStrokeColor
@@ -746,6 +789,11 @@ static Eau *gSharedEauInstance = nil;
 
 - (void) setMenu:(NSMenu*)m forWindow:(NSWindow*)w
 {
+  /* Slot-bar architecture: do NOT push the menu to Menu.app via DO. The
+     GNUstep app's own NSMenuPanel draws inside the advertised slot. Just
+     defer to super so libs-gui's normal menu lifecycle proceeds. */
+  [super setMenu: m forWindow: w];
+  return;
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
   if (windowId == nil)
     {
@@ -1341,28 +1389,39 @@ static Eau *gSharedEauInstance = nil;
 
 - (NSRect)modifyRect: (NSRect)rect forMenu: (NSMenu*)menu isHorizontal: (BOOL)horizontal
 {
-  // Always use Menu.app IPC when available
-  if ((menuServerAvailable || gForceExternalMenuByEnv) && ([NSApp mainMenu] == menu))
+  /* macOS-style top-strip menu, constrained to Menu.app's slot.
+     libs-gui passes us "top-of-screen, full width". Menu.app advertises
+     a slot rect (in screen coords) on the X11 root window. We narrow the
+     proposed rect to the slot's x/width while keeping y/height as-is so
+     the panel sits at the top of the screen but only inside the slot
+     region. Menu.app's bar covers the strips outside the slot
+     (left = app/command area, right = status items). Result: a single
+     visual top bar composed from Menu.app + each app's own NSMenuPanel.
+     No IPC for menu state, no XEmbed, no NSApp.keyWindow race. */
+  if (([NSApp mainMenu] == menu) && horizontal)
     {
-      EAULOG(@"Eau: Modifying menu rect for GNUstep IPC: hiding menu bar");
-      return NSZeroRect;
+      NSRect slot = [Eau _eauMenuSlotScreenRect];
+      NSLog(@"Eau modifyRect: proposed=(%g,%g %gx%g) slot=(%g,%g %gx%g)",
+            rect.origin.x, rect.origin.y, rect.size.width, rect.size.height,
+            slot.origin.x, slot.origin.y, slot.size.width, slot.size.height);
+      if (slot.size.width > 0 && slot.size.height > 0)
+        {
+          NSRect adjusted = rect;
+          adjusted.origin.x   = slot.origin.x;
+          adjusted.size.width = slot.size.width;
+          NSLog(@"Eau modifyRect: returning adjusted=(%g,%g %gx%g)",
+                adjusted.origin.x, adjusted.origin.y,
+                adjusted.size.width, adjusted.size.height);
+          return adjusted;
+        }
     }
-  
-  EAULOG(@"Eau: Using standard menu rect (Menu.app %@)", menuServerAvailable ? @"available" : @"unavailable");
   return [super modifyRect: rect forMenu: menu isHorizontal: horizontal];
 }
 
 - (BOOL)proposedVisibility: (BOOL)visibility forMenu: (NSMenu*)menu
 {
-  // Always use Menu.app IPC when available
-  if ((menuServerAvailable || gForceExternalMenuByEnv) && ([NSApp mainMenu] == menu))
-    {
-      EAULOG(@"Eau: Proposing menu visibility NO for GNUstep IPC");
-      return NO;
-    }
-  
-  EAULOG(@"Eau: Proposing standard menu visibility %@ (Menu.app %@)", 
-         visibility ? @"YES" : @"NO", menuServerAvailable ? @"available" : @"unavailable");
+  /* XEmbed model: panel must be visible so libs-gui actually draws it
+     and we can reparent it into Menu.app's slot. */
   return [super proposedVisibility: visibility forMenu: menu];
 }
 

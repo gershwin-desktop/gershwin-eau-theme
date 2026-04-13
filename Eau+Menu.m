@@ -16,6 +16,15 @@
   NSColor *color = [NSColor colorWithCalibratedRed: 0.992 green: 0.992 blue: 0.992 alpha: 0.66];
   return color;
 }
+
+/* Solid (alpha 1.0) version of the bar background. Both libs-gui's slot
+ * panel (drawn here in -drawMenuRect: horizontal branch) and Menu.app's
+ * MenuBarView use this so the slot and the left/right strips have
+ * identical RGBA pixels — no compositor blending difference. */
+- (NSColor *) menuBarBackgroundColor
+{
+  return [NSColor colorWithCalibratedRed:0.992 green:0.992 blue:0.992 alpha:1.0];
+}
 - (NSColor *) menuItemBackgroundColor
 {
   NSColor *color = [NSColor colorWithCalibratedRed: 0.992 green: 0.992 blue: 0.992 alpha: 0.95];
@@ -86,19 +95,11 @@
   [borderColor setStroke];
   if(horizontal == YES)
     {
-      // here the semitrasparent status bar...
-      NSColor* brightGrey = [NSColor colorWithCalibratedRed: 0.95 green: 0.95 blue: 0.95 alpha: 0.80];
-      NSColor* midGrey = [NSColor colorWithCalibratedRed: 0.85 green: 0.85 blue: 0.85 alpha: 0.70];
-      NSGradient* menuGradient = [[NSGradient alloc] initWithStartingColor: brightGrey endingColor: midGrey];
-      [menuGradient drawInRect: bounds angle: -90];
-      // Draw bright line at top of menu bar
-      NSBezierPath* linePath = [NSBezierPath bezierPath];
-      [linePath moveToPoint: NSMakePoint(bounds.origin.x, bounds.origin.y + bounds.size.height)];
-      [linePath lineToPoint: NSMakePoint(bounds.origin.x+ bounds.size.width, bounds.origin.y + bounds.size.height)];
-      [linePath setLineWidth: 1];
-      NSColor* topLineColor = [NSColor colorWithCalibratedRed: 1.0 green: 1.0 blue: 1.0 alpha: 0.8];
-      [topLineColor setStroke];
-      [linePath stroke];
+      /* Slot panel: opaque solid fill matching Menu.app's MenuBarView
+         exactly (both call -menuBarBackgroundColor at alpha 1.0). No
+         compositor blending difference because the pixels are identical. */
+      [[self menuBarBackgroundColor] set];
+      NSRectFill(bounds);
     }
   else
     {

@@ -4,9 +4,75 @@
 #import "Eau.h"
 #import "NSMenuView+Eau.h"
 #import <AppKit/NSMenuView.h>
+#import <GNUstepGUI/GSDisplayServer.h>
 #import <objc/runtime.h>
+#include <X11/Xlib.h>
+#include <X11/Xatom.h>
+
+/* Forward-declare the slot-rect helper implemented in Eau.m so the
+ * compiler knows the return type. */
+@interface Eau (EauSlotRect)
++ (NSRect)_eauMenuSlotScreenRect;
+@end
 
 @implementation NSMenuView (EauTheme)
+
+/* Swizzled -setHorizontal:. Default libs-gui implementation, when the
+ * view becomes horizontal (main menu under NSMacintoshInterfaceStyle),
+ * sets the view's frame to FULL screen width
+ * (NSMenuView.m:343 — `[self setFrameSize: scRect.size]` with scRect =
+ * [[NSScreen mainScreen] frame]). This frame later propagates to the
+ * NSMenuPanel via NSMenu.sizeToFit and OVERRIDES our modifyRect:forMenu:
+ * narrowing. To keep the bar inside Menu.app's slot, we re-size the
+ * view to the slot width immediately after the original setHorizontal:
+ * runs. */
+- (void)eau_setHorizontal:(BOOL)flag
+{
+  [self eau_setHorizontal:flag];  // original (swap pointer)
+
+  if (!flag) return;
+  NSRect slot = [Eau _eauMenuSlotScreenRect];
+  if (slot.size.width <= 0 || slot.size.height <= 0) return;
+
+  NSSize newSize = NSMakeSize(slot.size.width, slot.size.height);
+  [self setFrameSize:newSize];
+
+  /* Force the panel hosting this NSMenuView above Menu.app's bar so it
+   * always wins z-order in the slot region. setHidesOnDeactivate:NO
+   * keeps the panel mapped even when the user clicks Menu.app's
+   * command-menu icon (X11 focus briefly shifts to Menu.app); without
+   * this the panel hides and the slot goes blank — the bar must stay
+   * "locked" like macOS. */
+  NSWindow *panel = [self window];
+  if (!panel) return;
+  [panel setLevel:NSMainMenuWindowLevel + 1];
+  [panel setHidesOnDeactivate:NO];
+  if ([panel respondsToSelector:@selector(setCanHide:)]) {
+    [(id)panel setCanHide:NO];
+  }
+
+  /* Tell the WM this DOCK-typed window does NOT want any workarea
+   * reserved on its behalf (Menu.app's strut already handles that for
+   * the whole top strip). Without this, libs-back's
+   * NSMainMenuWindowLevel → _NET_WM_WINDOW_TYPE_DOCK mapping causes the
+   * WM to register a second strut and push the dock down. We don't try
+   * to change the window type itself (libs-back rewrites it); we set
+   * _NET_WM_STRUT_PARTIAL = all zeros which the WM honours. */
+  GSDisplayServer *server = GSServerForWindow(panel);
+  if (!server) return;
+  Display *dpy = (Display *)[server serverDevice];
+  Window xid = (Window)(uintptr_t)[server windowDevice:[panel windowNumber]];
+  if (!dpy || xid == 0) return;
+  Atom strutAtom        = XInternAtom(dpy, "_NET_WM_STRUT",         False);
+  Atom strutPartialAtom = XInternAtom(dpy, "_NET_WM_STRUT_PARTIAL", False);
+  long strut[4]      = {0, 0, 0, 0};
+  long partial[12]   = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+  XChangeProperty(dpy, xid, strutAtom,        XA_CARDINAL, 32, PropModeReplace,
+                  (unsigned char *)strut,   4);
+  XChangeProperty(dpy, xid, strutPartialAtom, XA_CARDINAL, 32, PropModeReplace,
+                  (unsigned char *)partial, 12);
+  XFlush(dpy);
+}
 
 - (NSPoint)eau_locationForSubmenu:(NSMenu *)aSubmenu
 {
@@ -89,4 +155,17 @@ static void initMenuViewSwizzling(void) {
 
   method_exchangeImplementations(originalMethod, swizzledMethod);
   // NSLog(@"NSMenuView+Eau: Successfully swizzled locationForSubmenu: with eau_locationForSubmenu:");
+
+  // Also swizzle setHorizontal: so that when the main menu's view becomes
+  // horizontal we can clamp its frame to Menu.app's slot width instead of
+  // letting libs-gui set it to full-screen width.
+  SEL setHOrig = sel_registerName("setHorizontal:");
+  SEL setHSwiz = @selector(eau_setHorizontal:);
+  Method origH = class_getInstanceMethod(menuViewClass, setHOrig);
+  Method swizH = class_getInstanceMethod(menuViewClass, setHSwiz);
+  if (origH && swizH
+      && method_getImplementation(origH) != method_getImplementation(swizH)) {
+    method_exchangeImplementations(origH, swizH);
+    NSLog(@"NSMenuView+Eau: swizzled setHorizontal: for slot-bar sizing");
+  }
 }
