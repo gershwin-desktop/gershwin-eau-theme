@@ -59,11 +59,15 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 }
 
 @protocol GSGNUstepMenuServer
-- (oneway void)updateMenuForWindow:(NSNumber *)windowId
-                          menuData:(NSDictionary *)menuData
-                        clientName:(NSString *)clientName;
-- (oneway void)unregisterWindow:(NSNumber *)windowId
-                       clientName:(NSString *)clientName;
+- (oneway void)updateMenuForWindow:(bycopy NSNumber *)windowId
+                          menuData:(bycopy NSDictionary *)menuData
+                        clientName:(bycopy NSString *)clientName;
+- (oneway void)unregisterWindow:(bycopy NSNumber *)windowId
+                       clientName:(bycopy NSString *)clientName;
+// Lightweight push: only enabled/state values, no menu rebuild.
+- (oneway void)updateMenuEnabledStatesForWindow:(bycopy NSNumber *)windowId
+                                       menuData:(bycopy NSDictionary *)menuData
+                                     clientName:(bycopy NSString *)clientName;
 @end
 
 // Dedicated UIBridge proxy object to expose the Eau theme's UIBridgeProtocol methods
@@ -1310,6 +1314,34 @@ static Eau *gSharedEauInstance = nil;
 - (bycopy NSString *)fullTreeForObjectJSON:(NSString *)objID { NSData *d = [NSJSONSerialization dataWithJSONObject:[self fullTreeForObject:objID] options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
 - (bycopy NSString *)invokeSelectorJSON:(NSString *)selectorName onObject:(NSString *)objID withArgs:(NSArray *)args { id r = [self invokeSelector:selectorName onObject:objID withArgs:args]; NSData *d = [NSJSONSerialization dataWithJSONObject:r options:0 error:nil]; return d ? [[NSString alloc] initWithData:d encoding:NSUTF8StringEncoding] : @"null"; }
 
+#pragma mark - GSGNUstepMenuClient protocol methods
+
+/* Called by Menu.app when a menu will open, to get fresh enabled/state values.
+   This ensures that menu states like "Copy enabled after Select All" are always
+   current when the user opens a submenu. */
+- (bycopy NSDictionary *)validateMenuStateForWindow:(NSNumber *)windowId
+{
+  if (!windowId) {
+    NSLog(@"Eau: validateMenuStateForWindow: nil windowId");
+    return nil;
+  }
+
+  NSMenu *menu = [menuByWindowId objectForKey:windowId];
+  if (!menu) {
+    NSDebugLog(@"Eau: validateMenuStateForWindow: no menu for window %@", windowId);
+    return nil;
+  }
+
+  /* Refresh the menu to ensure all enabled/disabled states are current.
+     This will call the delegate's menuNeedsUpdate: if set, allowing the app
+     to update menu states before we serialize them. */
+  [menu update];
+
+  /* Serialize the menu with current enabled/state values. */
+  NSDictionary *serialized = [self _serializeMenu:menu];
+  NSDebugLog(@"Eau: validateMenuStateForWindow: returning serialized menu for window %@", windowId);
+  return serialized;
+}
 
 - (oneway void)activateMenuItemAtPath:(NSArray *)indexPath forWindow:(NSNumber *)windowId
 {
