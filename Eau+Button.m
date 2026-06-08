@@ -33,36 +33,28 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 @implementation Eau(EauButton)
 - (NSColor*) pulseColorInCell:(NSButtonCell*) bc
 {
-  // Check if the button cell is enabled before applying pulse color
   BOOL isEnabled = YES;
   if ([bc respondsToSelector:@selector(isEnabled)]) {
     isEnabled = [bc isEnabled];
   }
-  
-  // Also check if the control view (button) is enabled
   if (isEnabled && [bc controlView] && [[bc controlView] isKindOfClass:[NSControl class]]) {
     NSControl *control = (NSControl *)[bc controlView];
     isEnabled = [control isEnabled];
   }
-  
   if (!isEnabled) {
-    // Return normal color for disabled buttons (no blue pulse)
-    EAULOG(@"pulseColorInCell: Button is disabled, returning normal color");
     return [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
   }
+  
+  // Compute pulse from current time — no timer/animation dependency
+  static NSTimeInterval pulseStart = 0;
+  if (pulseStart == 0) pulseStart = [NSDate timeIntervalSinceReferenceDate];
+  NSTimeInterval elapsed = [NSDate timeIntervalSinceReferenceDate] - pulseStart;
+  double phase = fmod(elapsed, 0.7) / 0.7;
+  double pulse = sin(M_PI * phase);
   
   NSColor * color;
-  CGFloat pulse = [[bc pulseProgress] floatValue];
-  
-  // Double-check pulse progress - if it's 0, return normal color
-  if (pulse <= 0.0) {
-    EAULOG(@"pulseColorInCell: Pulse progress is 0, returning normal color");
-    return [EauSafeCalibratedRGB([NSColor controlBackgroundColor]) shadowWithLevel: 0.1];
-  }
-  
   color = [NSColor colorWithCalibratedRed: 0.62 green: 0.82 blue: 0.965 alpha: 1];
   color = [NSColor colorWithCalibratedHue: [color hueComponent] saturation: 1.0 - pulse*0.6 brightness: 0.9 + pulse*0.1 alpha: [color alphaComponent]];
-  EAULOG(@"pulseColorInCell: Returning blue pulse color with progress %f", pulse);
   return color;
 }
 - (NSColor*) buttonColorInCell:(NSCell*) cell forState: (GSThemeControlState) state

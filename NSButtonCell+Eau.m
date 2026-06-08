@@ -106,6 +106,7 @@
 - (BOOL) isProcessingReturnButton;
 - (void) setIsProcessingReturnButton:(BOOL)processing;
 - (void) safelyMakeButtonSelectedAndHighlighted;
+- (void) EauPulseTick:(NSTimer *)timer;
 @end
 
 @implementation Eau(NSButtonCell)
@@ -879,4 +880,11 @@ static NSMutableSet *returnImageCells = nil;
   }
 }
 
+// Timer callback for default button pulse — called from NSButton+Eau.m swizzle
+- (void) EauPulseTick: (NSTimer *)timer
+{
+  [[self controlView] setNeedsDisplay: YES];
+  [[[self controlView] window] display];
+  [[[self controlView] window] flushWindow];
+}
 @end

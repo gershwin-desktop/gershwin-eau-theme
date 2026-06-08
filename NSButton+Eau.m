@@ -22,8 +22,25 @@
 
 #import "NSButton+Eau.h"
 #import "Eau.h"
+#import "Eau+Button.h"
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+
+// Weak proxy to break the retain cycle between NSTimer and NSButtonCell.
+// NSTimer retains its target, preventing dealloc. This proxy holds a weak
+// reference to the cell, so the cell can be deallocated normally when the
+// window is closed. If the cell is gone, the timer is invalidated.
+@interface EauPulseProxy : NSObject
+@property (nonatomic, weak) NSButtonCell *cell;
+@end
+@implementation EauPulseProxy
+- (void) pulseTick: (NSTimer *)timer
+{
+  NSButtonCell *cell = self.cell;
+  if (!cell) { [timer invalidate]; return; }
+  [cell EauPulseTick: timer];
+}
+@end
 
 @implementation NSButton (EauKeyboardHandling)
 
@@ -32,30 +49,63 @@
   static dispatch_once_t onceToken;
   dispatch_once(&onceToken, ^{
     Class cls = [NSButton class];
-    SEL origSelector = @selector(keyDown:);
-    SEL swizSelector = @selector(eau_keyDown:);
-    
-    Method origMethod = class_getInstanceMethod(cls, origSelector);
-    Method swizMethod = class_getInstanceMethod(cls, swizSelector);
-    
-    // Attempt to add the method first in case NSButton doesn't implement it directly
-    BOOL didAddMethod = class_addMethod(cls,
-                                        origSelector,
-                                        method_getImplementation(swizMethod),
-                                        method_getTypeEncoding(swizMethod));
-    
-    if (didAddMethod)
-      {
-        class_replaceMethod(cls,
-                            swizSelector,
+
+    // keyDown: swizzle
+    {
+      SEL origSelector = @selector(keyDown:);
+      SEL swizSelector = @selector(eau_keyDown:);
+      Method origMethod = class_getInstanceMethod(cls, origSelector);
+      Method swizMethod = class_getInstanceMethod(cls, swizSelector);
+      BOOL didAddMethod = class_addMethod(cls, origSelector,
+                                          method_getImplementation(swizMethod),
+                                          method_getTypeEncoding(swizMethod));
+      if (didAddMethod)
+        class_replaceMethod(cls, swizSelector,
                             method_getImplementation(origMethod),
                             method_getTypeEncoding(origMethod));
-      }
-    else
-      {
+      else
         method_exchangeImplementations(origMethod, swizMethod);
-      }
+    }
+
+    // setKeyEquivalent: swizzle - when @"\r", start pulse on the cell
+    {
+      SEL orig = @selector(setKeyEquivalent:);
+      SEL swiz = @selector(eau_setKeyEquivalent:);
+      Method origM = class_getInstanceMethod(cls, orig);
+      Method swizM = class_getInstanceMethod(cls, swiz);
+      if (origM && swizM)
+        method_exchangeImplementations(origM, swizM);
+    }
   });
+}
+
+- (void) eau_setKeyEquivalent: (NSString *)key
+{
+  [self eau_setKeyEquivalent: key];
+  if ([key isEqualToString: @"\r"])
+    {
+      NSButtonCell *cell = [self cell];
+      if (cell)
+        {
+          [cell setIsDefaultButton: @YES];
+          // Use a weak proxy as timer target to avoid retain cycle.
+          // Timer is stored on self (NSButton), released when button deallocates.
+          NSTimer *old = objc_getAssociatedObject(self, @selector(eau_setKeyEquivalent:));
+          if (old) [old invalidate];
+          EauPulseProxy *proxy = [[EauPulseProxy alloc] init];
+          proxy.cell = cell;
+          NSTimer *t = [NSTimer timerWithTimeInterval: 1.0/30.0
+                                               target: proxy
+                                             selector: @selector(pulseTick:)
+                                             userInfo: nil
+                                              repeats: YES];
+          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSDefaultRunLoopMode];
+          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSModalPanelRunLoopMode];
+          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSEventTrackingRunLoopMode];
+          objc_setAssociatedObject(self, @selector(eau_setKeyEquivalent:), t,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
 }
 
 /**
