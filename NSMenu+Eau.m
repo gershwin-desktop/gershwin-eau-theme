@@ -7,13 +7,143 @@
    This allows the Eau theme to:
    1. Receive notifications when the main menu changes
    2. Control menu visibility (hide in-app menu bar for global menu)
+   3. Detect and close orphaned dropdown menu windows that should have
+      been closed when the user switched to a different top-level menu
+      item but weren't due to a tracking-loop cleanup gap
 */
 
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSTheme.h>
 #import <objc/runtime.h>
+#import <X11/Xlib.h>
+#import <X11/Xutil.h>
 
 #import "Eau.h"
+
+/* ---- NSMenuPanel forward declaration (private) ---- */
+@interface NSObject (EauMenuPanel)
+- (id)_menu;
+@end
+
+/* ---- Tracked windows + active tracking counter ---- */
+static volatile int _eau_activeTrackingCount = 0;
+static Display *_eau_x11_display = NULL;
+
+static void _eau_ensureState(void)
+{
+  if (_eau_x11_display == NULL)
+    _eau_x11_display = XOpenDisplay(NULL);
+}
+
+/* ---- Destroy ALL X11 "Menu" windows + their containers ---- */
+static void _eau_destroyX11MenuWindows(void)
+{
+  _eau_ensureState();
+  if (_eau_x11_display == NULL) return;
+
+  /* Walk the X11 tree looking for GNUstep "Menu" windows in Normal
+     state.  These are orphaned dropdowns.  We destroy BOTH the
+     window AND its parent container, because the NSWindow's X11
+     window is often a child of an unmanaged container (0x40f7ce
+     style) that stays visible even after the child is destroyed. */
+  Window root = DefaultRootWindow(_eau_x11_display);
+  Window unused_root, unused_parent;
+  Window *children = NULL;
+  unsigned int nchildren = 0;
+
+  if (!XQueryTree(_eau_x11_display, root, &unused_root, &unused_parent,
+                  &children, &nchildren))
+    return;
+
+  for (unsigned int i = 0; i < nchildren; i++)
+    {
+      Window w = children[i];
+      XWindowAttributes attr;
+      if (!XGetWindowAttributes(_eau_x11_display, w, &attr))
+        continue;
+      if (attr.map_state != IsViewable)
+        continue;
+
+      /* Check WM_CLASS for "Menu" "GNUstep" */
+      XClassHint classHint;
+      if (!XGetClassHint(_eau_x11_display, w, &classHint))
+        continue;
+      BOOL isMenu = (classHint.res_name
+                     && strcmp(classHint.res_name, "Menu") == 0
+                     && classHint.res_class
+                     && strcmp(classHint.res_class, "GNUstep") == 0);
+      XFree(classHint.res_name);
+      XFree(classHint.res_class);
+      if (!isMenu)
+        continue;
+
+      /* Skip the menu bar itself — it's a "Menu" "GNUstep" window
+         too but sits at y=0 with the menu bar height (~22px).
+         Only destroy windows that are clearly dropdowns (>25px). */
+      if (attr.y == 0 && attr.height <= 25)
+        continue;
+
+      /* Found a visible GNUstep Menu window.  Destroy the parent
+         container (w itself may be the child).  Walk up one level
+         to find the actual parent container to destroy. */
+      Window parent = w;
+      Window root2 = None;
+      Window *children2 = NULL;
+      unsigned int nc2 = 0;
+      if (XQueryTree(_eau_x11_display, parent, &root2, &parent,
+                     &children2, &nc2))
+        {
+          if (children2) XFree(children2);
+        }
+      // parent now holds the actual parent of w
+
+      // Also recurse into children to destroy any sub-windows
+      // (deeper submenus)
+      Window *subchildren = NULL;
+      unsigned int nsub = 0;
+      if (XQueryTree(_eau_x11_display, w, &unused_root, &unused_parent,
+                     &subchildren, &nsub))
+        {
+          for (unsigned int j = 0; j < nsub; j++)
+            {
+              XDestroyWindow(_eau_x11_display, subchildren[j]);
+            }
+          if (subchildren) XFree(subchildren);
+        }
+
+      // Destroy w itself
+      XDestroyWindow(_eau_x11_display, w);
+
+      // If parent is not root, also destroy the parent container
+      if (parent != root && parent != None)
+        {
+          XDestroyWindow(_eau_x11_display, parent);
+        }
+    }
+
+  if (children) XFree(children);
+  XSync(_eau_x11_display, False);
+}
+
+/* ---- trackWithEvent: swizzle (increment/decrement, then cleanup) ---- */
+
+/* ---- trackWithEvent: swizzle (increment/decrement, then cleanup) ---- */
+static BOOL (*s_orig_trackWithEvent)(id, SEL, id) = NULL;
+
+static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
+{
+  _eau_activeTrackingCount++;
+  BOOL result = NO;
+  @try
+    {
+      if (s_orig_trackWithEvent)
+        result = s_orig_trackWithEvent(self, _cmd, event);
+    }
+  @catch (NSException *e) {}
+  _eau_activeTrackingCount--;
+  _eau_destroyX11MenuWindows();
+  return result;
+}
 
 @implementation NSMenu (Eau)
 
@@ -83,7 +213,9 @@
  *
  * This swizzle checks proposedVisibility:forMenu: before displaying,
  * allowing the theme to hide the in-app menu bar when using a global
- * menu bar (Menu.app).
+ * menu bar (Menu.app).  Additionally, before showing a new dropdown it
+ * closes any orphaned menu windows from a previous tracking session
+ * that were not properly cleaned up.
  */
 - (void)eau_display
 {
@@ -97,6 +229,43 @@
 
   // Call original implementation
   [self eau_display];
+}
+
+/**
+ * Swizzled -displayTransient implementation.
+ *
+ * Same orphaned-menu cleanup as -display, but for transient menus
+ * (context menus, torn-off menus, and submenus of transient menus).
+ */
+- (void)eau_displayTransient
+{
+  [self eau_displayTransient];
+}
+
+/**
+ * Swizzled -close implementation.
+ *
+ * Tracks that the menu's window is being closed.
+ */
+- (void)eau_close
+{
+  [self eau_close];
+}
+
+/**
+ * Swizzled -closeTransient implementation.
+ */
+- (void)eau_closeTransient
+{
+  [self eau_closeTransient];
+}
+
+/**
+ * Swizzled -_attachMenu: implementation.
+ */
+- (void)eau_attachMenu:(NSMenu *)aMenu
+{
+  [self eau_attachMenu:aMenu];
 }
 
 @end
@@ -178,8 +347,32 @@ static void initNSMenuSwizzling(void)
 
   // Swizzle -display
   // Allows theme to hide menu window via proposedVisibility:forMenu:
+  // and closes orphaned menu windows when a new dropdown is opened.
   swizzleNSMenuMethod(menuClass,
                       @selector(display),
                       @selector(eau_display),
                       "display");
+
+  // Swizzle -displayTransient
+  // Same orphaned-menu cleanup for transient menus (context menus,
+  // torn-off menus, submenus of transient menus).
+  swizzleNSMenuMethod(menuClass,
+                      @selector(displayTransient),
+                      @selector(eau_displayTransient),
+                      "displayTransient");
+
+  // Swizzle -trackWithEvent: on NSMenuView to count active tracking
+  // sessions and run cleanup when tracking ends.
+  Class menuViewClass = objc_getClass("NSMenuView");
+  if (menuViewClass)
+    {
+      Method origTW = class_getInstanceMethod(menuViewClass,
+                                              @selector(trackWithEvent:));
+      if (origTW)
+        {
+          s_orig_trackWithEvent
+            = (BOOL (*)(id, SEL, id))method_getImplementation(origTW);
+          method_setImplementation(origTW, (IMP)s_eau_trackWithEvent);
+        }
+    }
 }

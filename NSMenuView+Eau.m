@@ -13,39 +13,76 @@
   EAULOG(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
 
   NSMenuView *menuView = (NSMenuView *)self;
-
-  // Call the original implementation - it correctly calculates Y position.
-  // After swizzling, -eau_locationForSubmenu: points to the original
-  // -locationForSubmenu: implementation.
-  NSPoint originalPoint = [self eau_locationForSubmenu:aSubmenu];
-
-  // If this menu view itself is horizontal (the menu bar), use original positioning entirely
-  if ([menuView isHorizontal]) {
-    EAULOG(@"NSMenuView+Eau: Menu is horizontal, using original submenu position {%.1f, %.1f}",
-          originalPoint.x, originalPoint.y);
-    return originalPoint;
-  }
-
-  // For vertical dropdown menus, adjust only the X position to remove overlap
-  // Keep the original Y position which correctly aligns with the parent item
   NSWindow *window = [menuView window];
-  if (!window) {
-    EAULOG(@"NSMenuView+Eau: No window for menu view, using original submenu position {%.1f, %.1f}",
-          originalPoint.x, originalPoint.y);
-    return originalPoint;
-  }
 
-  NSRect frame = [window frame];
+  // Horizontal menu bar: position dropdown below the menu bar item.
+  if ([menuView isHorizontal])
+    {
+      if (!window || !aSubmenu) return NSZeroPoint;
 
-  // X position: right edge of parent menu window (just touching, no overlap)
-  CGFloat xPos = NSMaxX(frame);
+      // Find the item in this menu that has the submenu.
+      NSMenu *myMenu = [menuView menu];
+      NSInteger itemIndex = [myMenu indexOfItemWithSubmenu:aSubmenu];
+      if (itemIndex < 0) return NSZeroPoint;
 
-  // Y position: use the original calculation which correctly handles item position
-  CGFloat yPos = originalPoint.y;
+      // Get the item's rect in window coordinates, then screen.
+      NSRect itemRect = [menuView rectOfItemAtIndex:itemIndex];
+      itemRect = [menuView convertRect:itemRect toView:nil];
+      NSPoint screenOrigin = [window convertBaseToScreen:itemRect.origin];
 
-  EAULOG(@"NSMenuView+Eau: Adjusted submenu position from {%.1f, %.1f} to {%.1f, %.1f}",
-        originalPoint.x, originalPoint.y, xPos, yPos);
+      // Get the submenu's window frame to know its height.
+      NSRect subFrame = [[[aSubmenu menuRepresentation] window] frame];
+      CGFloat subH = NSHeight(subFrame);
+      if (subH < 1) subH = 100; // fallback if window not yet sized
 
+      // X: same as the item's left edge
+      // Y: place submenu's TOP at the item's BOTTOM in screen coords.
+      //    In GNUstep screen coordinates (origin bottom-left), the item's
+      //    bottom is screenOrigin.y, so we place the submenu origin at
+      //    screenOrigin.y - subH to make its top align with item bottom.
+      CGFloat yPos = screenOrigin.y - subH;
+      EAULOG(@"NSMenuView+Eau: Horizontal pos for '%@': itemRect=%@ screenOrigin=%@ subH=%.1f → (%.1f, %.1f)",
+            [aSubmenu title], NSStringFromRect(itemRect), NSStringFromPoint(screenOrigin),
+            subH, screenOrigin.x, yPos);
+      return NSMakePoint(screenOrigin.x, yPos);
+    }
+
+  // Vertical dropdown menu: position child submenu to the right, aligned
+  // vertically with the parent item so the submenu's first item appears
+  // at the same level as the item that triggered it.
+  if (!window || !aSubmenu) return NSZeroPoint;
+
+  // Find the item in THIS menu that has the submenu.
+  NSMenu *myMenu = [menuView menu];
+  NSInteger itemIndex = [myMenu indexOfItemWithSubmenu:aSubmenu];
+  if (itemIndex < 0) return NSZeroPoint;
+
+  // Get the item's rect in window coordinates, then screen.
+  NSRect itemRect = [menuView rectOfItemAtIndex:itemIndex];
+  itemRect = [menuView convertRect:itemRect toView:nil];
+  NSPoint screenOrigin = [window convertBaseToScreen:itemRect.origin];
+  CGFloat itemH = NSHeight(itemRect);
+
+  // Get the submenu's window frame to know its height.
+  NSRect subFrame = [[[aSubmenu menuRepresentation] window] frame];
+  CGFloat subH = NSHeight(subFrame);
+  if (subH < 1) subH = 100;
+
+  // X: right edge of parent window (no horizontal overlap)
+  NSRect parentFrame = [window frame];
+  CGFloat xPos = NSMaxX(parentFrame);
+
+  // Y: align submenu's TOP edge with the parent item's TOP edge.
+  // In GNUstep screen coords (bottom-left origin):
+  //   item top = screenOrigin.y + itemH
+  //   submenu origin (bottom-left) at: itemTop - subH
+  // This makes the submenu's first row of items appear level with
+  // the parent item.
+  CGFloat yPos = screenOrigin.y + itemH - subH;
+
+  EAULOG(@"NSMenuView+Eau: Vertical pos for '%@': parentFrame=%@ itemScreen=%@ itemH=%.1f subH=%.1f → (%.1f, %.1f)",
+        [aSubmenu title], NSStringFromRect(parentFrame), NSStringFromPoint(screenOrigin),
+        itemH, subH, xPos, yPos);
   return NSMakePoint(xPos, yPos);
 }
 
