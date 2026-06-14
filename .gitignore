@@ -12,3 +12,4 @@ Eau.theme/Eau
 Info-gnustep.plist
 Eau.theme/Resources/Info-gnustep.plist
 *.o
+*.bak

@@ -73,8 +73,6 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   BOOL isActive = (inputState == 0);  // 0 = key window (active)
 
   workRect = titleRect;
-  workRect.origin.x -= 0.5;
-  workRect.origin.y -= 0.5;
   [self drawTitleBarBackground:workRect];
 
   // Draw edge buttons
@@ -161,33 +159,38 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
   CGFloat titleBarCornerRadius = METRICS_TITLEBAR_CORNER_RADIUS;
   NSRect titleRect = rect;
-  titleRect.origin.x += 1;
-  titleRect.size.width -= 1;
   NSRectFillUsingOperation(titleRect, NSCompositeClear);
-  NSRect titleinner = NSInsetRect(titleRect, titleBarCornerRadius, titleBarCornerRadius);
-  NSBezierPath* titleBarPath = [NSBezierPath bezierPath];
-  [titleBarPath moveToPoint: NSMakePoint(NSMinX(titleRect), NSMinY(titleRect))];
-  [titleBarPath lineToPoint: NSMakePoint(NSMaxX(titleRect), NSMinY(titleRect))];
-  [titleBarPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMaxX(titleinner), NSMaxY(titleinner))
-                                           radius: titleBarCornerRadius
-                                       startAngle: 0
-                                         endAngle: 90];
-  [titleBarPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMinX(titleinner), NSMaxY(titleinner))
-                                           radius: titleBarCornerRadius
-                                       startAngle: 90
-                                         endAngle: 180];
-  [titleBarPath closePath];
 
-  NSBezierPath* linePath = [NSBezierPath bezierPath];
-  [linePath moveToPoint: NSMakePoint(NSMinX(titleRect), NSMinY(titleRect)+1)];
-  [linePath lineToPoint:  NSMakePoint(NSMaxX(titleRect), NSMinY(titleRect)+1)];
+  // Simple rect-based gradient fill — no path boundaries that could
+  // create aliased edge artifacts.
+  [gradient drawInRect:titleRect angle:-90];
 
+  // Ensure bottom pixel row is solidly filled with the gradient's end
+  // color to prevent any aliasing gap between the gradient and the
+  // URSThemeIntegration bottom edge drawn on top.
+  [[NSColor colorWithCalibratedRed:0.667 green:0.667 blue:0.667 alpha:1] set];
+  NSRectFill(NSMakeRect(NSMinX(titleRect), NSMinY(titleRect),
+                        NSWidth(titleRect), 1));
+
+  // Top rounded corner arcs only — no left/right vertical edges, no bottom lines.
+  // URSThemeIntegration draws the bottom edge and buttons on top.
   [borderColor setStroke];
-  [gradient drawInBezierPath: titleBarPath angle: -90];
-  [titleBarPath setLineWidth: 1];
-  [titleBarPath stroke];
-  [linePath setLineWidth: 1];
-  [linePath stroke];
+  NSBezierPath *arcPath = [NSBezierPath bezierPath];
+  CGFloat r = titleBarCornerRadius;
+  // Top-right corner arc: from (width-r, MaxY) → (width, MaxY-r) sweeps clockwise
+  [arcPath moveToPoint: NSMakePoint(NSMaxX(titleRect), NSMaxY(titleRect) - r)];
+  [arcPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMaxX(titleRect) - r, NSMaxY(titleRect) - r)
+                                      radius: r
+                                  startAngle: 0
+                                    endAngle: 90];
+  // Top-left corner arc: from (MinX+r, MaxY) → (MinX, MaxY-r) sweeps clockwise
+  [arcPath moveToPoint: NSMakePoint(NSMinX(titleRect) + r, NSMaxY(titleRect))];
+  [arcPath appendBezierPathWithArcWithCenter: NSMakePoint(NSMinX(titleRect) + r, NSMaxY(titleRect) - r)
+                                      radius: r
+                                  startAngle: 90
+                                    endAngle: 180];
+  [arcPath setLineWidth: 1];
+  [arcPath stroke];
 }
 
 - (NSColor *) windowFrameBorderColor
