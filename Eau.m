@@ -70,6 +70,13 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
                                      clientName:(bycopy NSString *)clientName;
 @end
 
+@protocol GSGNUstepMenuClient
+- (oneway void)activateMenuItemAtPath:(NSArray *)indexPath
+                            forWindow:(NSNumber *)windowId;
+- (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId;
+- (bycopy id)validateMenuStateForWindow:(NSNumber *)windowId;
+@end
+
 // Dedicated UIBridge proxy object to expose the Eau theme's UIBridgeProtocol methods
 // This is needed because Distributed Objects requires explicit protocol conformance
 @interface EauUIBridgeProxy : NSObject <UIBridgeProtocol>
@@ -402,6 +409,7 @@ static Eau *gSharedEauInstance = nil;
 
   int internalNumber = [window windowNumber];
   uint32_t deviceId = (uint32_t)(uintptr_t)[server windowDevice:internalNumber];
+
   return [NSNumber numberWithUnsignedInt:deviceId];
 }
 
@@ -576,6 +584,15 @@ static Eau *gSharedEauInstance = nil;
                name:@"NSWindowDidBecomeKeyNotification"
              object:nil];
 
+      // After any menu selection finishes, push updated enabled/state values
+      // to Menu.app so items like Copy/Paste reflect the new app state without
+      // requiring the user to open a submenu first.
+      [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(menuDidEndTracking:)
+               name:NSMenuDidEndTrackingNotification
+             object:nil];
+
       EAULOG(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
              menuServerAvailable ? @"available" : @"unavailable");
 
@@ -607,6 +624,16 @@ static Eau *gSharedEauInstance = nil;
         {
           EAULOG(@"Eau: Could not set alternating row color: %@", [exception reason]);
         }
+      // After ANY action is sent through a menu item (including keyboard
+      // shortcuts matched to menu items), push updated enabled/state values
+      // to Menu.app.  This is more efficient than a timer — we only push
+      // when something might have changed.
+      [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(menuDidSendAction:)
+               name:NSMenuDidSendActionNotification
+             object:nil];
+
       EAULOG(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
@@ -721,9 +748,8 @@ static Eau *gSharedEauInstance = nil;
 
 - (void) sendMenu:(NSWindow*)w {
 
-  NSLog(@"Eau: sendMenu");
-
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
+  NSLog(@"Eau: sendMenu");
   NSMenu *m = [menuByWindowId objectForKey:windowId];
 
   @try
@@ -747,6 +773,73 @@ static Eau *gSharedEauInstance = nil;
     }
   
 
+}
+
+#pragma mark - Menu state push
+
+// Push only the enabled/state values for the current key window's menu to
+// Menu.app without a full menu rebuild.  This is called after menu tracking
+// ends so that PostScript/Paste/Select All etc. immediately update the menu
+// bar when the user next looks at it.
+- (void)_pushMenuEnabledStates
+{
+  if (!menuServerProxy) return;
+
+  NSWindow *keyWindow = [NSApp keyWindow];
+  if (!keyWindow) return;
+
+  NSNumber *windowId = [self _windowIdentifierForWindow:keyWindow];
+  if (!windowId) return;
+
+  NSMenu *menu = [menuByWindowId objectForKey:windowId];
+  if (!menu) return;
+
+  @try
+    {
+      // Run NSMenuValidation so items get fresh enabled/state values before we
+      // push them to Menu.app.  Without this, [item isEnabled] returns stale
+      // values set at the time the menu was last serialized.
+      [menu update];
+
+      // Serialize with index paths — includes fresh enabled/state after [menu update]
+      NSDictionary *menuData = [self _serializeMenuWithIndexPaths:menu];
+      if (menuData)
+        {
+          [(id<GSGNUstepMenuServer>)menuServerProxy
+            updateMenuEnabledStatesForWindow:windowId
+                                    menuData:menuData
+                                  clientName:[self _menuClientName]];
+          EAULOG(@"Eau: Pushed enabled states for window %@", windowId);
+        }
+    }
+  @catch (NSException *exception)
+    {
+      EAULOG(@"Eau: Exception pushing enabled states: %@", exception);
+    }
+}
+
+// NSMenuDidSendActionNotification — fired after ANY action is sent through a
+// menu item, including keyboard shortcuts that match menu items.  We push
+// updated enabled/state to Menu.app so the menu bar is always current.
+// This is more efficient than a polling timer — we only push when something
+// might have changed.
+- (void)menuDidSendAction:(NSNotification *)note
+{
+  (void)note;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self _pushMenuEnabledStates];
+  });
+}
+
+// NSMenuDidEndTrackingNotification — fired after any menu tracking session
+// finishes.  Extra safety net for cases where the action is sent outside
+// the menu item path.
+- (void)menuDidEndTracking:(NSNotification *)note
+{
+  (void)note;
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self _pushMenuEnabledStates];
+  });
 }
 
 - (void) setMenu:(NSMenu*)m forWindow:(NSWindow*)w
@@ -1364,6 +1457,123 @@ static Eau *gSharedEauInstance = nil;
 
   EAULOG(@"Eau: On main thread, calling _performMenuActionFromIPC directly");
   [self _performMenuActionFromIPC:payload];
+}
+
+// Recursively collect @[title, enabled, state] triples from a menu tree.
+// Returns a flat NSArray — no nested dictionaries — so it copies over DO
+// in a single batch regardless of bycopy support.
+- (NSArray *)_collectFlatStates:(NSMenu *)menu
+{
+  NSMutableArray *result = [NSMutableArray array];
+  for (NSMenuItem *item in [menu itemArray]) {
+    if ([item isSeparatorItem]) continue;
+    NSString *title = [item title];
+    if (!title || [title length] == 0) continue;
+    [result addObject:@[ title, @([item isEnabled]), @([item state]) ]];
+    if ([item hasSubmenu]) {
+      [result addObjectsFromArray:[self _collectFlatStates:[item submenu]]];
+    }
+  }
+  return result;
+}
+
+- (bycopy id)validateMenuStateForWindow:(NSNumber *)windowId
+{
+  EAULOG(@"Eau: validateMenuStateForWindow called - windowId: %@", windowId);
+
+  if (![NSThread isMainThread])
+    {
+      __block id result = nil;
+      dispatch_sync(dispatch_get_main_queue(), ^{
+        result = [self validateMenuStateForWindow:windowId];
+      });
+      return result;
+    }
+
+  // Find the menu for this window
+  NSMenu *menu = nil;
+  if (windowId)
+    {
+      menu = [menuByWindowId objectForKey:windowId];
+    }
+
+  // Fallback: use key window's menu
+  if (!menu)
+    {
+      NSWindow *keyWindow = [NSApp keyWindow];
+      if (keyWindow)
+        {
+          NSNumber *keyWinId = [self _windowIdentifierForWindow:keyWindow];
+          if (keyWinId)
+            {
+              menu = [menuByWindowId objectForKey:keyWinId];
+            }
+        }
+    }
+
+  // Last resort: first cached menu
+  if (!menu && [menuByWindowId count] > 0)
+    {
+      menu = [[menuByWindowId allValues] firstObject];
+    }
+
+  if (!menu)
+    {
+      EAULOG(@"Eau: validateMenuStateForWindow: no menu found for window %@", windowId);
+      return nil;
+    }
+
+  // Run NSMenuValidation so items get fresh enabled/state values
+  [menu update];
+
+  // Return a flat array of @[title, enabled, state] triples.
+  // No nested dictionaries — copies over DO in one batch instantly.
+  NSArray *flat = [self _collectFlatStates:menu];
+  EAULOG(@"Eau: validateMenuStateForWindow: returning %lu flat items for window %@",
+         (unsigned long)[flat count], windowId);
+  return flat;
+}
+
+- (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId
+{
+  NSLog(@"Eau: requestMenuUpdateForWindow called - windowId: %@", windowId);
+  EAULOG(@"Eau: requestMenuUpdateForWindow called - windowId: %@", windowId);
+
+  if (![NSThread isMainThread])
+    {
+      dispatch_async(dispatch_get_main_queue(), ^{
+        [self requestMenuUpdateForWindow:windowId];
+      });
+      return;
+    }
+
+  // Find the window and push its menu to Menu.app
+  NSWindow *targetWindow = nil;
+  for (NSWindow *w in [NSApp windows])
+    {
+      NSNumber *wid = [self _windowIdentifierForWindow:w];
+      if (wid && [wid isEqualToNumber:windowId])
+        {
+          targetWindow = w;
+          break;
+        }
+    }
+
+  if (!targetWindow)
+    {
+      // Fallback: use key window
+      targetWindow = [NSApp keyWindow];
+    }
+
+  if (targetWindow)
+    {
+      EAULOG(@"Eau: requestMenuUpdateForWindow: pushing menu for window %@", windowId);
+      [self setMenu:[NSApp mainMenu] forWindow:targetWindow];
+    }
+  else
+    {
+      EAULOG(@"Eau: requestMenuUpdateForWindow: no window found for %@, cannot push", windowId);
+    }
 }
 
 - (void)updateAllWindowsWithMenu: (NSMenu*)menu
