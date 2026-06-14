@@ -9,5 +9,8 @@
 @interface NSButtonCell(EauTheme)
 - (NSImage *) EAUimage;
 - (NSImage *) EAUalternateImage;
+- (BOOL) isProcessingReturnButton;
+- (void) setIsProcessingReturnButton:(BOOL)processing;
 - (void) safelyMakeButtonSelectedAndHighlighted;
+- (void) EauPulseTick:(NSTimer *)timer;
 @end

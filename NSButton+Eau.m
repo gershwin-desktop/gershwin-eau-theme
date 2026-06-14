@@ -23,6 +23,7 @@
 #import "NSButton+Eau.h"
 #import "Eau.h"
 #import "Eau+Button.h"
+#import "NSButtonCell+Eau.h"
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 

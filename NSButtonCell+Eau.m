@@ -13,6 +13,7 @@
  */
 
 #import "NSCell+Eau.h"
+#import "NSButtonCell+Eau.h"
 #import "Eau+Button.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
@@ -98,15 +99,6 @@
   [self EAU_drawInRect:rect fromRect:srcRect operation:op fraction:delta respectFlipped:respectFlipped hints:hints];
 }
 
-@end
-
-@interface NSButtonCell(EauTheme)
-- (NSImage *) EAUimage;
-- (NSImage *) EAUalternateImage;
-- (BOOL) isProcessingReturnButton;
-- (void) setIsProcessingReturnButton:(BOOL)processing;
-- (void) safelyMakeButtonSelectedAndHighlighted;
-- (void) EauPulseTick:(NSTimer *)timer;
 @end
 
 @implementation Eau(NSButtonCell)

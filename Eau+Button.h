@@ -11,5 +11,4 @@
 @interface NSButtonCell(EauDefaultButtonAnimation)
   @property (nonatomic, copy) NSNumber* isDefaultButton;
   @property (nonatomic, copy) NSNumber* pulseProgress;
-- (void) EauPulseTick:(NSTimer *)timer;
 @end
