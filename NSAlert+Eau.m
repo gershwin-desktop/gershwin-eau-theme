@@ -158,7 +158,22 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 - (id) init
 {
     NSLog(@"Eau: EauAlertPanel init called");
-    return [self initWithContentRect: NSMakeRect(0, 0, METRICS_WIN_MIN_WIDTH, METRICS_WIN_MIN_HEIGHT)];
+
+    // Compute a centered initial frame so the X window is never created at
+    // (0,0) (bottom-left in OS coordinates).  This prevents a visual flash
+    // where the alert appears near the bottom-left corner before -center
+    // repositions it.  Use visibleFrame to stay within the usable screen area.
+    NSScreen *screen = [NSScreen mainScreen];
+    CGFloat winW = METRICS_WIN_MIN_WIDTH;
+    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat screenW = [screen visibleFrame].size.width;
+    CGFloat screenH = [screen visibleFrame].size.height;
+    CGFloat x = ([screen visibleFrame].origin.x
+                 + (screenW - winW) / 2);
+    CGFloat y = ([screen visibleFrame].origin.y
+                 + (screenH - winH) / 2);
+
+    return [self initWithContentRect: NSMakeRect(x, y, winW, winH)];
 }
 
 // Helper method injected into GSAlertPanel via swizzling
@@ -625,12 +640,24 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
             NSLog(@"Eau: EauAlertPanel sizePanelToFit completed");
         }
     
+        NSLog(@"[EauTrace] EauAlertPanel runModal: BEFORE center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+              NSStringFromRect([self frame]),
+              [self frame].origin.x, [self frame].origin.y,
+              [self frame].size.width, [self frame].size.height);
+    
     // Ensure we're the key window and can handle events
     [self center];
+    
+        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+              NSStringFromRect([self frame]),
+              [self frame].origin.x, [self frame].origin.y,
+              [self frame].size.width, [self frame].size.height);
     
     // Raise the window to ensure it gets input focus
     [NSApp activateIgnoringOtherApps: YES];
     [self orderFrontRegardless];
+        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
+              NSStringFromRect([self frame]));
     [self makeKeyAndOrderFront: self];
     
     // Make sure the default button has focus for Enter key handling
@@ -824,6 +851,16 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         }
     }
     [super sendEvent: event];
+}
+
+/* Ensure the window is centered right before it is ordered front.
+   This prevents a visual flash where the X window would otherwise be
+   created at the OS (0,0) position (near bottom-left of the screen)
+   before being moved to the correct center position by -center. */
+- (void) orderFrontRegardless
+{
+    [self center];
+    [super orderFrontRegardless];
 }
 
 - (BOOL) canBecomeKeyWindow
