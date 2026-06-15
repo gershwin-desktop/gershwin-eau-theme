@@ -216,8 +216,12 @@ static NSMutableSet *returnImageCells = nil;
       if (![self isProcessingReturnButton]) {
         [self setIsProcessingReturnButton:YES];
         [self setIsDefaultButton:@YES];
-        [self setIsProcessingReturnButton:NO];
+        // Keep the guard set ACROSS enablePulsing: it re-drives setKeyEquivalent:,
+        // which routes through GSTheme back into setImage: (the return-arrow image).
+        // Clearing the flag before enablePulsing left that re-entry unguarded and
+        // produced an infinite setImage:/setKeyEquivalent: recursion (stack overflow).
         [self enablePulsing];
+        [self setIsProcessingReturnButton:NO];
       }
       
       return; // Don't set the image
@@ -284,8 +288,12 @@ static NSMutableSet *returnImageCells = nil;
       if (![self isProcessingReturnButton]) {
         [self setIsProcessingReturnButton:YES];
         [self setIsDefaultButton:@YES];
-        [self setIsProcessingReturnButton:NO];
+        // Keep the guard set ACROSS enablePulsing: it re-drives setKeyEquivalent:,
+        // which routes through GSTheme back into setImage: (the return-arrow image).
+        // Clearing the flag before enablePulsing left that re-entry unguarded and
+        // produced an infinite setImage:/setKeyEquivalent: recursion (stack overflow).
         [self enablePulsing];
+        [self setIsProcessingReturnButton:NO];
       }
       
       return; // Don't set the image
