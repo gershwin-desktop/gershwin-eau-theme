@@ -65,18 +65,18 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (id) initWithContentRect: (NSRect)rect
 {
-    NSLog(@"Eau: EauAlertPanel initWithContentRect called");
+    EAULOG(@"Eau: EauAlertPanel initWithContentRect called");
     self = [super initWithContentRect: rect
                             styleMask: NSTitledWindowMask
                               backing: NSBackingStoreRetained
                                 defer: YES];
     if (self == nil)
     {
-        NSLog(@"Eau: EauAlertPanel super init returned nil");
+        EAULOG(@"Eau: EauAlertPanel super init returned nil");
         return nil;
     }
     
-    NSLog(@"Eau: EauAlertPanel setting properties");
+    EAULOG(@"Eau: EauAlertPanel setting properties");
     [self setTitle: @" "];
     [self setLevel: NSModalPanelWindowLevel];
     [self setHidesOnDeactivate: NO];
@@ -130,14 +130,14 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     // Buttons
     defButton = [self _makeButtonWithRect: NSZeroRect tag: NSAlertDefaultReturn];
     [defButton setKeyEquivalent: @"\r"];
-    // NSLog(@"Eau: defButton key equivalent set to: '%@' - FORCED LOG", [defButton keyEquivalent]);
+    // EAULOG(@"Eau: defButton key equivalent set to: '%@' - FORCED LOG", [defButton keyEquivalent]);
     [defButton setHighlightsBy: NSPushInCellMask | NSChangeGrayCellMask | NSContentsCellMask];
     @try {
         [defButton setImagePosition: NSImageRight];
         [defButton setImage: [NSImage imageNamed: @"common_ret"]];
         [defButton setAlternateImage: [NSImage imageNamed: @"common_retH"]];
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception loading button images: %@", e);
+        EAULOG(@"Eau: Exception loading button images: %@", e);
     }
     [defButton setFont: titleFont];  // Mark as default with bold font
     
@@ -151,13 +151,13 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     isGreen = YES;
     _isStoppingModal = NO;
     
-    NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
+    EAULOG(@"Eau: EauAlertPanel initWithContentRect completed successfully");
     return self;
 }
 
 - (id) init
 {
-    NSLog(@"Eau: EauAlertPanel init called");
+    EAULOG(@"Eau: EauAlertPanel init called");
 
     // Compute a centered initial frame so the X window is never created at
     // (0,0) (bottom-left in OS coordinates).  This prevents a visual flash
@@ -279,7 +279,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (void) dealloc
 {
-    NSLog(@"Eau: EauAlertPanel dealloc called for panel: %p", self);
+    EAULOG(@"Eau: EauAlertPanel dealloc called for panel: %p", self);
     
     @try {
         // Stop any pending animations or callbacks
@@ -297,7 +297,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     messageField = nil;
     scroll = nil;
     
-    NSLog(@"Eau: EauAlertPanel dealloc cleaning up completed");
+    EAULOG(@"Eau: EauAlertPanel dealloc cleaning up completed");
     // In ARC, [super dealloc] is NOT called - it happens automatically
 }
 
@@ -317,7 +317,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (void) sizePanelToFit
 {
-    NSLog(@"Eau: sizePanelToFit called");
+    EAULOG(@"Eau: sizePanelToFit called");
     @try {
     NSRect bounds;
     NSSize ssize;
@@ -540,45 +540,45 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     }
     
     isGreen = NO;
-    NSLog(@"Eau: sizePanelToFit displaying content");
+    EAULOG(@"Eau: sizePanelToFit displaying content");
     [content display];
-    NSLog(@"Eau: sizePanelToFit completed successfully");
+    EAULOG(@"Eau: sizePanelToFit completed successfully");
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: EXCEPTION in sizePanelToFit: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: EXCEPTION in sizePanelToFit: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
     }
 }
 
 - (void) buttonAction: (id)sender
 {
-    NSLog(@"Eau: buttonAction called, sender: %@, _isStoppingModal: %d", sender, _isStoppingModal);
+    EAULOG(@"Eau: buttonAction called, sender: %@, _isStoppingModal: %d", sender, _isStoppingModal);
     if (sender == nil)
     {
-        NSLog(@"Eau: WARNING - buttonAction called with nil sender");
+        EAULOG(@"Eau: WARNING - buttonAction called with nil sender");
         return;
     }
     
     // Prevent re-entrant calls while stopping modal
     if (_isStoppingModal)
     {
-        NSLog(@"Eau: WARNING - buttonAction called while already stopping modal, ignoring");
+        EAULOG(@"Eau: WARNING - buttonAction called while already stopping modal, ignoring");
         return;
     }
     
     NSInteger tag = [sender tag];
-    NSLog(@"Eau: buttonAction tag: %ld", tag);
+    EAULOG(@"Eau: buttonAction tag: %ld", tag);
     if (![self isActivePanel])
     {
-        NSLog(@"Eau: WARNING - buttonAction called when not in modal loop");
+        EAULOG(@"Eau: WARNING - buttonAction called when not in modal loop");
         return;
     }
     
     result = tag;
     _isStoppingModal = YES;
     
-    NSLog(@"Eau: buttonAction will stop modal with result: %ld", result);
+    EAULOG(@"Eau: buttonAction will stop modal with result: %ld", result);
     
     // Defer stopping the modal to the next run loop iteration.
     // We use performSelector with specific modes because dispatch_async to the 
@@ -588,17 +588,17 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
                afterDelay: 0.0
                   inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
     
-    NSLog(@"Eau: buttonAction scheduled deferred modal stop");
+    EAULOG(@"Eau: buttonAction scheduled deferred modal stop");
 }
 
 - (void) _stopModalDeferred
 {
     // Ensure we check isActivePanel to avoid stopping a context we don't own anymore
     if ([self isActivePanel] || [NSApp modalWindow] == self) {
-        NSLog(@"Eau: _stopModalDeferred executing for result: %ld", result);
+        EAULOG(@"Eau: _stopModalDeferred executing for result: %ld", result);
         [NSApp stopModalWithCode: result];
     } else {
-        NSLog(@"Eau: _stopModalDeferred skipped - panel no longer active");
+        EAULOG(@"Eau: _stopModalDeferred skipped - panel no longer active");
     }
     _isStoppingModal = NO;
 }
@@ -620,27 +620,27 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (NSInteger) runModal
 {
-    NSLog(@"Eau: EauAlertPanel runModal called");
+    EAULOG(@"Eau: EauAlertPanel runModal called");
     
     // Beep when alert is displayed (diagnostics)
     NSApplication *app = [NSApplication sharedApplication];
-    NSLog(@"Eau: EauAlertPanel about to beep - NSApp class: %@ respondsToSelector: %d",
+    EAULOG(@"Eau: EauAlertPanel about to beep - NSApp class: %@ respondsToSelector: %d",
           NSStringFromClass([app class]), (int)[app respondsToSelector:@selector(beep)]);
     if ([app respondsToSelector:@selector(beep)]) {
         [app performSelector:@selector(beep)];
     } else {
-        NSLog(@"Eau: NSApp does not respond to -beep");
+        EAULOG(@"Eau: NSApp does not respond to -beep");
     }
     
     @try {
         if (isGreen)
         {
-            NSLog(@"Eau: EauAlertPanel calling sizePanelToFit");
+            EAULOG(@"Eau: EauAlertPanel calling sizePanelToFit");
             [self sizePanelToFit];
-            NSLog(@"Eau: EauAlertPanel sizePanelToFit completed");
+            EAULOG(@"Eau: EauAlertPanel sizePanelToFit completed");
         }
     
-        NSLog(@"[EauTrace] EauAlertPanel runModal: BEFORE center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+        EAULOG(@"[EauTrace] EauAlertPanel runModal: BEFORE center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
               NSStringFromRect([self frame]),
               [self frame].origin.x, [self frame].origin.y,
               [self frame].size.width, [self frame].size.height);
@@ -648,7 +648,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     // Ensure we're the key window and can handle events
     [self center];
     
-        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+        EAULOG(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
               NSStringFromRect([self frame]),
               [self frame].origin.x, [self frame].origin.y,
               [self frame].size.width, [self frame].size.height);
@@ -656,7 +656,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     // Raise the window to ensure it gets input focus
     [NSApp activateIgnoringOtherApps: YES];
     [self orderFrontRegardless];
-        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
+        EAULOG(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
               NSStringFromRect([self frame]));
     [self makeKeyAndOrderFront: self];
     
@@ -669,17 +669,17 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     EAULOG(@"Eau: runModal - window is key: %d", [self isKeyWindow]);
     EAULOG(@"Eau: runModal - first responder: %@", [self firstResponder]);
     
-    NSLog(@"Eau: About to call runModalForWindow");
+    EAULOG(@"Eau: About to call runModalForWindow");
     result = [NSApp runModalForWindow: self];
-    NSLog(@"Eau: runModalForWindow returned with result: %ld", result);
+    EAULOG(@"Eau: runModalForWindow returned with result: %ld", result);
     [self orderOut: self];
-    NSLog(@"Eau: EauAlertPanel runModal completed");
+    EAULOG(@"Eau: EauAlertPanel runModal completed");
     return result;
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: EXCEPTION in EauAlertPanel runModal: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: EXCEPTION in EauAlertPanel runModal: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
         return NSAlertErrorReturn;
     }
 }
@@ -703,7 +703,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     // Handle Spacebar for default button - CRITICAL
     if (keyChar == ' ' && useControl(defButton))
     {
-        NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
+        EAULOG(@"Eau: keyDown Spacebar pressed, clicking default button");
         [self buttonAction: defButton];
         return;
     }
@@ -763,7 +763,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 {
     NSString *chars = [event characters];
     NSUInteger modifiers = [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
-    NSLog(@"Eau: performKeyEquivalent received: '%@', modifiers: %lu, isActivePanel: %d", chars, (unsigned long)modifiers, [self isActivePanel]);
+    EAULOG(@"Eau: performKeyEquivalent received: '%@', modifiers: %lu, isActivePanel: %d", chars, (unsigned long)modifiers, [self isActivePanel]);
     
     // During modal operation, intercept ALL keyboard events to prevent app shortcuts
     if ([self isActivePanel])
@@ -771,7 +771,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         // Handle Return/Enter for default button
         if ([chars isEqualToString: @"\r"] && useControl(defButton))
         {
-            NSLog(@"Eau: performKeyEquivalent Enter pressed, clicking default button");
+            EAULOG(@"Eau: performKeyEquivalent Enter pressed, clicking default button");
             [self buttonAction: defButton];
             return YES;
         }
@@ -779,7 +779,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         // Handle Spacebar for default button
         if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
         {
-            NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
+            EAULOG(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
             [self buttonAction: defButton];
             return YES;
         }
@@ -787,7 +787,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
-            NSLog(@"Eau: performKeyEquivalent Escape pressed, clicking cancel button");
+            EAULOG(@"Eau: performKeyEquivalent Escape pressed, clicking cancel button");
             [self buttonAction: altButton];
             return YES;
         }
@@ -795,7 +795,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         // CRITICAL: Block ALL other keyboard events while modal is active
         // This prevents ANY app-level shortcuts from interfering with the dialog
         // Return YES to consume the event and prevent it from reaching the application
-        NSLog(@"Eau: Blocking event during modal: '%@' with modifiers: %lu", chars, (unsigned long)modifiers);
+        EAULOG(@"Eau: Blocking event during modal: '%@' with modifiers: %lu", chars, (unsigned long)modifiers);
         return YES;  // Consume ALL events to prevent app shortcuts
     }
     
@@ -807,7 +807,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     if ([event type] == NSKeyDown)
     {
         NSString *chars = [event characters];
-        NSLog(@"Eau: sendEvent received keyDown: '%@', isActivePanel: %d", chars, [self isActivePanel]);
+        EAULOG(@"Eau: sendEvent received keyDown: '%@', isActivePanel: %d", chars, [self isActivePanel]);
         
         // CRITICAL: During modal operation, try performKeyEquivalent FIRST
         // This ensures keyboard events are handled by the dialog, not the app
@@ -815,7 +815,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         {
             if ([self performKeyEquivalent: event])
             {
-                NSLog(@"Eau: Event consumed by performKeyEquivalent, not propagating to app");
+                EAULOG(@"Eau: Event consumed by performKeyEquivalent, not propagating to app");
                 return;  // Event was handled, DO NOT call super or keyDown
             }
         }
@@ -828,7 +828,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
             // Handle Return/Enter for default button
             if (keyChar == '\r' && useControl(defButton))
             {
-                NSLog(@"Eau: sendEvent Enter pressed, clicking default button");
+                EAULOG(@"Eau: sendEvent Enter pressed, clicking default button");
                 [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
@@ -836,7 +836,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
             // Handle Spacebar for default button
             if (keyChar == ' ' && useControl(defButton))
             {
-                NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
+                EAULOG(@"Eau: sendEvent Spacebar pressed, clicking default button");
                 [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
@@ -844,7 +844,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
             // Handle Escape for cancel button
             if (keyChar == 0x1B && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
             {
-                NSLog(@"Eau: sendEvent Escape pressed, clicking cancel button");
+                EAULOG(@"Eau: sendEvent Escape pressed, clicking cancel button");
                 [self buttonAction: altButton];
                 return;  // Don't call super - we handled it
             }
@@ -878,30 +878,30 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
                title: (NSString *)title
              message: (NSString *)message
 {
-    NSLog(@"Eau: setTitleBar called with title='%@', message='%@'", title, message);
+    EAULOG(@"Eau: setTitleBar called with title='%@', message='%@'", title, message);
     @try {
     NSView *content = [self contentView];
     if (content == nil)
     {
-        NSLog(@"Eau: WARNING - contentView is nil");
+        EAULOG(@"Eau: WARNING - contentView is nil");
         return;
     }
     
-    NSLog(@"Eau: Setting window title");
+    EAULOG(@"Eau: Setting window title");
     if (titleBar != nil)
         [self setTitle: titleBar];
     
-    NSLog(@"Eau: Setting icon");
+    EAULOG(@"Eau: Setting icon");
     if (icon != nil)
         [icoButton setImage: icon];
     
     if (title == nil)
         title = titleBar;
     
-    NSLog(@"Eau: Setting title field");
+    EAULOG(@"Eau: Setting title field");
     setControl(content, titleField, title);
     
-    NSLog(@"Eau: Handling scroll view");
+    EAULOG(@"Eau: Handling scroll view");
     if (useControl(scroll))
     {
         [scroll setDocumentView: nil];
@@ -909,18 +909,18 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         [messageField removeFromSuperview];
     }
     
-    NSLog(@"Eau: Setting message field");
+    EAULOG(@"Eau: Setting message field");
     setControl(content, messageField, message);
     
     // Always use left alignment for consistent appearance
     [messageField setAlignment: NSLeftTextAlignment];
     
-    NSLog(@"Eau: setTitleBar completed successfully");
+    EAULOG(@"Eau: setTitleBar completed successfully");
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: EXCEPTION in setTitleBar: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: EXCEPTION in setTitleBar: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
     }
 }
 
@@ -1006,24 +1006,24 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (void) setButtons: (NSArray *)buttons
 {
-    NSLog(@"Eau: setButtons called with %lu buttons", (unsigned long)[buttons count]);
+    EAULOG(@"Eau: setButtons called with %lu buttons", (unsigned long)[buttons count]);
     @try {
     NSView *content = [self contentView];
     if (content == nil)
     {
-        NSLog(@"Eau: WARNING - contentView is nil in setButtons");
+        EAULOG(@"Eau: WARNING - contentView is nil in setButtons");
         return;
     }
     NSUInteger count = [buttons count];
     
-    NSLog(@"Eau: Setting button 0");
+    EAULOG(@"Eau: Setting button 0");
     setButton(content, defButton, count > 0 ? [buttons objectAtIndex: 0] : nil);
-    NSLog(@"Eau: Setting button 1");
+    EAULOG(@"Eau: Setting button 1");
     setButton(content, altButton, count > 1 ? [buttons objectAtIndex: 1] : nil);
-    NSLog(@"Eau: Setting button 2");
+    EAULOG(@"Eau: Setting button 2");
     setButton(content, othButton, count > 2 ? [buttons objectAtIndex: 2] : nil);
     
-    NSLog(@"Eau: Setting up first responder");
+    EAULOG(@"Eau: Setting up first responder");
     if (useControl(defButton))
     {
         [self makeFirstResponder: defButton];
@@ -1033,7 +1033,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     else
         [self makeFirstResponder: self];
     
-    NSLog(@"Eau: Setting up key view chain");
+    EAULOG(@"Eau: Setting up key view chain");
     if (count > 2)
     {
         [defButton setNextKeyView: othButton];
@@ -1051,17 +1051,17 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         [defButton setNextKeyView: nil];
     }
     
-    NSLog(@"Eau: Calling sizePanelToFit from setButtons");
+    EAULOG(@"Eau: Calling sizePanelToFit from setButtons");
     [self sizePanelToFit];
-    NSLog(@"Eau: sizePanelToFit completed from setButtons");
+    EAULOG(@"Eau: sizePanelToFit completed from setButtons");
     isGreen = YES;
     result = NSAlertErrorReturn;
-    NSLog(@"Eau: setButtons completed successfully");
+    EAULOG(@"Eau: setButtons completed successfully");
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: EXCEPTION in setButtons: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: EXCEPTION in setButtons: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
     }
 }
 
@@ -1183,20 +1183,20 @@ static void setKeyEquivalent(NSButton *button)
     didSwizzle = YES;
     
     EAULOG(@"Eau: Installing NSAlert customizations");
-    // NSLog(@"Eau: Installing NSAlert customizations - FORCED LOG");
+    // EAULOG(@"Eau: Installing NSAlert customizations - FORCED LOG");
     
     // Swizzle NSAlert's _setupPanel to use EauAlertPanel
     Class alertClass = NSClassFromString(@"NSAlert");
     SEL origSetupSel = @selector(_setupPanel);
     SEL swizzledSetupSel = @selector(eau_setupPanel);
     
-    // NSLog(@"Eau: Found NSAlert class: %@", alertClass);
+    // EAULOG(@"Eau: Found NSAlert class: %@", alertClass);
     
     Method origSetupMethod = class_getInstanceMethod(alertClass, origSetupSel);
     Method swizzledSetupMethod = class_getInstanceMethod(alertClass, swizzledSetupSel);
     
-    // NSLog(@"Eau: Original _setupPanel method: %p", origSetupMethod);
-    // NSLog(@"Eau: Swizzled eau_setupPanel method: %p", swizzledSetupMethod);
+    // EAULOG(@"Eau: Original _setupPanel method: %p", origSetupMethod);
+    // EAULOG(@"Eau: Swizzled eau_setupPanel method: %p", swizzledSetupMethod);
     
     if (origSetupMethod && swizzledSetupMethod)
     {
@@ -1216,12 +1216,12 @@ static void setKeyEquivalent(NSButton *button)
             method_exchangeImplementations(origSetupMethod, swizzledSetupMethod);
         }
         EAULOG(@"Eau: NSAlert _setupPanel swizzled successfully");
-        // NSLog(@"Eau: NSAlert _setupPanel swizzled successfully - FORCED LOG");
+        // EAULOG(@"Eau: NSAlert _setupPanel swizzled successfully - FORCED LOG");
     }
     else
     {
         EAULOG(@"Eau: Warning - could not find _setupPanel method to swizzle");
-        // NSLog(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
+        // EAULOG(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
     }
     
     // Swizzle NSAlert's runModal to ensure proper activation
@@ -1293,7 +1293,7 @@ static void setKeyEquivalent(NSButton *button)
 // - Avoids KVC retain/release side effects on _window
 - (NSInteger) eau_runModal
 {
-    NSLog(@"Eau: NSAlert eau_runModal called");
+    EAULOG(@"Eau: NSAlert eau_runModal called");
     @try {
 
     if (![NSThread isMainThread])
@@ -1311,12 +1311,12 @@ static void setKeyEquivalent(NSButton *button)
     
     // Beep when alert is displayed (diagnostics)
     NSApplication *eauApp = [NSApplication sharedApplication];
-    NSLog(@"Eau: NSAlert about to beep - NSApp class: %@ respondsToSelector: %d",
+    EAULOG(@"Eau: NSAlert about to beep - NSApp class: %@ respondsToSelector: %d",
           NSStringFromClass([eauApp class]), (int)[eauApp respondsToSelector:@selector(beep)]);
     if ([eauApp respondsToSelector:@selector(beep)]) {
         [eauApp performSelector:@selector(beep)];
     } else {
-        NSLog(@"Eau: NSApp does not respond to -beep");
+        EAULOG(@"Eau: NSApp does not respond to -beep");
     }
     
     // Get the _window ivar (NSAlert owns the panel instance)
@@ -1420,13 +1420,13 @@ static void setKeyEquivalent(NSButton *button)
     }
     
     // Fallback: if window creation failed, return failure
-    NSLog(@"Eau: NSAlert eau_runModal - window was nil, returning NSAlertFirstButtonReturn");
+    EAULOG(@"Eau: NSAlert eau_runModal - window was nil, returning NSAlertFirstButtonReturn");
     return NSAlertFirstButtonReturn;
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: FATAL EXCEPTION in eau_runModal: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: FATAL EXCEPTION in eau_runModal: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
         return NSAlertErrorReturn;
     }
 }
@@ -1434,14 +1434,14 @@ static void setKeyEquivalent(NSButton *button)
 // Cleanup helper to clear NSAlert's window after modal teardown.
 - (void)eau_cleanupPanel
 {
-    NSLog(@"Eau: eau_cleanupPanel called for NSAlert %p", self);
+    EAULOG(@"Eau: eau_cleanupPanel called for NSAlert %p", self);
     Ivar windowIvar = class_getInstanceVariable([self class], "_window");
     if (windowIvar)
     {
         // Check current value
         id currentWindow = object_getIvar(self, windowIvar);
         if (currentWindow) {
-            NSLog(@"Eau: Cleaning up window %p before release", currentWindow);
+            EAULOG(@"Eau: Cleaning up window %p before release", currentWindow);
             @try {
                 // Ensure pulse animation and delegate are cleared while window is still alive
                 if ([currentWindow respondsToSelector: @selector(setDefaultButtonCell:)]) {
@@ -1451,17 +1451,17 @@ static void setKeyEquivalent(NSButton *button)
                     [currentWindow setDelegate: nil];
                 }
             } @catch (NSException *e) {
-                NSLog(@"Eau: Exception during window cleanup: %@", e);
+                EAULOG(@"Eau: Exception during window cleanup: %@", e);
             }
             
-            NSLog(@"Eau: Clearing _window ivar and associated object on NSAlert");
+            EAULOG(@"Eau: Clearing _window ivar and associated object on NSAlert");
             object_setIvar(self, windowIvar, nil);
             objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
     }
     else
     {
-        NSLog(@"Eau: _window ivar not found during cleanup, trying KVC");
+        EAULOG(@"Eau: _window ivar not found during cleanup, trying KVC");
         @try {
             [self setValue: nil forKey: @"_window"];
             objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
@@ -1476,23 +1476,23 @@ static void setKeyEquivalent(NSButton *button)
 // Builds a themed EauAlertPanel and assigns it to NSAlert's _window ivar.
 - (void) eau_setupPanel
 {
-    NSLog(@"Eau: eau_setupPanel called for NSAlert");
+    EAULOG(@"Eau: eau_setupPanel called for NSAlert");
     
     EauAlertPanel *panel;
     NSString *title;
     
     @try {
-    NSLog(@"Eau: Creating EauAlertPanel");
+    EAULOG(@"Eau: Creating EauAlertPanel");
     panel = [[EauAlertPanel alloc] init];
     if (panel == nil)
     {
-        NSLog(@"Eau: CRITICAL - EauAlertPanel init returned nil");
+        EAULOG(@"Eau: CRITICAL - EauAlertPanel init returned nil");
         return;
     }
-    NSLog(@"Eau: EauAlertPanel created successfully: %@", panel);
+    EAULOG(@"Eau: EauAlertPanel created successfully: %@", panel);
     
     // Access NSAlert's ivars through KVC or accessor methods
-    NSLog(@"Eau: Accessing NSAlert properties");
+    EAULOG(@"Eau: Accessing NSAlert properties");
     NSAlertStyle style = NSWarningAlertStyle;
     NSString *messageText = nil;
     NSString *informativeText = nil;
@@ -1501,43 +1501,43 @@ static void setKeyEquivalent(NSButton *button)
     
     @try {
         style = [self alertStyle];
-        NSLog(@"Eau: alertStyle: %ld", (long)style);
+        EAULOG(@"Eau: alertStyle: %ld", (long)style);
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception getting alertStyle: %@", e);
+        EAULOG(@"Eau: Exception getting alertStyle: %@", e);
     }
     
     @try {
         messageText = [self messageText];
-        NSLog(@"Eau: messageText: %@", messageText);
+        EAULOG(@"Eau: messageText: %@", messageText);
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception getting messageText: %@", e);
+        EAULOG(@"Eau: Exception getting messageText: %@", e);
     }
     
     @try {
         informativeText = [self informativeText];
-        NSLog(@"Eau: informativeText: %@", informativeText);
+        EAULOG(@"Eau: informativeText: %@", informativeText);
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception getting informativeText: %@", e);
+        EAULOG(@"Eau: Exception getting informativeText: %@", e);
     }
     
     @try {
         icon = [self icon];
-        NSLog(@"Eau: icon: %@", icon);
+        EAULOG(@"Eau: icon: %@", icon);
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception getting icon: %@", e);
+        EAULOG(@"Eau: Exception getting icon: %@", e);
     }
     
     @try {
         buttons = [self buttons];
-        NSLog(@"Eau: buttons count: %lu", (unsigned long)[buttons count]);
+        EAULOG(@"Eau: buttons count: %lu", (unsigned long)[buttons count]);
     } @catch (NSException *e) {
-        NSLog(@"Eau: Exception getting buttons: %@", e);
+        EAULOG(@"Eau: Exception getting buttons: %@", e);
     }
     
     // Set default icons based on alert style if no custom icon is provided
     if (icon == nil)
     {
-        NSLog(@"Eau: No icon provided, using default for style %ld", (long)style);
+        EAULOG(@"Eau: No icon provided, using default for style %ld", (long)style);
         @try {
             switch (style)
             {
@@ -1553,9 +1553,9 @@ static void setKeyEquivalent(NSButton *button)
                     break;
             }
             if (icon != nil)
-                NSLog(@"Eau: Loaded default icon: %@", icon);
+                EAULOG(@"Eau: Loaded default icon: %@", icon);
         } @catch (NSException *e) {
-            NSLog(@"Eau: Exception loading default icon: %@", e);
+            EAULOG(@"Eau: Exception loading default icon: %@", e);
         }
     }
     
@@ -1573,60 +1573,60 @@ static void setKeyEquivalent(NSButton *button)
             break;
     }
     
-    NSLog(@"Eau: Setting up panel with title and buttons");
+    EAULOG(@"Eau: Setting up panel with title and buttons");
     @try {
         [panel setTitleBar: title
                       icon: icon
                      title: messageText != nil ? messageText : @"Alert"
                    message: informativeText != nil ? informativeText : @""];
-        NSLog(@"Eau: setTitleBar completed");
+        EAULOG(@"Eau: setTitleBar completed");
     } @catch (NSException *e) {
-        NSLog(@"Eau: EXCEPTION in setTitleBar: %@", e);
+        EAULOG(@"Eau: EXCEPTION in setTitleBar: %@", e);
     }
     
     @try {
         if ([buttons count] == 0)
         {
-            NSLog(@"Eau: No buttons, adding default OK button");
+            EAULOG(@"Eau: No buttons, adding default OK button");
             [self addButtonWithTitle: @"OK"];
             buttons = [self buttons];
         }
         
-        NSLog(@"Eau: Setting %lu buttons on panel", (unsigned long)[buttons count]);
+        EAULOG(@"Eau: Setting %lu buttons on panel", (unsigned long)[buttons count]);
         [panel setButtons: buttons];
-        NSLog(@"Eau: setButtons completed");
+        EAULOG(@"Eau: setButtons completed");
     } @catch (NSException *e) {
-        NSLog(@"Eau: EXCEPTION in setButtons: %@", e);
+        EAULOG(@"Eau: EXCEPTION in setButtons: %@", e);
     }
     
     // Set the _window ivar directly when possible to avoid KVC retain/release side effects
-    NSLog(@"Eau: Setting _window ivar on NSAlert");
+    EAULOG(@"Eau: Setting _window ivar on NSAlert");
     {
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
             object_setIvar(self, windowIvar, panel);
             objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-            NSLog(@"Eau: Successfully set _window via ivar");
+            EAULOG(@"Eau: Successfully set _window via ivar");
         }
         else
         {
             @try {
                 [self setValue: panel forKey: @"_window"];
-                NSLog(@"Eau: Successfully set _window via KVC");
+                EAULOG(@"Eau: Successfully set _window via KVC");
             }
             @catch (NSException *exception) {
-                NSLog(@"Eau: CRITICAL - could not set _window ivar on NSAlert: %@", exception);
+                EAULOG(@"Eau: CRITICAL - could not set _window ivar on NSAlert: %@", exception);
             }
         }
     }
     
-    NSLog(@"Eau: eau_setupPanel completed successfully");
+    EAULOG(@"Eau: eau_setupPanel completed successfully");
     }
     @catch (NSException *exception) {
-        NSLog(@"Eau: FATAL EXCEPTION in eau_setupPanel: %@", exception);
-        NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
+        EAULOG(@"Eau: FATAL EXCEPTION in eau_setupPanel: %@", exception);
+        EAULOG(@"Eau: Exception reason: %@", [exception reason]);
+        EAULOG(@"Eau: Exception stack: %@", [exception callStackSymbols]);
     }
 }
 

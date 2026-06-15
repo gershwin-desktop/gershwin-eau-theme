@@ -138,7 +138,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
     // Enable multi-threading on all child connections immediately
     [newConnection enableMultipleThreads];
     [newConnection setIndependentConversationQueueing:YES];
-    NSLog(@"Eau: [Delegate] Enabled multi-threading on new connection: %@ (parent: %@)", newConnection, parentConnection);
+    EAULOG(@"Eau: [Delegate] Enabled multi-threading on new connection: %@ (parent: %@)", newConnection, parentConnection);
     return newConnection;
 }
 
@@ -147,7 +147,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
     // Enable multi-threading before the connection becomes active
     [newConnection enableMultipleThreads];
     [newConnection setIndependentConversationQueueing:YES];
-    NSLog(@"Eau: [Delegate] shouldMakeNewConnection - enabled multi-threading on: %@", newConnection);
+    EAULOG(@"Eau: [Delegate] shouldMakeNewConnection - enabled multi-threading on: %@", newConnection);
     return YES;
 }
 @end
@@ -165,9 +165,9 @@ static EauUIBridgeProxy *gUIBridgeProxy = nil;
   gForceExternalMenuByEnv = EauEnvironmentContainsAppMenuToken();
   if (gForceExternalMenuByEnv)
     {
-      NSLog(@"Eau: appmenu token detected in environment, forcing external menu mode");
+      EAULOG(@"Eau: appmenu token detected in environment, forcing external menu mode");
     }
-  NSLog(@"Eau: +load called");
+  EAULOG(@"Eau: +load called");
   // Schedule UIBridge service registration after a delay to ensure run loop is active
   // Using dispatch_after ensures this runs even if performSelector isn't processed
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -181,7 +181,7 @@ static EauUIBridgeProxy *gUIBridgeProxy = nil;
   // Enable multi-threading on all new connections to handle cross-process requests
   [conn enableMultipleThreads];
   [conn setIndependentConversationQueueing:YES];
-  NSLog(@"Eau: Enabled multi-threading on new connection: %@", conn);
+  EAULOG(@"Eau: Enabled multi-threading on new connection: %@", conn);
 }
 
 // Static variable to hold the shared Eau instance for UIBridge
@@ -196,36 +196,36 @@ static Eau *gSharedEauInstance = nil;
     if ([themeObj isKindOfClass:[Eau class]]) {
       gSharedEauInstance = (Eau *)themeObj;
     } else {
-      NSLog(@"Eau: _registerUIBridgeService called but no Eau instance available yet (got %@)", [themeObj class]);
+      EAULOG(@"Eau: _registerUIBridgeService called but no Eau instance available yet (got %@)", [themeObj class]);
       return;
     }
   }
   
   // Already registered?
   if (gUIBridgeThemeConnection) {
-    NSLog(@"Eau: UIBridge service already registered, skipping");
+    EAULOG(@"Eau: UIBridge service already registered, skipping");
     return;
   }
   
   pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
   // Register per-PID service so each app has its own unique UIBridge service
   NSString *name = [NSString stringWithFormat:@"org.gershwin.Gershwin.Theme.UIBridge.%d", pid];
-  NSLog(@"Eau: Registering per-PID UIBridge theme service: %@", name);
+  EAULOG(@"Eau: Registering per-PID UIBridge theme service: %@", name);
   
   @try {
-    NSLog(@"Eau: Theme object class: %@, responds to listMenus: %d", 
+    EAULOG(@"Eau: Theme object class: %@, responds to listMenus: %d", 
           [gSharedEauInstance class], 
           (int)[gSharedEauInstance respondsToSelector:@selector(listMenus)]);
     
     // Create a proxy object that explicitly implements UIBridgeProtocol
     gUIBridgeProxy = [[EauUIBridgeProxy alloc] initWithTheme:gSharedEauInstance];
-    NSLog(@"Eau: Created UIBridge proxy: %@", gUIBridgeProxy);
+    EAULOG(@"Eau: Created UIBridge proxy: %@", gUIBridgeProxy);
     
     // Create connection delegate to handle child connections
     gUIBridgeConnectionDelegate = [[EauConnectionDelegate alloc] init];
     
     gUIBridgeThemeConnection = [[NSConnection alloc] init];
-    NSLog(@"Eau: Connection created - receivePort: %@, sendPort: %@", 
+    EAULOG(@"Eau: Connection created - receivePort: %@, sendPort: %@", 
           [gUIBridgeThemeConnection receivePort], 
           [gUIBridgeThemeConnection sendPort]);
     [gUIBridgeThemeConnection setRootObject:gUIBridgeProxy];
@@ -256,18 +256,18 @@ static Eau *gSharedEauInstance = nil;
       [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSRunLoopCommonModes];
     }
     
-    NSLog(@"Eau: Ports added to main runloop");
+    EAULOG(@"Eau: Ports added to main runloop");
     
     BOOL ok = [gUIBridgeThemeConnection registerName:name];
-    NSLog(@"Eau: registerName returned: %d", ok);
+    EAULOG(@"Eau: registerName returned: %d", ok);
     if (ok) {
-      NSLog(@"Eau: Successfully registered per-PID UIBridge theme service: %@", name);
+      EAULOG(@"Eau: Successfully registered per-PID UIBridge theme service: %@", name);
     } else {
-      NSLog(@"Eau: Failed to register per-PID UIBridge service as %@", name);
+      EAULOG(@"Eau: Failed to register per-PID UIBridge service as %@", name);
       gUIBridgeThemeConnection = nil;
     }
   } @catch (NSException *e) {
-    NSLog(@"Eau: Exception during UIBridge registration: %@", e);
+    EAULOG(@"Eau: Exception during UIBridge registration: %@", e);
     gUIBridgeThemeConnection = nil;
   }
 }
@@ -548,7 +548,7 @@ static Eau *gSharedEauInstance = nil;
       [self _ensureMenuServerConnection];
       
       // Register UIBridge service so server can query menus from theme
-      NSLog(@"Eau: Registering UIBridge service from initWithBundle");
+      EAULOG(@"Eau: Registering UIBridge service from initWithBundle");
       [[self class] _registerUIBridgeService:nil];
 
       // Observe menu changes so Menu.app can stay in sync
@@ -639,7 +639,7 @@ static Eau *gSharedEauInstance = nil;
 
 - (void)_menuClientConnectionDidDie:(NSNotification *)notification
 {
-  NSLog(@"Eau: Menu client connection died");
+  EAULOG(@"Eau: Menu client connection died");
   EAULOG(@"Eau: Menu client connection died");
   if (menuClientReceivePort != nil)
     {
@@ -658,7 +658,7 @@ static Eau *gSharedEauInstance = nil;
 
 - (void)_menuServerConnectionDidDie:(NSNotification *)notification
 {
-  NSLog(@"Eau: Menu server connection died");
+  EAULOG(@"Eau: Menu server connection died");
   EAULOG(@"Eau: Menu server connection died");
   menuServerConnection = nil;
   menuServerProxy = nil;
@@ -730,18 +730,18 @@ static Eau *gSharedEauInstance = nil;
 - (void) sendMenu:(NSWindow*)w {
 
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
-  NSLog(@"Eau: sendMenu");
+  EAULOG(@"Eau: sendMenu");
   NSMenu *m = [menuByWindowId objectForKey:windowId];
 
   @try
     {
-      // NSLog(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
+      // EAULOG(@"Eau: Calling updateMenuForWindow on Menu.app server proxy");
       NSDictionary *menuData = [self _serializeMenu:m];
 
       [(id<GSGNUstepMenuServer>)menuServerProxy updateMenuForWindow:windowId
 							   menuData:menuData
 							 clientName:[self _menuClientName]];
-      NSLog(@"Eau: Successfully sent menu update to Menu.app");
+      EAULOG(@"Eau: Successfully sent menu update to Menu.app");
       EAULOG(@"Eau: Updated GNUstep menu for window %@", windowId);
     }
   @catch (NSException *exception)
@@ -828,7 +828,7 @@ static Eau *gSharedEauInstance = nil;
   NSNumber *windowId = [self _windowIdentifierForWindow:w];
   if (windowId == nil)
     {
-      NSLog(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
+      EAULOG(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
       EAULOG(@"Eau: Could not resolve window identifier, using standard menu for window: %@", w);
       if (!gForceExternalMenuByEnv)
         {
@@ -839,7 +839,7 @@ static Eau *gSharedEauInstance = nil;
 
   if (m == nil || [m numberOfItems] == 0)
     {
-      NSLog(@"Eau: Menu is nil or empty (items=%ld)", (long)[m numberOfItems]);
+      EAULOG(@"Eau: Menu is nil or empty (items=%ld)", (long)[m numberOfItems]);
       BOOL hadMenu = ([menuByWindowId objectForKey:windowId] != nil);
       [menuByWindowId removeObjectForKey:windowId];
 
@@ -847,13 +847,13 @@ static Eau *gSharedEauInstance = nil;
         {
           @try
             {
-              NSLog(@"Eau: Unregistering window %@ from Menu.app", windowId);
+              EAULOG(@"Eau: Unregistering window %@ from Menu.app", windowId);
               [(id<GSGNUstepMenuServer>)menuServerProxy unregisterWindow:windowId
                                                                 clientName:[self _menuClientName]];
             }
           @catch (NSException *exception)
             {
-              NSLog(@"Eau: Exception unregistering window %@: %@", windowId, exception);
+              EAULOG(@"Eau: Exception unregistering window %@: %@", windowId, exception);
               EAULOG(@"Eau: Exception unregistering window %@: %@", windowId, exception);
             }
         }
@@ -866,7 +866,7 @@ static Eau *gSharedEauInstance = nil;
       return;
     }
 
-  // NSLog(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
+  // EAULOG(@"Eau: Storing menu in cache for windowId=%@, menu has %ld items", windowId, (long)[m numberOfItems]);
   // TOM: i believe this is redundant
   // [m update];
 
@@ -874,7 +874,7 @@ static Eau *gSharedEauInstance = nil;
 
   if (![self _ensureMenuClientRegistered])
     {
-      NSLog(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
+      EAULOG(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
       EAULOG(@"Eau: Failed to register GNUstep menu client, using standard menu for window: %@", w);
       if (!gForceExternalMenuByEnv)
         {
@@ -885,7 +885,7 @@ static Eau *gSharedEauInstance = nil;
 
   if (![self _ensureMenuServerConnection])
     {
-      NSLog(@"Eau: GNUstep menu server unavailable, automatic Menu.app restart disabled for window: %@", w);
+      EAULOG(@"Eau: GNUstep menu server unavailable, automatic Menu.app restart disabled for window: %@", w);
       EAULOG(@"Eau: GNUstep menu server unavailable, automatic Menu.app restart disabled for window: %@", w);
       // [[EauMenuRelaunchManager sharedManager] relaunchMenuProcessIfSnapshotAvailable];
       return;
@@ -898,7 +898,7 @@ static Eau *gSharedEauInstance = nil;
 
 - (void)_performMenuActionFromIPC:(NSDictionary *)info
 {
-  NSLog(@"Eau: _performMenuActionFromIPC called with info: %@", info);
+  EAULOG(@"Eau: _performMenuActionFromIPC called with info: %@", info);
   EAULOG(@"Eau: _performMenuActionFromIPC called with info: %@", info);
   
   NSNumber *windowId = [info objectForKey:@"windowId"];
@@ -967,8 +967,8 @@ static Eau *gSharedEauInstance = nil;
     }
 
   EAULOG(@"Eau: Sending action %@ to target %@ from menu item '%@'", NSStringFromSelector(action), target, [menuItem title]);
-  BOOL handled = [NSApp sendAction:action to:target from:menuItem];
-  NSLog(@"Eau: sendAction returned %@ for menu item '%@'", handled ? @"YES" : @"NO", [menuItem title]);
+  BOOL handled __attribute__((unused)) = [NSApp sendAction:action to:target from:menuItem];
+  EAULOG(@"Eau: sendAction returned %@ for menu item '%@'", handled ? @"YES" : @"NO", [menuItem title]);
   EAULOG(@"Eau: Action sent successfully");
 }
 
@@ -1006,7 +1006,7 @@ static Eau *gSharedEauInstance = nil;
     // Also include the application's main menu (Application menu) as a global fallback
     NSMenu *appMainMenu = [NSApp mainMenu];
     if (appMainMenu) {
-      NSLog(@"Eau: Including application mainMenu as fallback");
+      EAULOG(@"Eau: Including application mainMenu as fallback");
       NSDictionary *appMenuData = [self _serializeMenuWithIndexPaths:appMainMenu];
       // Use nil windowId to indicate it's the global app menu
       [result addObject:@{ @"windowId": [NSNull null], @"menu": appMenuData }];
@@ -1051,7 +1051,7 @@ static Eau *gSharedEauInstance = nil;
       [self activateMenuItemAtPath:indexPath forWindow:windowId];
       handled = YES;
     } @catch (NSException *e) {
-      NSLog(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
+      EAULOG(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
       handled = NO;
     }
   } else {
@@ -1060,7 +1060,7 @@ static Eau *gSharedEauInstance = nil;
         [self activateMenuItemAtPath:indexPath forWindow:windowId];
         handled = YES;
       } @catch (NSException *e) {
-        NSLog(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
+        EAULOG(@"Eau: Exception in invokeMenuItem %@: %@", objID, e);
         handled = NO;
       }
     });
@@ -1391,7 +1391,7 @@ static Eau *gSharedEauInstance = nil;
 
 - (oneway void)activateMenuItemAtPath:(NSArray *)indexPath forWindow:(NSNumber *)windowId
 {
-  NSLog(@"Eau: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);
+  EAULOG(@"Eau: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);
   EAULOG(@"Eau: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);
   
   NSDictionary *payload = [NSDictionary dictionaryWithObjectsAndKeys:
@@ -1489,7 +1489,7 @@ static Eau *gSharedEauInstance = nil;
 
 - (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId
 {
-  NSLog(@"Eau: requestMenuUpdateForWindow called - windowId: %@", windowId);
+  EAULOG(@"Eau: requestMenuUpdateForWindow called - windowId: %@", windowId);
   EAULOG(@"Eau: requestMenuUpdateForWindow called - windowId: %@", windowId);
 
   if (![NSThread isMainThread])
