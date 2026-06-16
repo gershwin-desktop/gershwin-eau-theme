@@ -274,18 +274,21 @@ static char originalFrameKey;  // Store original frame before zoom
 #pragma mark - Title text truncation
 
 // Helper: create a middle-truncated version of a string for window titles.
-// Returns a string with "…" inserted in the middle when the full title would
-// exceed 80% of the available width.
+// Returns a string with "…" inserted in the middle when the gap between
+// the centered title and the nearest button would be less than 24px.
 static NSString *EAUTruncateTitleWithMiddleEllipsis(NSString *title,
-                                                     CGFloat availableWidth)
+                                                     CGFloat titleMaxWidth,
+                                                     CGFloat interButtonWidth)
 {
-  if ([title length] == 0 || availableWidth <= 0) return title;
+  if ([title length] == 0 || titleMaxWidth <= 0) return title;
 
   NSFont *font = [NSFont systemFontOfSize:0];
   NSDictionary *attrs = @{ NSFontAttributeName: font };
 
   CGFloat titleWidth = [title sizeWithAttributes:attrs].width;
-  if (titleWidth <= 0.55 * availableWidth) return title;
+  // Only truncate when gap between centered title and nearest button < 24px
+  CGFloat gap = (interButtonWidth - titleWidth) / 2.0;
+  if (gap >= 24.0) return title;
 
   // Need middle ellipsis — split the string into left/right parts.
   // Binary search for the maximum prefix+middle+suffix that fits.
@@ -305,7 +308,7 @@ static NSString *EAUTruncateTitleWithMiddleEllipsis(NSString *title,
     NSString *candidate = [NSString stringWithFormat:@"%@%@%@",
                             leftPart, ellipsis, rightPart];
     CGFloat w = [candidate sizeWithAttributes:attrs].width;
-    if (w <= availableWidth) {
+    if (w <= titleMaxWidth) {
       lo = leftLen;
     } else {
       hi = leftLen - 1;
@@ -368,11 +371,13 @@ static void EAU_newNSWindowSetTitle(id self, SEL _cmd, NSString *title)
 
       if (availableWidth > 0)
         {
-          // Only let the title use up to 60% of the available width so there's
-          // visible breathing room on both sides between the text and buttons.
-          CGFloat titleMaxWidth = 0.6 * availableWidth;
+          // Calculate inter-button width for gap-based truncation decision
+          CGFloat interButtonWidth = availableWidth + 36;
+          // Let the truncated title fill the inter-button space minus 24px on each side
+          CGFloat titleMaxWidth = interButtonWidth - 48.0;
           NSString *truncated = EAUTruncateTitleWithMiddleEllipsis(title,
-                                                                    titleMaxWidth);
+                                                                    titleMaxWidth,
+                                                                    interButtonWidth);
           if (truncated != title)
             {
               title = truncated;

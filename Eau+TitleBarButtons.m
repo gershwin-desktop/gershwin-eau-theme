@@ -568,7 +568,6 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
     }
 
     NSColor *textColor = active ? activeColor : inactiveColor;
-    CGFloat availableWidth = NSWidth(rect);
 
     // Measure unconstrained text width to decide on truncation
     NSDictionary *measureAttrs = @{
@@ -578,13 +577,21 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
     };
     NSSize titleSize = [title sizeWithAttributes:measureAttrs];
 
+    // Calculate gap between centered title and nearest button edge
+    CGFloat centeredX = rect.origin.x + rect.size.width / 2.0 - titleSize.width / 2.0;
+    CGFloat minX = rect.origin.x;
+    CGFloat maxX = NSMaxX(rect) - titleSize.width;
+    CGFloat titleLeft = MAX(minX, MIN(centeredX, maxX));
+    CGFloat leftGap = titleLeft - rect.origin.x;
+    CGFloat rightGap = NSMaxX(rect) - (titleLeft + titleSize.width);
+
     // Create paragraph style with appropriate truncation
     NSMutableParagraphStyle *p = [centerStyle mutableCopy];
-    if (titleSize.width > 0.55 * availableWidth) {
-        // Use middle ellipsis when text exceeds 55% of available width
+    if (leftGap < 24.0 || rightGap < 24.0) {
+        // Use middle ellipsis when gap to nearest button is less than 24px
         [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
     } else {
-        // No truncation needed when text fits within threshold
+        // No truncation needed when there's enough breathing room
         [p setLineBreakMode:NSLineBreakByClipping];
     }
 

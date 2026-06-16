@@ -133,8 +133,16 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
       titleSize = [title sizeWithAttributes: titleTextAttributes[attrIndex]];
 
-      // Use middle ellipsis when title exceeds 80% of available width
-      BOOL useMiddleEllipsis = (titleSize.width > 0.55 * workRect.size.width);
+      // Calculate gap between centered title and nearest button edge
+      CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
+      CGFloat minX = workRect.origin.x;
+      CGFloat maxX = NSMaxX(workRect) - titleSize.width;
+      CGFloat titleLeft = MAX(minX, MIN(centeredX, maxX));
+      CGFloat leftGap = titleLeft - workRect.origin.x;
+      CGFloat rightGap = NSMaxX(workRect) - (titleLeft + titleSize.width);
+
+      // Only use middle ellipsis when gap to nearest button is less than 24px
+      BOOL useMiddleEllipsis = (leftGap < 24.0 || rightGap < 24.0);
 
       if (useMiddleEllipsis) {
         // Draw with middle ellipsis — no centering, just fill the available rect
