@@ -52,7 +52,11 @@
       if ([_delegate
         applicationShouldTerminateAfterLastWindowClosed: self])
         {
-          [self terminate: self];
+          // Defer to the top of the next runloop iteration: _lastWindowClosed
+          // runs mid-event with the runloop's autorelease pool live, and a
+          // synchronous terminate runs the whole teardown nested inside it.
+          // Scheduling it lets the current event/pool unwind cleanly first.
+          [self performSelector: @selector(terminate:) withObject: self afterDelay: 0.0];
         }
     }
   else
@@ -60,7 +64,8 @@
       // Terminate by default for all interface styles when last window closes
       // Overrides default GNUstep behavior:
       // https://github.com/gnustep/libs-gui/blob/402a94295ad56ab6219a6b18fdf9d9624834983f/Source/NSApplication.m#L4187C1-L4205C2
-      [self terminate: self];
+      // Deferred (see above) to avoid a synchronous mid-event teardown.
+      [self performSelector: @selector(terminate:) withObject: self afterDelay: 0.0];
     }
 }
 
