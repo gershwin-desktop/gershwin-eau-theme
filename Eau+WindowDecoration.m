@@ -73,7 +73,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   BOOL isActive = (inputState == 0);  // 0 = key window (active)
 
   workRect = titleRect;
-  [self drawTitleBarBackground:workRect];
+  [self drawTitleBarBackground:workRect active:isActive];
 
   // Draw edge buttons
   if (styleMask & NSClosableWindowMask)
@@ -132,30 +132,58 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
       }
 
       titleSize = [title sizeWithAttributes: titleTextAttributes[attrIndex]];
-      if (titleSize.width <= workRect.size.width)
-        {
-          if (EauTitleBarButtonStyleIsOrb()) {
-            // Center in full titlebar width, clamp to not overlap orb region
-            CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
-            workRect.origin.x = MAX(centeredX, titleRect.origin.x + METRICS_TITLEBAR_ORB_REGION_WIDTH);
-          } else {
-            CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
-            CGFloat minX = workRect.origin.x;
-            CGFloat maxX = NSMaxX(workRect) - titleSize.width;
-            workRect.origin.x = MAX(minX, MIN(centeredX, maxX));
+
+      // Use middle ellipsis when title exceeds 80% of available width
+      BOOL useMiddleEllipsis = (titleSize.width > 0.55 * workRect.size.width);
+
+      if (useMiddleEllipsis) {
+        // Draw with middle ellipsis — no centering, just fill the available rect
+        NSMutableParagraphStyle *p = [[titleTextAttributes[attrIndex] objectForKey:NSParagraphStyleAttributeName] mutableCopy];
+        [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
+        [p setAlignment:NSCenterTextAlignment];
+
+        NSMutableDictionary *truncAttrs = [titleTextAttributes[attrIndex] mutableCopy];
+        [truncAttrs setObject:p forKey:NSParagraphStyleAttributeName];
+
+        workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
+        workRect.size.height = titleSize.height;
+        [title drawInRect:workRect withAttributes:truncAttrs];
+      } else {
+        if (titleSize.width <= workRect.size.width)
+          {
+            if (EauTitleBarButtonStyleIsOrb()) {
+              // Center in full titlebar width, clamp to not overlap orb region
+              CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
+              workRect.origin.x = MAX(centeredX, titleRect.origin.x + METRICS_TITLEBAR_ORB_REGION_WIDTH);
+            } else {
+              CGFloat centeredX = titleRect.origin.x + titleRect.size.width / 2.0 - titleSize.width / 2.0;
+              CGFloat minX = workRect.origin.x;
+              CGFloat maxX = NSMaxX(workRect) - titleSize.width;
+              workRect.origin.x = MAX(minX, MIN(centeredX, maxX));
+            }
           }
-        }
-      workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
-      workRect.size.height = titleSize.height;
-      [title drawInRect: workRect
-          withAttributes: titleTextAttributes[attrIndex]];
+        workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
+        workRect.size.height = titleSize.height;
+        [title drawInRect: workRect
+            withAttributes: titleTextAttributes[attrIndex]];
+      }
     }
 }
 
-- (void) drawTitleBarBackground: (NSRect)rect {
+- (void) drawTitleBarBackground: (NSRect)rect active:(BOOL)isActive {
 
-  NSColor* borderColor = [Eau controlStrokeColor];
-  NSGradient* gradient = [self _windowTitlebarGradient];
+  NSGradient* gradient;
+  CGFloat bottomRowGray;
+  NSColor *borderColor;
+  if (isActive) {
+    gradient = [self _windowTitlebarGradient];
+    bottomRowGray = 0.63;
+    borderColor = [Eau controlStrokeColor];
+  } else {
+    gradient = [self _windowTitlebarGradientInactive];
+    bottomRowGray = 0.83;
+    borderColor = [NSColor colorWithCalibratedRed:0.85 green:0.85 blue:0.85 alpha:1.0];
+  }
 
   CGFloat titleBarCornerRadius = METRICS_TITLEBAR_CORNER_RADIUS;
   NSRect titleRect = rect;
@@ -165,10 +193,15 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   // create aliased edge artifacts.
   [gradient drawInRect:titleRect angle:-90];
 
+  // Top edge highlight — 1px white line matching the button top highlights.
+  [[NSColor colorWithCalibratedWhite:1.0 alpha:0.35] setFill];
+  NSRectFill(NSMakeRect(NSMinX(titleRect), NSMaxY(titleRect) - 0.5,
+                        NSWidth(titleRect), 1));
+
   // Ensure bottom pixel row is solidly filled with the gradient's end
   // color to prevent any aliasing gap between the gradient and the
   // URSThemeIntegration bottom edge drawn on top.
-  [[NSColor colorWithCalibratedRed:0.667 green:0.667 blue:0.667 alpha:1] set];
+  [[NSColor colorWithCalibratedRed:bottomRowGray green:bottomRowGray blue:bottomRowGray alpha:1] set];
   NSRectFill(NSMakeRect(NSMinX(titleRect), NSMinY(titleRect),
                         NSWidth(titleRect), 1));
 
@@ -214,8 +247,8 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   [p setLineBreakMode: NSLineBreakByClipping];
 
 
-  keyColor = [NSColor colorWithCalibratedRed: 0.1 green: 0.1 blue: 0.1 alpha: 1];
-  normalColor = [NSColor colorWithCalibratedRed: 0.50 green: 0.50 blue: 0.50 alpha: 1];  // Lighter for unfocused
+  keyColor = [NSColor colorWithCalibratedRed: 0.05 green: 0.05 blue: 0.05 alpha: 1];
+  normalColor = [NSColor colorWithCalibratedRed: 0.70 green: 0.70 blue: 0.70 alpha: 1];  // Lighter for unfocused
   mainColor = keyColor;
 
   titleTextAttributes[0] = [[NSMutableDictionary alloc]
