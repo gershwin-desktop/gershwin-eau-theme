@@ -89,13 +89,13 @@ static const float METRICS_RESIZE_EDGE_THICKNESS = 4.0;
 #define METRICS_GROW_BOX_SIZE 16.0
 
 // Window corner radii for rounded corners
-static const float METRICS_TITLEBAR_CORNER_RADIUS = 4.0;  // Optically matches Menu app corner radius
+static const float METRICS_TITLEBAR_CORNER_RADIUS = 7.0;  // Optically matches Menu app corner radius
 static const float METRICS_WINDOW_BOTTOM_CORNER_RADIUS = 0.0;
 static const float METRICS_TITLEBAR_HEIGHT = 22.0;
 // TODO: Remove the following 2 lines once WindowManager has been updated
 static const float METRICS_TITLEBAR_EDGE_BUTTON_WIDTH = 22.0;      // TODO: Remove
 static const float METRICS_TITLEBAR_RIGHT_REGION_WIDTH = 44.0;     // TODO: Remove
-static const float METRICS_TITLEBAR_BUTTON_INNER_RADIUS = 4.0;      // Rounded corner on inner edge only
+static const float METRICS_TITLEBAR_BUTTON_INNER_RADIUS = METRICS_TITLEBAR_CORNER_RADIUS;      // Rounded corner on inner edge only
 static const float METRICS_TITLEBAR_ICON_STROKE = 1.5;              // Stroke width for button icons
 static const float METRICS_TITLEBAR_ICON_INSET = 9.0;               // Inset from button edges to icon
 

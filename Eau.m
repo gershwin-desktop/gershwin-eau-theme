@@ -64,6 +64,9 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
 + (void)load
 {
+  // Swizzle NSWindow setTitle: to add middle-ellipsis truncation for long titles
+  [(id)self performSelector: NSSelectorFromString(@"EAUswizzleNSWindowSetTitle")];
+
   gForceExternalMenuByEnv = EauEnvironmentContainsAppMenuToken();
   if (gForceExternalMenuByEnv)
     {
