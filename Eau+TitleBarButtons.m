@@ -100,9 +100,15 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
                                METRICS_TITLEBAR_HEIGHT);
     }
 
-    // Draw titlebar background gradient
-    NSColor *gradientColor1 = [NSColor colorWithCalibratedRed:0.833 green:0.833 blue:0.833 alpha:1];
-    NSColor *gradientColor2 = [NSColor colorWithCalibratedRed:0.667 green:0.667 blue:0.667 alpha:1];
+    // Draw titlebar background gradient — lighter for inactive windows
+    NSColor *gradientColor1, *gradientColor2;
+    if (active) {
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.63 green:0.63 blue:0.63 alpha:1];
+    } else {
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.92 green:0.92 blue:0.92 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
+    }
     NSGradient *gradient = [[NSGradient alloc] initWithStartingColor:gradientColor1
                                                          endingColor:gradientColor2];
     [gradient drawInRect:titleRect angle:-90];
@@ -127,7 +133,7 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
               withBaseColor:[NSColor colorWithCalibratedRed:0.97 green:0.26 blue:0.23 alpha:1]
                      active:active
                     hovered:hovered];
-        if (active && hovered) {
+        if (hovered) {
             [self drawCloseIconInRect:NSInsetRect(rect, 3.0, 3.0)
                             withColor:[self iconColorForActive:active highlighted:hovered]];
         }
@@ -138,8 +144,11 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
                     buttonType:0
                         active:active
                        hovered:hovered];
-    [self drawCloseIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
-                    withColor:[self iconColorForActive:active highlighted:hovered]];
+    // Show icon on active, or when hovering this button on inactive
+    if (active || hovered) {
+        [self drawCloseIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
+                        withColor:[self iconColorForActive:active highlighted:hovered]];
+    }
 }
 
 - (void)drawMinimizeButtonInRect:(NSRect)rect state:(GSThemeControlState)state active:(BOOL)active
@@ -150,7 +159,7 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
               withBaseColor:[NSColor colorWithCalibratedRed:0.9 green:0.7 blue:0.3 alpha:1]
                      active:active
                     hovered:hovered];
-        if (active && hovered) {
+        if (hovered) {
             [self drawMinimizeIconInRect:NSInsetRect(rect, 3.0, 3.0)
                                withColor:[self iconColorForActive:active highlighted:hovered]];
         }
@@ -161,8 +170,11 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
                     buttonType:1
                         active:active
                        hovered:hovered];
-    [self drawMinimizeIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
-                       withColor:[self iconColorForActive:active highlighted:hovered]];
+    // Show icon on active, or when hovering this button on inactive
+    if (active || hovered) {
+        [self drawMinimizeIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
+                           withColor:[self iconColorForActive:active highlighted:hovered]];
+    }
 }
 
 - (void)drawMaximizeButtonInRect:(NSRect)rect state:(GSThemeControlState)state active:(BOOL)active
@@ -173,7 +185,7 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
               withBaseColor:[NSColor colorWithCalibratedRed:0.322 green:0.778 blue:0.244 alpha:1]
                      active:active
                     hovered:hovered];
-        if (active && hovered) {
+        if (hovered) {
             [self drawMaximizeIconInRect:NSInsetRect(rect, 3.0, 3.0)
                                withColor:[self iconColorForActive:active highlighted:hovered]];
         }
@@ -184,8 +196,11 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
                     buttonType:2
                         active:active
                        hovered:hovered];
-    [self drawMaximizeIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
-                       withColor:[self iconColorForActive:active highlighted:hovered]];
+    // Show icon on active, or when hovering this button on inactive
+    if (active || hovered) {
+        [self drawMaximizeIconInRect:NSInsetRect(rect, METRICS_TITLEBAR_ICON_INSET, METRICS_TITLEBAR_ICON_INSET)
+                           withColor:[self iconColorForActive:active highlighted:hovered]];
+    }
 }
 
 #pragma mark - Icon Drawing
@@ -394,22 +409,29 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
                 break;
         }
     } else if (active) {
-        // Active window - #C2C2C2 average (0.76) with subtle gradient
-        gradientColor1 = [NSColor colorWithCalibratedRed:0.82 green:0.82 blue:0.82 alpha:1];  // #D1D1D1
-        gradientColor2 = [NSColor colorWithCalibratedRed:0.70 green:0.70 blue:0.70 alpha:1];  // #B3B3B3
+        // Match active titlebar gradient (0.83→0.63)
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.63 green:0.63 blue:0.63 alpha:1];
     } else {
-        // Inactive window - slightly lighter/washed out
-        gradientColor1 = [NSColor colorWithCalibratedRed:0.85 green:0.85 blue:0.85 alpha:1];
-        gradientColor2 = [NSColor colorWithCalibratedRed:0.75 green:0.75 blue:0.75 alpha:1];
+        // Match inactive titlebar gradient (0.92→0.83)
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.92 green:0.92 blue:0.92 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
     }
 
     NSGradient *gradient = [[NSGradient alloc] initWithStartingColor:gradientColor1
                                                          endingColor:gradientColor2];
 
-    NSColor *borderColor = [Eau controlStrokeColor];
-
-    // Top border color - matches titlebar top edge (slightly lighter for visual trick)
-    NSColor *topBorderColor = [NSColor colorWithCalibratedRed:0.5 green:0.5 blue:0.5 alpha:1.0];
+    // Border colors — use lighter shade for inactive windows to match
+    // the inactive title text color.
+    NSColor *borderColor;
+    NSColor *topBorderColor;
+    if (active) {
+      borderColor = [Eau controlStrokeColor];
+      topBorderColor = [NSColor colorWithCalibratedRed:0.5 green:0.5 blue:0.5 alpha:1.0];
+    } else {
+      borderColor = [NSColor colorWithCalibratedRed:0.92 green:0.92 blue:0.92 alpha:0.5];
+      topBorderColor = borderColor;
+    }
 
     // Create path with appropriate corner rounding
     NSBezierPath *path = [self buttonPathForRect:rect position:position];
@@ -530,39 +552,61 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
 
 - (void)drawTitleText:(NSString *)title inRect:(NSRect)rect active:(BOOL)active
 {
-    static NSDictionary *activeAttrs = nil;
-    static NSDictionary *inactiveAttrs = nil;
+    static NSFont *titleFont = nil;
+    static NSColor *activeColor = nil;
+    static NSColor *inactiveColor = nil;
+    static NSParagraphStyle *centerStyle = nil;
 
-    if (!activeAttrs) {
+    if (!titleFont) {
+        titleFont = [NSFont systemFontOfSize:0];
+        activeColor = [NSColor colorWithCalibratedRed:0.05 green:0.05 blue:0.05 alpha:1];
+        inactiveColor = [NSColor colorWithCalibratedRed:0.75 green:0.75 blue:0.75 alpha:1];
+
         NSMutableParagraphStyle *p = [[NSParagraphStyle defaultParagraphStyle] mutableCopy];
         [p setAlignment:NSCenterTextAlignment];
-        [p setLineBreakMode:NSLineBreakByTruncatingTail];
-
-        NSColor *activeColor = [NSColor colorWithCalibratedRed:0.1 green:0.1 blue:0.1 alpha:1];
-        NSColor *inactiveColor = [NSColor colorWithCalibratedRed:0.65 green:0.65 blue:0.65 alpha:1];
-
-        activeAttrs = @{
-            NSFontAttributeName: [NSFont systemFontOfSize:0],
-            NSForegroundColorAttributeName: activeColor,
-            NSParagraphStyleAttributeName: p
-        };
-
-        inactiveAttrs = @{
-            NSFontAttributeName: [NSFont systemFontOfSize:0],
-            NSForegroundColorAttributeName: inactiveColor,
-            NSParagraphStyleAttributeName: p
-        };
+        centerStyle = [p copy];
     }
 
-    NSDictionary *attrs = active ? activeAttrs : inactiveAttrs;
-    NSSize titleSize = [title sizeWithAttributes:attrs];
+    NSColor *textColor = active ? activeColor : inactiveColor;
+
+    // Measure unconstrained text width to decide on truncation
+    NSDictionary *measureAttrs = @{
+        NSFontAttributeName: titleFont,
+        NSForegroundColorAttributeName: textColor,
+        NSParagraphStyleAttributeName: centerStyle
+    };
+    NSSize titleSize = [title sizeWithAttributes:measureAttrs];
+
+    // Calculate gap between centered title and nearest button edge
+    CGFloat centeredX = rect.origin.x + rect.size.width / 2.0 - titleSize.width / 2.0;
+    CGFloat minX = rect.origin.x;
+    CGFloat maxX = NSMaxX(rect) - titleSize.width;
+    CGFloat titleLeft = MAX(minX, MIN(centeredX, maxX));
+    CGFloat leftGap = titleLeft - rect.origin.x;
+    CGFloat rightGap = NSMaxX(rect) - (titleLeft + titleSize.width);
+
+    // Create paragraph style with appropriate truncation
+    NSMutableParagraphStyle *p = [centerStyle mutableCopy];
+    if (leftGap < 24.0 || rightGap < 24.0) {
+        // Use middle ellipsis when gap to nearest button is less than 24px
+        [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
+    } else {
+        // No truncation needed when there's enough breathing room
+        [p setLineBreakMode:NSLineBreakByClipping];
+    }
+
+    NSDictionary *drawAttrs = @{
+        NSFontAttributeName: titleFont,
+        NSForegroundColorAttributeName: textColor,
+        NSParagraphStyleAttributeName: p
+    };
 
     // Center vertically
     NSRect drawRect = rect;
     drawRect.origin.y = NSMidY(rect) - titleSize.height / 2.0;
     drawRect.size.height = titleSize.height;
 
-    [title drawInRect:drawRect withAttributes:attrs];
+    [title drawInRect:drawRect withAttributes:drawAttrs];
 }
 
 @end
