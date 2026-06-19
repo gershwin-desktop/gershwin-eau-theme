@@ -31,7 +31,10 @@
         return;
 
     [self drawButtonInRect:cellFrame];
-    [self drawIconInRect:cellFrame];
+    // Show icon on active windows, or when hovering this button on inactive
+    if (_isActive || _cell.is_highlighted) {
+        [self drawIconInRect:cellFrame];
+    }
 }
 
 - (void)drawButtonInRect:(NSRect)frame
@@ -65,13 +68,13 @@
                 break;
         }
     } else if (_isActive) {
-        // Active window - #C2C2C2 average (0.76) with subtle gradient
-        gradientColor1 = [NSColor colorWithCalibratedRed:0.82 green:0.82 blue:0.82 alpha:1];  // #D1D1D1
-        gradientColor2 = [NSColor colorWithCalibratedRed:0.70 green:0.70 blue:0.70 alpha:1];  // #B3B3B3
+        // Match active titlebar gradient (0.83→0.63)
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.63 green:0.63 blue:0.63 alpha:1];
     } else {
-        // Inactive window - slightly lighter/washed out
-        gradientColor1 = [NSColor colorWithCalibratedRed:0.85 green:0.85 blue:0.85 alpha:1];
-        gradientColor2 = [NSColor colorWithCalibratedRed:0.75 green:0.75 blue:0.75 alpha:1];
+        // Match inactive titlebar gradient (0.92→0.83)
+        gradientColor1 = [NSColor colorWithCalibratedRed:0.92 green:0.92 blue:0.92 alpha:1];
+        gradientColor2 = [NSColor colorWithCalibratedRed:0.83 green:0.83 blue:0.83 alpha:1];
     }
 
     NSGradient *gradient = [[NSGradient alloc] initWithStartingColor:gradientColor1
@@ -91,7 +94,7 @@
     // Draw inner highlight near top (gives raised 3D look)
     NSColor *highlightColor = [NSColor colorWithCalibratedWhite:1.0 alpha:0.35];
     NSBezierPath *highlightPath = [NSBezierPath bezierPath];
-    CGFloat highlightY = NSMaxY(frame) - 2.5;
+    CGFloat highlightY = NSMaxY(frame) - 0.5;
     [highlightPath moveToPoint:NSMakePoint(NSMinX(frame) + 1, highlightY)];
     [highlightPath lineToPoint:NSMakePoint(NSMaxX(frame) - 1, highlightY)];
     [highlightColor setStroke];
