@@ -41,6 +41,29 @@
       //    bottom is screenOrigin.y, so we place the submenu origin at
       //    screenOrigin.y - subH to make its top align with item bottom.
       CGFloat yPos = screenOrigin.y - subH;
+      // If the menu would extend past the bottom screen border, shift it up.
+      if (yPos < 0)
+        {
+          EAULOG(@"NSMenuView+Eau: Horizontal menu extends past bottom border (yPos=%.1f), shifting up", yPos);
+          yPos = 0;
+        }
+      // Clamp horizontally so the menu fits on screen.
+      CGFloat subW = NSWidth(subFrame);
+      if (subW < 1) subW = 100;
+      NSScreen *menuScreen = [window screen];
+      if (!menuScreen) menuScreen = [NSScreen mainScreen];
+      if (menuScreen)
+        {
+          NSRect screenFrame = [menuScreen frame];
+          if (screenOrigin.x + subW > NSMaxX(screenFrame))
+            {
+              screenOrigin.x = NSMaxX(screenFrame) - subW;
+            }
+          if (screenOrigin.x < screenFrame.origin.x)
+            {
+              screenOrigin.x = screenFrame.origin.x;
+            }
+        }
       EAULOG(@"NSMenuView+Eau: Horizontal pos for '%@': itemRect=%@ screenOrigin=%@ subH=%.1f → (%.1f, %.1f)",
             [aSubmenu title], NSStringFromRect(itemRect), NSStringFromPoint(screenOrigin),
             subH, screenOrigin.x, yPos);
@@ -63,10 +86,12 @@
   NSPoint screenOrigin = [window convertBaseToScreen:itemRect.origin];
   CGFloat itemH = NSHeight(itemRect);
 
-  // Get the submenu's window frame to know its height.
+  // Get the submenu's window frame to know its height and width.
   NSRect subFrame = [[[aSubmenu menuRepresentation] window] frame];
   CGFloat subH = NSHeight(subFrame);
   if (subH < 1) subH = 100;
+  CGFloat subW = NSWidth(subFrame);
+  if (subW < 1) subW = 100;
 
   // X: right edge of parent window (no horizontal overlap)
   NSRect parentFrame = [window frame];
@@ -79,6 +104,37 @@
   // This makes the submenu's first row of items appear level with
   // the parent item.
   CGFloat yPos = screenOrigin.y + itemH - subH;
+  // If the menu would extend past the bottom screen border, shift it up.
+  if (yPos < 0)
+    {
+      EAULOG(@"NSMenuView+Eau: Vertical submenu extends past bottom border (yPos=%.1f), shifting up", yPos);
+      yPos = 0;
+    }
+  // If the menu would extend past the top screen border, shift it down.
+  NSScreen *menuScreen = [window screen];
+  if (!menuScreen) menuScreen = [NSScreen mainScreen];
+  if (menuScreen)
+    {
+      NSRect screenFrame = [menuScreen frame];
+      if (yPos + subH > NSMaxY(screenFrame))
+        {
+          yPos = NSMaxY(screenFrame) - subH;
+        }
+      // Clamp horizontally so the submenu fits on screen.
+      if (xPos + subW > NSMaxX(screenFrame))
+        {
+          // Try showing on the left side of the parent instead
+          xPos = screenFrame.origin.x;
+        }
+      if (xPos + subW > NSMaxX(screenFrame))
+        {
+          xPos = NSMaxX(screenFrame) - subW;
+        }
+      if (xPos < screenFrame.origin.x)
+        {
+          xPos = screenFrame.origin.x;
+        }
+    }
 
   EAULOG(@"NSMenuView+Eau: Vertical pos for '%@': parentFrame=%@ itemScreen=%@ itemH=%.1f subH=%.1f → (%.1f, %.1f)",
         [aSubmenu title], NSStringFromRect(parentFrame), NSStringFromPoint(screenOrigin),

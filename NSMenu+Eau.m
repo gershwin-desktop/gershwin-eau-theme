@@ -25,6 +25,107 @@
 - (id)_menu;
 @end
 
+/* ---- NSMenuPanel swizzles: clamp menu windows to screen bounds ---- */
+
+// Shared bottom-clamp helper: if the window extends past the screen
+// borders, shift it to fit entirely on screen.
+// Uses the original setFrame:display: IMP to avoid recursion.
+static void (*s_orig_menuWindowSetFrameDisplay)(id, SEL, NSRect, BOOL) = NULL;
+
+static BOOL _eau_clampMenuWindowToScreenBounds(id window)
+{
+  NSRect frame = [window frame];
+  NSScreen *screen = [window screen];
+  if (!screen) screen = [NSScreen mainScreen];
+  if (!screen) return NO;
+
+  NSRect screenFrame = [screen frame];
+  BOOL needsClamp = NO;
+
+  // Bottom edge — shift up
+  if (frame.origin.y < screenFrame.origin.y)
+    {
+      frame.origin.y = screenFrame.origin.y;
+      needsClamp = YES;
+    }
+
+  // Top edge — shift down
+  if (NSMaxY(frame) > NSMaxY(screenFrame))
+    {
+      frame.origin.y = NSMaxY(screenFrame) - frame.size.height;
+      needsClamp = YES;
+    }
+
+  // Left edge — shift right
+  if (frame.origin.x < screenFrame.origin.x)
+    {
+      frame.origin.x = screenFrame.origin.x;
+      needsClamp = YES;
+    }
+
+  // Right edge — shift left
+  if (NSMaxX(frame) > NSMaxX(screenFrame))
+    {
+      frame.origin.x = NSMaxX(screenFrame) - frame.size.width;
+      needsClamp = YES;
+    }
+
+  if (needsClamp)
+    {
+      // Use the original IMP directly to avoid re-entering the swizzle.
+      if (s_orig_menuWindowSetFrameDisplay)
+        s_orig_menuWindowSetFrameDisplay(window, @selector(setFrame:display:), frame, NO);
+      return YES;
+    }
+  return NO;
+}
+
+static void (*s_orig_menuWindowSetFrameOrigin)(id, SEL, NSPoint) = NULL;
+
+static void s_eau_menuWindowSetFrameOrigin(id self, SEL _cmd, NSPoint aPoint)
+{
+  if (s_orig_menuWindowSetFrameOrigin)
+    s_orig_menuWindowSetFrameOrigin(self, _cmd, aPoint);
+  _eau_clampMenuWindowToScreenBounds(self);
+}
+
+static void s_eau_menuWindowSetFrameDisplay(id self, SEL _cmd, NSRect frameRect, BOOL flag)
+{
+  if (s_orig_menuWindowSetFrameDisplay)
+    s_orig_menuWindowSetFrameDisplay(self, _cmd, frameRect, flag);
+  _eau_clampMenuWindowToScreenBounds(self);
+}
+
+static void _eau_swizzleMenuWindowFrameMethods(void)
+{
+  Class menuPanelClass = objc_getClass("NSMenuPanel");
+  if (!menuPanelClass)
+    {
+      EAULOG(@"Eau: NSMenuPanel class not found, skipping menu window swizzles");
+      return;
+    }
+
+  // Swizzle setFrameOrigin:
+  SEL selOrigin = sel_registerName("setFrameOrigin:");
+  Method mOrigin = class_getInstanceMethod(menuPanelClass, selOrigin);
+  if (mOrigin)
+    {
+      s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))method_getImplementation(mOrigin);
+      method_setImplementation(mOrigin, (IMP)s_eau_menuWindowSetFrameOrigin);
+      EAULOG(@"Eau: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
+    }
+
+  // Swizzle setFrame:display: (catches sizeToFit calls that bypass setFrameOrigin:)
+  SEL selFrameDisplay = sel_registerName("setFrame:display:");
+  Method mFrameDisplay = class_getInstanceMethod(menuPanelClass, selFrameDisplay);
+  if (mFrameDisplay)
+    {
+      s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))method_getImplementation(mFrameDisplay);
+      method_setImplementation(mFrameDisplay, (IMP)s_eau_menuWindowSetFrameDisplay);
+      EAULOG(@"Eau: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
+    }
+}
+
 /* ---- Tracked windows + active tracking counter ---- */
 static volatile int _eau_activeTrackingCount = 0;
 static Display *_eau_x11_display = NULL;
@@ -234,8 +335,9 @@ static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
 /**
  * Swizzled -displayTransient implementation.
  *
- * Same orphaned-menu cleanup as -display, but for transient menus
- * (context menus, torn-off menus, and submenus of transient menus).
+ * Pass-through for transient menus (context menus, torn-off menus, etc.).
+ * Bottom-screen clamping is handled by the NSMenuPanel setFrameOrigin:
+ * swizzle which catches all menu window positioning.
  */
 - (void)eau_displayTransient
 {
@@ -375,4 +477,9 @@ static void initNSMenuSwizzling(void)
           method_setImplementation(origTW, (IMP)s_eau_trackWithEvent);
         }
     }
+
+  // Swizzle setFrameOrigin: and setFrame:display: on NSMenuPanel to clamp
+  // menu windows to the bottom screen border. This catches ALL menu
+  // positioning regardless of which code path is used.
+  _eau_swizzleMenuWindowFrameMethods();
 }
