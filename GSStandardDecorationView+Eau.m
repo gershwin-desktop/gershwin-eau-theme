@@ -1,5 +1,6 @@
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import <GNUstepGUI/GSTheme.h>
+#import <GNUstepGUI/GSDisplayServer.h>
 #import <objc/runtime.h>
 #import "Eau.h"
 #import "EauTitleBarButton.h"
@@ -268,6 +269,140 @@ static char originalFrameKey;  // Store original frame before zoom
   }
 
   EAULOG(@"*** After zoom call - Window isZoomed: %d", [window isZoomed]);
+}
+
+#pragma mark - Title text truncation
+
+// Helper: create a middle-truncated version of a string for window titles.
+// Returns a string with "…" inserted in the middle when the gap between
+// the centered title and the nearest button would be less than 24px.
+static NSString *EAUTruncateTitleWithMiddleEllipsis(NSString *title,
+                                                     CGFloat titleMaxWidth,
+                                                     CGFloat interButtonWidth)
+{
+  if ([title length] == 0 || titleMaxWidth <= 0) return title;
+
+  NSFont *font = [NSFont systemFontOfSize:0];
+  NSDictionary *attrs = @{ NSFontAttributeName: font };
+
+  CGFloat titleWidth = [title sizeWithAttributes:attrs].width;
+  // Only truncate when gap between centered title and nearest button < 24px
+  CGFloat gap = (interButtonWidth - titleWidth) / 2.0;
+  if (gap >= 24.0) return title;
+
+  // Need middle ellipsis — split the string into left/right parts.
+  // Binary search for the maximum prefix+middle+suffix that fits.
+  NSString *ellipsis = @"\xe2\x80\xa6"; // Unicode HORIZONTAL ELLIPSIS (…)
+
+  NSUInteger len = [title length];
+  NSUInteger lo = 0, hi = len - 1;
+
+  while (lo < hi) {
+    NSUInteger leftLen = (lo + hi + 1) / 2;
+    NSUInteger rightLen = leftLen;
+    if (leftLen + rightLen + 1 > len) rightLen = len - leftLen;
+    if (leftLen + rightLen < 2) { hi = leftLen - 1; continue; }
+
+    NSString *leftPart = [title substringToIndex:leftLen];
+    NSString *rightPart = [title substringFromIndex:len - rightLen];
+    NSString *candidate = [NSString stringWithFormat:@"%@%@%@",
+                            leftPart, ellipsis, rightPart];
+    CGFloat w = [candidate sizeWithAttributes:attrs].width;
+    if (w <= titleMaxWidth) {
+      lo = leftLen;
+    } else {
+      hi = leftLen - 1;
+    }
+  }
+
+  // Build final truncated string
+  NSUInteger bestLeft = lo;
+  NSUInteger bestRight = lo;
+  if (bestLeft + bestRight + 1 > len) bestRight = len - bestLeft;
+  if (bestLeft < 1 || bestRight < 1) {
+    // Fallback: show ellipsis with first and last character
+    bestLeft = 1;
+    bestRight = 1;
+  }
+
+  NSString *leftPart = [title substringToIndex:bestLeft];
+  NSString *rightPart = [title substringFromIndex:len - bestRight];
+  return [NSString stringWithFormat:@"%@%@%@", leftPart, ellipsis, rightPart];
+}
+
+@end
+
+// Original setTitle: IMP saved before swizzling
+static IMP _originalNSWindowSetTitle = NULL;
+
+// Swizzled setTitle: implementation
+static void EAU_newNSWindowSetTitle(id self, SEL _cmd, NSString *title)
+{
+  if (title != nil && [title length] > 0)
+    {
+      NSRect frame = [self frame];
+      NSUInteger styleMask = [self styleMask];
+      CGFloat availableWidth = frame.size.width;
+
+      // Subtract left/right decoration offsets
+      float leftOff = 0, rightOff = 0, topOff = 0, bottomOff = 0;
+      id server = GSCurrentServer();
+      if ([server respondsToSelector: NSSelectorFromString(@"styleoffsets::::")])
+        {
+          IMP imp = [server methodForSelector: NSSelectorFromString(@"styleoffsets::::")];
+          if (imp)
+            {
+              ((void (*)(id, SEL, float*, float*, float*, float*))imp)
+                (server, NSSelectorFromString(@"styleoffsets::::"),
+                 &leftOff, &rightOff, &topOff, &bottomOff);
+            }
+        }
+      availableWidth -= (leftOff + rightOff);
+
+      // Subtract space for title bar buttons
+      CGFloat buttonSpace = 0;
+      if (styleMask & NSClosableWindowMask)
+        buttonSpace += METRICS_TITLEBAR_HEIGHT;
+      if (styleMask & NSMiniaturizableWindowMask)
+        buttonSpace += METRICS_TITLEBAR_HEIGHT;
+      if (styleMask & NSResizableWindowMask)
+        buttonSpace += METRICS_TITLEBAR_HEIGHT;
+      availableWidth -= buttonSpace + 36;
+
+      if (availableWidth > 0)
+        {
+          // Calculate inter-button width for gap-based truncation decision
+          CGFloat interButtonWidth = availableWidth + 36;
+          // Let the truncated title fill the inter-button space minus 24px on each side
+          CGFloat titleMaxWidth = interButtonWidth - 48.0;
+          NSString *truncated = EAUTruncateTitleWithMiddleEllipsis(title,
+                                                                    titleMaxWidth,
+                                                                    interButtonWidth);
+          if (truncated != title)
+            {
+              title = truncated;
+            }
+        }
+    }
+
+  // Call the original setTitle:
+  ((void (*)(id, SEL, id))_originalNSWindowSetTitle)(self, @selector(setTitle:), title);
+}
+
+@implementation Eau(NSWindowTitle)
+
++ (void) EAUswizzleNSWindowSetTitle
+{
+  static BOOL swizzled = NO;
+  if (swizzled) return;
+  swizzled = YES;
+
+  Method origMethod = class_getInstanceMethod([NSWindow class], @selector(setTitle:));
+  if (origMethod)
+    {
+      _originalNSWindowSetTitle = method_getImplementation(origMethod);
+      method_setImplementation(origMethod, (IMP)EAU_newNSWindowSetTitle);
+    }
 }
 
 @end

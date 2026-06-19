@@ -8,6 +8,7 @@ void NSRoundRectFill(NSRect r, float radius);
 - (NSGradient *) _bezelGradientWithColor:(NSColor*) baseColor;
 - (NSGradient *) _buttonGradientWithColor:(NSColor*) baseColor;
 - (NSGradient *) _windowTitlebarGradient;
+- (NSGradient *) _windowTitlebarGradientInactive;
 - (NSRect) drawInnerGrayBezel: (NSRect)border withClip: (NSRect)clip;
 - (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style;
 @end

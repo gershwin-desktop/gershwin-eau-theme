@@ -56,13 +56,30 @@ NSRoundRectFill(NSRect r, float radius)
 
 - (NSGradient *) _windowTitlebarGradient
 {
-  NSColor* gradientColor1 = [NSColor colorWithCalibratedRed: 0.833
-                                                      green: 0.833
-                                                       blue: 0.833
+  // Visible top-to-bottom shading (0.83→0.63) for active titlebars.
+  NSColor* gradientColor1 = [NSColor colorWithCalibratedRed: 0.83
+                                                      green: 0.83
+                                                       blue: 0.83
                                                       alpha: 1];
-  NSColor* gradientColor2 = [NSColor colorWithCalibratedRed: 0.667
-                                                      green: 0.667
-                                                       blue: 0.667
+  NSColor* gradientColor2 = [NSColor colorWithCalibratedRed: 0.63
+                                                      green: 0.63
+                                                       blue: 0.63
+                                                      alpha: 1];
+
+  return [[NSGradient alloc] initWithStartingColor: gradientColor1
+                                       endingColor: gradientColor2];
+}
+
+- (NSGradient *) _windowTitlebarGradientInactive
+{
+  // Lighter gradient (0.92→0.83) for inactive titlebars.
+  NSColor* gradientColor1 = [NSColor colorWithCalibratedRed: 0.92
+                                                      green: 0.92
+                                                       blue: 0.92
+                                                      alpha: 1];
+  NSColor* gradientColor2 = [NSColor colorWithCalibratedRed: 0.83
+                                                      green: 0.83
+                                                       blue: 0.83
                                                       alpha: 1];
 
   return [[NSGradient alloc] initWithStartingColor: gradientColor1
