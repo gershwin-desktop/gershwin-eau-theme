@@ -18,7 +18,7 @@
 {
   NSGraphicsContext *ctxt = GSCurrentContext();
   const NSUInteger howMany = [items count];
-  int i;
+  NSUInteger i;
   int previousState = 0;
   const NSTabViewType type = [(NSTabView *)view tabViewType];
   const NSRect bounds = [view bounds];

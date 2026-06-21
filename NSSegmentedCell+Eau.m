@@ -44,7 +44,7 @@
   NSBezierPath* linesPath = [NSBezierPath bezierPath];
   [linesPath setLineWidth: 1];
   CGFloat offsetX = 0;
-  for (i = 0; i < count-1;i++)
+  for (i = 0; i < (NSInteger)count - 1; i++)
     {
       frame.size.width = [xself widthForSegment: i];
       if(frame.size.width == 0.0)
