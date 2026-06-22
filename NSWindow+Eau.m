@@ -101,7 +101,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 {
   if (window == nil)
     {
-      EAULOG(@"EauWindowLog: %@ window=(null)", event);
+      NSDebugLog(@"EauWindowLog: %@ window=(null)", event);
       return;
     }
   NSString *summary = nil;
@@ -109,7 +109,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     {
       summary = EAUDialogTextSummary(window);
     }
-  EAULOG(@"EauWindowLog: %@ window=%p class=%@ title='%@' visible=%d key=%d main=%d level=%ld",
+  NSDebugLog(@"EauWindowLog: %@ window=%p class=%@ title='%@' visible=%d key=%d main=%d level=%ld",
          event,
          window,
          NSStringFromClass([window class]),
@@ -120,7 +120,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
          (long)[window level]);
   if (summary != nil && [summary length] > 0)
     {
-      EAULOG(@"EauDialog: window=%p class=%@ text='%@'", window, NSStringFromClass([window class]), summary);
+      NSDebugLog(@"EauDialog: window=%p class=%@ text='%@'", window, NSStringFromClass([window class]), summary);
     }
 }
 
@@ -246,7 +246,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
               }
             } else {
               // Button is disabled, stop the animation and reset pulse progress
-              EAULOG(@"DefaultButtonAnimation: Button cell is disabled, stopping animation");
+              NSDebugLog(@"DefaultButtonAnimation: Button cell is disabled, stopping animation");
               defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
               NSView *cv = [defaultbuttoncell controlView];
               if (cv) {
@@ -263,7 +263,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   if (defaultbuttoncell && progress >= 1.0)
   {
     reverse = !reverse;
-    EAULOG(@"DefaultButtonAnimation: Reversing direction and restarting animation");
+    NSDebugLog(@"DefaultButtonAnimation: Reversing direction and restarting animation");
     if ([self isAnimating]) {
         [self startAnimation];
     }
@@ -287,9 +287,9 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 @synthesize animation;
 - (id) initWithButtonCell: (NSButtonCell*) cell
 {
-  EAULOG(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
+  NSDebugLog(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
   if (self = [super init]) {
-    self.buttoncell = cell;    EAULOG(@"DefaultButtonAnimationController: Initialized for button cell %p", cell);    
+    self.buttoncell = cell;    NSDebugLog(@"DefaultButtonAnimationController: Initialized for button cell %p", cell);    
     // Register for additional window notifications to handle visibility changes
     [[NSNotificationCenter defaultCenter] addObserver:self 
                                              selector:@selector(windowWillClose:) 
@@ -328,14 +328,14 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
                   forKeyPath:@"enabled"
                      options:NSKeyValueObservingOptionNew | NSKeyValueObservingOptionOld
                      context:NULL];
-        EAULOG(@"DefaultButtonAnimationController: Added KVO observer for enabled property on control %p", control);
+        NSDebugLog(@"DefaultButtonAnimationController: Added KVO observer for enabled property on control %p", control);
       }
       @catch (NSException *exception) {
-        EAULOG(@"DefaultButtonAnimationController: ERROR adding KVO observer for enabled property: %@", exception);
+        NSDebugLog(@"DefaultButtonAnimationController: ERROR adding KVO observer for enabled property: %@", exception);
       }
     }
     
-    EAULOG(@"DefaultButtonAnimationController: Successfully initialized with cell %p", cell);
+    NSDebugLog(@"DefaultButtonAnimationController: Successfully initialized with cell %p", cell);
   }
   return self;
 }
@@ -360,14 +360,14 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
  */
 - (id)windowWillReturnFieldEditor:(id)fieldEditor toObject:(id)anObject
 {
-  EAULOG(@"DefaultButtonAnimationController: windowWillReturnFieldEditor called for object %p, returning nil (use default)", anObject);
+  NSDebugLog(@"DefaultButtonAnimationController: windowWillReturnFieldEditor called for object %p, returning nil (use default)", anObject);
   return nil;  // Return nil to use the default field editor
 }
 
 
 - (void) dealloc
 {
-  EAULOG(@"DefaultButtonAnimationController: dealloc called");
+  NSDebugLog(@"DefaultButtonAnimationController: dealloc called");
   
   @try {
     // Stop animation and remove all notifications
@@ -391,10 +391,10 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
           NSControl *control = (NSControl *)cv;
           // paracoid check: only remove if it's still alive enough to have property
           [control removeObserver:self forKeyPath:@"enabled"];
-          EAULOG(@"DefaultButtonAnimationController: Removed KVO observer for enabled property on control %p", control);
+          NSDebugLog(@"DefaultButtonAnimationController: Removed KVO observer for enabled property on control %p", control);
         }
       } @catch (NSException *exception) {
-        EAULOG(@"DefaultButtonAnimationController: Exception removing KVO: %@", exception);
+        NSDebugLog(@"DefaultButtonAnimationController: Exception removing KVO: %@", exception);
       }
       
       @try {
@@ -403,7 +403,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
       } @catch (id ex) {}
     }
   } @catch (NSException *exception) {
-    EAULOG(@"DefaultButtonAnimationController: ERROR in dealloc: %@", exception);
+    NSDebugLog(@"DefaultButtonAnimationController: ERROR in dealloc: %@", exception);
   }
   
   buttoncell = nil;
@@ -411,12 +411,12 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 - (void) startPulse
 {
-  EAULOG(@"DefaultButtonAnimationController: startPulse called for cell %p", buttoncell);
+  NSDebugLog(@"DefaultButtonAnimationController: startPulse called for cell %p", buttoncell);
   [self startPulse: NO];
 }
 - (void) startPulse: (BOOL) reverse
 {
-  EAULOG(@"DefaultButtonAnimationController: startPulse:reverse called with reverse=%d for cell %p", reverse, buttoncell);
+  NSDebugLog(@"DefaultButtonAnimationController: startPulse:reverse called with reverse=%d for cell %p", reverse, buttoncell);
   
   // Check if the button cell is enabled before starting animation
   BOOL isEnabled = YES;
@@ -425,7 +425,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   }
   
   if (!isEnabled) {
-    EAULOG(@"DefaultButtonAnimationController: Button cell is disabled, not starting animation");
+    NSDebugLog(@"DefaultButtonAnimationController: Button cell is disabled, not starting animation");
     return;
   }
   
@@ -438,9 +438,9 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   [animation setAnimationBlockingMode:NSAnimationNonblocking];
   animation.defaultbuttoncell = buttoncell;
   
-  EAULOG(@"DefaultButtonAnimationController: Starting animation %p for cell %p", animation, buttoncell);
+  NSDebugLog(@"DefaultButtonAnimationController: Starting animation %p for cell %p", animation, buttoncell);
   [animation startAnimation];
-  EAULOG(@"DefaultButtonAnimationController: Animation started for cell %p", buttoncell);
+  NSDebugLog(@"DefaultButtonAnimationController: Animation started for cell %p", buttoncell);
 }
 - (void)animation:(NSAnimation *)a
             didReachProgressMark:(NSAnimationProgress)progress
@@ -451,7 +451,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
-      EAULOG(@"DefaultButtonAnimationController: Window resigned key, stopping animation");
+      NSDebugLog(@"DefaultButtonAnimationController: Window resigned key, stopping animation");
       [animation stopAnimation];
 }
 
@@ -461,21 +461,21 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
       NSWindow *window = [notification object];
       NSWindow *buttonWindow = [[buttoncell controlView] window];
       
-      EAULOG(@"DefaultButtonAnimationController: Window became key notification received");
-      EAULOG(@"DefaultButtonAnimationController: Notifying window %p, button window %p", window, buttonWindow);
+      NSDebugLog(@"DefaultButtonAnimationController: Window became key notification received");
+      NSDebugLog(@"DefaultButtonAnimationController: Notifying window %p, button window %p", window, buttonWindow);
       
       if (window == buttonWindow)
         {
           if ([self shouldAnimationBeRunning]) {
-              EAULOG(@"DefaultButtonAnimationController: Button's window became key and button is enabled, starting animation");
+              NSDebugLog(@"DefaultButtonAnimationController: Button's window became key and button is enabled, starting animation");
               [animation startAnimation];
           } else {
-              EAULOG(@"DefaultButtonAnimationController: Button's window became key but button is disabled, not starting animation");
+              NSDebugLog(@"DefaultButtonAnimationController: Button's window became key but button is disabled, not starting animation");
           }
         }
       else
         {
-          EAULOG(@"DefaultButtonAnimationController: Different window became key, ignoring");
+          NSDebugLog(@"DefaultButtonAnimationController: Different window became key, ignoring");
         }
 }
 
@@ -490,7 +490,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     } @catch (id ex) {}
     
     if (closingWindow == buttonWindow || closingWindow == nil) {
-        EAULOG(@"DefaultButtonAnimationController: Button's window is closing, stopping animation");
+        NSDebugLog(@"DefaultButtonAnimationController: Button's window is closing, stopping animation");
         if (animation) {
             [animation stopAnimation];
         }
@@ -503,7 +503,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     NSWindow *buttonWindow = [[buttoncell controlView] window];
     
     if (miniaturizedWindow == buttonWindow) {
-        EAULOG(@"DefaultButtonAnimationController: Button's window was miniaturized, stopping animation");
+        NSDebugLog(@"DefaultButtonAnimationController: Button's window was miniaturized, stopping animation");
         [animation stopAnimation];
     }
 }
@@ -514,24 +514,24 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     NSWindow *buttonWindow = [[buttoncell controlView] window];
     
     if (deminiaturizedWindow == buttonWindow && [self shouldAnimationBeRunning]) {
-        EAULOG(@"DefaultButtonAnimationController: Button's window was deminiaturized and button is enabled, starting animation");
+        NSDebugLog(@"DefaultButtonAnimationController: Button's window was deminiaturized and button is enabled, starting animation");
         [animation startAnimation];
     }
 }
 
 - (void)applicationDidHide:(NSNotification *)notification
 {
-    EAULOG(@"DefaultButtonAnimationController: Application was hidden, stopping animation");
+    NSDebugLog(@"DefaultButtonAnimationController: Application was hidden, stopping animation");
     [animation stopAnimation];
 }
 
 - (void)applicationDidUnhide:(NSNotification *)notification
 {
     if ([self shouldAnimationBeRunning]) {
-        EAULOG(@"DefaultButtonAnimationController: Application was unhidden and button is enabled and visible, starting animation");
+        NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden and button is enabled and visible, starting animation");
         [animation startAnimation];
     } else {
-        EAULOG(@"DefaultButtonAnimationController: Application was unhidden but button is disabled or window not visible, not starting animation");
+        NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden but button is disabled or window not visible, not starting animation");
     }
 }
 
@@ -569,23 +569,23 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
                        context:(void *)context
 {
     if ([keyPath isEqualToString:@"enabled"]) {
-        EAULOG(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
+        NSDebugLog(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
         
         // Immediately reset pulse progress if button becomes disabled
         if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
-            EAULOG(@"DefaultButtonAnimationController: Button disabled - immediately resetting pulse progress");
+            NSDebugLog(@"DefaultButtonAnimationController: Button disabled - immediately resetting pulse progress");
             buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
             [[buttoncell controlView] setNeedsDisplay: YES];
         }
         
         if ([self shouldAnimationBeRunning]) {
             if (![animation isAnimating]) {
-                EAULOG(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
+                NSDebugLog(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
                 [self startPulse];
             }
         } else {
             if ([animation isAnimating]) {
-                EAULOG(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
+                NSDebugLog(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
                 [animation stopAnimation];
             }
         }
@@ -606,7 +606,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 - (NSButton *) standardWindowButton: (NSWindowButton)button
                        forStyleMask: (NSUInteger) mask
 {
-  EAULOG(@"NSWindow+Eau standardWindowButton:forStyleMask:");
+  NSDebugLog(@"NSWindow+Eau standardWindowButton:forStyleMask:");
 
   if (EauTitleBarButtonStyleIsOrb()) {
     EauWindowButton *orbButton = [[EauWindowButton alloc] init];
@@ -694,14 +694,14 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 }
 
 - (void) _overrideNSWindowMethod_setDefaultButtonCell: (NSButtonCell *)aCell {
-  EAULOG(@"_overrideNSWindowMethod_setDefaultButtonCell:");
+  NSDebugLog(@"_overrideNSWindowMethod_setDefaultButtonCell:");
   NSWindow *xself = (NSWindow*)self;
   [xself EAUsetDefaultButtonCell:aCell];
 }
 
 // Override the center method to position windows using golden ratio
 - (void) _overrideNSWindowMethod_center {
-  EAULOG(@"_overrideNSWindowMethod_center: Positioning window with golden ratio");
+  NSDebugLog(@"_overrideNSWindowMethod_center: Positioning window with golden ratio");
   NSWindow *xself = (NSWindow*)self;
   [xself EAUcenter];
 }
@@ -750,7 +750,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
  */
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell
 {
-  EAULOG(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p for window %p", aCell, self);
+  NSDebugLog(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p for window %p", aCell, self);
   
   _defaultButtonCell = aCell;
   
@@ -773,7 +773,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
   [aCell setKeyEquivalentModifierMask: 0];
   [aCell setIsDefaultButton: [NSNumber numberWithBool: YES]];
 
-  EAULOG(@"NSWindow+Eau: Creating DefaultButtonAnimationController for cell %p", aCell);
+  NSDebugLog(@"NSWindow+Eau: Creating DefaultButtonAnimationController for cell %p", aCell);
   DefaultButtonAnimationController * animationcontroller = [[DefaultButtonAnimationController alloc] initWithButtonCell: aCell];
 
   // Retain controller via association to ensure it stays alive
@@ -803,7 +803,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
    */
   if ([self isKindOfClass: NSClassFromString(@"GWDialog")])
     {
-      EAULOG(@"NSWindow+Eau: Skipping delegate assignment for GWDialog %p to preserve text field focus", self);
+      NSDebugLog(@"NSWindow+Eau: Skipping delegate assignment for GWDialog %p to preserve text field focus", self);
     }
   else
     {
@@ -811,19 +811,19 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
       id currentDelegate = [self delegate];
       if (currentDelegate == nil || currentDelegate == animationcontroller)
         {
-          EAULOG(@"NSWindow+Eau: Setting window delegate to animation controller %p for window %p", animationcontroller, self);
+          NSDebugLog(@"NSWindow+Eau: Setting window delegate to animation controller %p for window %p", animationcontroller, self);
           [self setDelegate: animationcontroller];
         }
       else
         {
-          EAULOG(@"NSWindow+Eau: Preserving existing delegate %@ for window %p", currentDelegate, self);
+          NSDebugLog(@"NSWindow+Eau: Preserving existing delegate %@ for window %p", currentDelegate, self);
         }
     }
   
-  EAULOG(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
+  NSDebugLog(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
   [animationcontroller startPulse];
   
-  EAULOG(@"NSWindow+Eau: Default button cell setup completed for cell %p", aCell);
+  NSDebugLog(@"NSWindow+Eau: Default button cell setup completed for cell %p", aCell);
 }
 
 - (void) animateDefaultButton: (id)sender
@@ -833,7 +833,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 // Golden ratio positioning method
 - (void) EAUcenter
 {
-  EAULOG(@"NSWindow+Eau: EAUcenter called - applying golden ratio positioning");
+  NSDebugLog(@"NSWindow+Eau: EAUcenter called - applying golden ratio positioning");
   
   NSScreen *screen = [self screen];
   if (!screen) {
@@ -841,7 +841,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
   }
   
   if (!screen) {
-    EAULOG(@"NSWindow+Eau: No screen available, using standard center");
+    NSDebugLog(@"NSWindow+Eau: No screen available, using standard center");
     [self center];
     return;
   }
@@ -849,8 +849,8 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
   NSRect screenFrame = [screen visibleFrame];
   NSRect windowFrame = [self frame];
   
-  EAULOG(@"NSWindow+Eau: Screen frame: %@", NSStringFromRect(screenFrame));
-  EAULOG(@"NSWindow+Eau: Window frame: %@", NSStringFromRect(windowFrame));
+  NSDebugLog(@"NSWindow+Eau: Screen frame: %@", NSStringFromRect(screenFrame));
+  NSDebugLog(@"NSWindow+Eau: Window frame: %@", NSStringFromRect(windowFrame));
   
   // Golden ratio ≈ 1.618, inverse ≈ 0.618
   // Position the window vertically at the golden ratio point
@@ -881,7 +881,7 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
   
   NSRect newFrame = NSMakeRect(x, y, windowFrame.size.width, windowFrame.size.height);
   
-  EAULOG(@"NSWindow+Eau: New window frame with golden ratio: %@", NSStringFromRect(newFrame));
+  NSDebugLog(@"NSWindow+Eau: New window frame with golden ratio: %@", NSStringFromRect(newFrame));
   
   [self setFrame:newFrame display:YES];
 }

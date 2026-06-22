@@ -13,7 +13,7 @@
 @implementation NSApplication (EauBeep)
 
 + (void)load {
-    EAULOG(@"NSApplication(EauBeep) +load");
+    NSDebugLog(@"NSApplication(EauBeep) +load");
 }
 
 
@@ -24,27 +24,27 @@
     
     // Prevent recursive calls
     if (isPlaying) {
-        EAULOG(@"Re-entrant beep ignored");
+        NSDebugLog(@"Re-entrant beep ignored");
         return;
     }
     
     isPlaying = YES;
-    EAULOG(@"-beep called");
+    NSDebugLog(@"-beep called");
     
     @autoreleasepool {
         // Load preferences for alert sound
         NSString *prefsPath = [NSHomeDirectory() stringByAppendingPathComponent:
                               @".config/gershwin/sound-defaults.plist"];
-        EAULOG(@"prefsPath: %@", prefsPath);
+        NSDebugLog(@"prefsPath: %@", prefsPath);
         
         NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:prefsPath];
         
         if (prefs) {
-            EAULOG(@"Loaded prefs");
+            NSDebugLog(@"Loaded prefs");
             NSString *alertSoundName = [prefs objectForKey:@"alertSound"];
             
             if (alertSoundName) {
-                EAULOG(@"alertSound: %@", alertSoundName);
+                NSDebugLog(@"alertSound: %@", alertSoundName);
                 // Search for the sound file
                 NSArray *soundPaths = @[
                     @"/System/Library/Sounds",
@@ -61,31 +61,31 @@
                                              [alertSoundName stringByAppendingPathExtension:ext]];
                         
                         if ([[NSFileManager defaultManager] fileExistsAtPath:soundPath]) {
-                            EAULOG(@"Found sound at %@", soundPath);
+                            NSDebugLog(@"Found sound at %@", soundPath);
                             // Play the sound using NSSound
                             NSSound *sound = [[NSSound alloc] initWithContentsOfFile:soundPath
                                                                         byReference:YES];
                             if (sound) {
-                                EAULOG(@"Playing sound %@", soundPath);
+                                NSDebugLog(@"Playing sound %@", soundPath);
                                 [sound play];
                                 isPlaying = NO;
                                 return;
                             } else {
-                                EAULOG(@"Failed to init NSSound for %@", soundPath);
+                                NSDebugLog(@"Failed to init NSSound for %@", soundPath);
                             }
                         }
                     }
                 }
-                EAULOG(@"No sound file found for %@ in sound paths", alertSoundName);
+                NSDebugLog(@"No sound file found for %@ in sound paths", alertSoundName);
             } else {
-                EAULOG(@"alertSound key missing in prefs");
+                NSDebugLog(@"alertSound key missing in prefs");
             }
         } else {
-            EAULOG(@"No prefs found at %@", prefsPath);
+            NSDebugLog(@"No prefs found at %@", prefsPath);
         }
         
         // Fall back to system beep (PC speaker or /dev/console)
-        EAULOG(@"Falling back to system bell");
+        NSDebugLog(@"Falling back to system bell");
         printf("\a");
         fflush(stdout);
     }

@@ -3,13 +3,6 @@
 #import <GNUstepGUI/GSTheme.h>
 #import "NSTableView+Eau.h"
 
-// To enable debugging messages in the _overrideClassMethod_foo mechanism
-#if 0
-#define EAULOG(args...) NSDebugLog(args)
-#else
-#define EAULOG(args...)
-#endif
-
 // Menu item horizontal padding in pixels. This value is the total horizontal
 // padding applied to a menu item and is split equally between the left and
 // right sides (e.g. 10.0 => 5 px on the left, 5 px on the right). The

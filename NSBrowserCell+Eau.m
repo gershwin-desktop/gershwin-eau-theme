@@ -6,7 +6,7 @@
 
 @implementation Eau(NSBrowserCell)
 - (void) _overrideNSBrowserCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView *)controlView {
-  EAULOG(@"_overrideNSBrowserCellMethod_drawInteriorWithFrame:inView:");
+  NSDebugLog(@"_overrideNSBrowserCellMethod_drawInteriorWithFrame:inView:");
   NSBrowserCell *xself = (NSBrowserCell*)self;
   [xself EAUdrawInteriorWithFrame:cellFrame inView:controlView];
 }

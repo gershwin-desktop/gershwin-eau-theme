@@ -10,7 +10,7 @@
 
 - (NSPoint)eau_locationForSubmenu:(NSMenu *)aSubmenu
 {
-  EAULOG(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
+  NSDebugLog(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
 
   NSMenuView *menuView = (NSMenuView *)self;
   NSWindow *window = [menuView window];
@@ -44,7 +44,7 @@
       // If the menu would extend past the bottom screen border, shift it up.
       if (yPos < 0)
         {
-          EAULOG(@"NSMenuView+Eau: Horizontal menu extends past bottom border (yPos=%.1f), shifting up", yPos);
+          NSDebugLog(@"NSMenuView+Eau: Horizontal menu extends past bottom border (yPos=%.1f), shifting up", yPos);
           yPos = 0;
         }
       // Clamp horizontally so the menu fits on screen.
@@ -64,7 +64,7 @@
               screenOrigin.x = screenFrame.origin.x;
             }
         }
-      EAULOG(@"NSMenuView+Eau: Horizontal pos for '%@': itemRect=%@ screenOrigin=%@ subH=%.1f → (%.1f, %.1f)",
+      NSDebugLog(@"NSMenuView+Eau: Horizontal pos for '%@': itemRect=%@ screenOrigin=%@ subH=%.1f → (%.1f, %.1f)",
             [aSubmenu title], NSStringFromRect(itemRect), NSStringFromPoint(screenOrigin),
             subH, screenOrigin.x, yPos);
       return NSMakePoint(screenOrigin.x, yPos);
@@ -107,7 +107,7 @@
   // If the menu would extend past the bottom screen border, shift it up.
   if (yPos < 0)
     {
-      EAULOG(@"NSMenuView+Eau: Vertical submenu extends past bottom border (yPos=%.1f), shifting up", yPos);
+      NSDebugLog(@"NSMenuView+Eau: Vertical submenu extends past bottom border (yPos=%.1f), shifting up", yPos);
       yPos = 0;
     }
   // If the menu would extend past the top screen border, shift it down.
@@ -136,7 +136,7 @@
         }
     }
 
-  EAULOG(@"NSMenuView+Eau: Vertical pos for '%@': parentFrame=%@ itemScreen=%@ itemH=%.1f subH=%.1f → (%.1f, %.1f)",
+  NSDebugLog(@"NSMenuView+Eau: Vertical pos for '%@': parentFrame=%@ itemScreen=%@ itemH=%.1f subH=%.1f → (%.1f, %.1f)",
         [aSubmenu title], NSStringFromRect(parentFrame), NSStringFromPoint(screenOrigin),
         itemH, subH, xPos, yPos);
   return NSMakePoint(xPos, yPos);
@@ -151,7 +151,7 @@ static void initMenuViewSwizzling(void) {
 
   Class menuViewClass = objc_getClass("NSMenuView");
   if (!menuViewClass) {
-    EAULOG(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
+    NSDebugLog(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
     return;
   }
 
@@ -163,12 +163,12 @@ static void initMenuViewSwizzling(void) {
   Method swizzledMethod = class_getInstanceMethod(menuViewClass, swizzledSelector);
 
   if (!originalMethod) {
-    EAULOG(@"NSMenuView+Eau: ERROR - Could not find original locationForSubmenu: method");
+    NSDebugLog(@"NSMenuView+Eau: ERROR - Could not find original locationForSubmenu: method");
     return;
   }
 
   if (!swizzledMethod) {
-    EAULOG(@"NSMenuView+Eau: ERROR - Could not find eau_locationForSubmenu: method on NSMenuView");
+    NSDebugLog(@"NSMenuView+Eau: ERROR - Could not find eau_locationForSubmenu: method on NSMenuView");
     return;
   }
 
@@ -176,7 +176,7 @@ static void initMenuViewSwizzling(void) {
   IMP originalIMP = method_getImplementation(originalMethod);
   IMP swizzledIMP = method_getImplementation(swizzledMethod);
   if (originalIMP == swizzledIMP) {
-    EAULOG(@"NSMenuView+Eau: Swizzling skipped - implementations already identical");
+    NSDebugLog(@"NSMenuView+Eau: Swizzling skipped - implementations already identical");
     return;
   }
 

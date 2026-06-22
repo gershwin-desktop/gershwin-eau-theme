@@ -45,7 +45,7 @@ __attribute__((constructor))
 static void initFontSwizzling(void) {
   Class fontClass = [NSFont class];
   if (!fontClass) {
-    EAULOG(@"NSFont+Eau: ERROR - NSFont class not found");
+    NSDebugLog(@"NSFont+Eau: ERROR - NSFont class not found");
     return;
   }
 
@@ -66,10 +66,10 @@ static void initFontSwizzling(void) {
     }
   } else {
     if (!originalMenuBarFontMethod) {
-      EAULOG(@"NSFont+Eau: ERROR - Could not find original menuBarFontOfSize: method");
+      NSDebugLog(@"NSFont+Eau: ERROR - Could not find original menuBarFontOfSize: method");
     }
     if (!swizzledMenuBarFontMethod) {
-      EAULOG(@"NSFont+Eau: ERROR - Could not find eau_menuBarFontOfSize: method on NSFont");
+      NSDebugLog(@"NSFont+Eau: ERROR - Could not find eau_menuBarFontOfSize: method on NSFont");
     }
   }
 
@@ -90,10 +90,10 @@ static void initFontSwizzling(void) {
     }
   } else {
     if (!originalMenuFontMethod) {
-      EAULOG(@"NSFont+Eau: ERROR - Could not find original menuFontOfSize: method");
+      NSDebugLog(@"NSFont+Eau: ERROR - Could not find original menuFontOfSize: method");
     }
     if (!swizzledMenuFontMethod) {
-      EAULOG(@"NSFont+Eau: ERROR - Could not find eau_menuFontOfSize: method on NSFont");
+      NSDebugLog(@"NSFont+Eau: ERROR - Could not find eau_menuFontOfSize: method on NSFont");
     }
   }
 }

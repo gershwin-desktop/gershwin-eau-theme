@@ -101,7 +101,7 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
   Class menuPanelClass = objc_getClass("NSMenuPanel");
   if (!menuPanelClass)
     {
-      EAULOG(@"Eau: NSMenuPanel class not found, skipping menu window swizzles");
+      NSDebugLog(@"Eau: NSMenuPanel class not found, skipping menu window swizzles");
       return;
     }
 
@@ -112,7 +112,7 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
     {
       s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))method_getImplementation(mOrigin);
       method_setImplementation(mOrigin, (IMP)s_eau_menuWindowSetFrameOrigin);
-      EAULOG(@"Eau: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
+      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
     }
 
   // Swizzle setFrame:display: (catches sizeToFit calls that bypass setFrameOrigin:)
@@ -122,7 +122,7 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
     {
       s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))method_getImplementation(mFrameDisplay);
       method_setImplementation(mFrameDisplay, (IMP)s_eau_menuWindowSetFrameDisplay);
-      EAULOG(@"Eau: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
+      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
     }
 }
 
@@ -392,13 +392,13 @@ static void swizzleNSMenuMethod(Class menuClass,
 
   if (!originalMethod)
     {
-      EAULOG(@"Eau: Cannot swizzle NSMenu -%s: original method not found", methodName);
+      NSDebugLog(@"Eau: Cannot swizzle NSMenu -%s: original method not found", methodName);
       return;
     }
 
   if (!swizzledMethod)
     {
-      EAULOG(@"Eau: Cannot swizzle NSMenu -%s: swizzled method not found", methodName);
+      NSDebugLog(@"Eau: Cannot swizzle NSMenu -%s: swizzled method not found", methodName);
       return;
     }
 
@@ -407,12 +407,12 @@ static void swizzleNSMenuMethod(Class menuClass,
   IMP swizzledIMP = method_getImplementation(swizzledMethod);
   if (originalIMP == swizzledIMP)
     {
-      EAULOG(@"Eau: NSMenu -%s already swizzled, skipping", methodName);
+      NSDebugLog(@"Eau: NSMenu -%s already swizzled, skipping", methodName);
       return;
     }
 
   method_exchangeImplementations(originalMethod, swizzledMethod);
-  EAULOG(@"Eau: Swizzled NSMenu -%s for Macintosh menu support", methodName);
+  NSDebugLog(@"Eau: Swizzled NSMenu -%s for Macintosh menu support", methodName);
 }
 
 /**
@@ -427,11 +427,11 @@ static void initNSMenuSwizzling(void)
   Class menuClass = objc_getClass("NSMenu");
   if (!menuClass)
     {
-      EAULOG(@"Eau: Failed to get NSMenu class for swizzling");
+      NSDebugLog(@"Eau: Failed to get NSMenu class for swizzling");
       return;
     }
 
-  EAULOG(@"Eau: Installing NSMenu swizzles for Macintosh interface style support");
+  NSDebugLog(@"Eau: Installing NSMenu swizzles for Macintosh interface style support");
 
   // Swizzle -menuChanged
   // Posts notification when menu changes reach the main menu

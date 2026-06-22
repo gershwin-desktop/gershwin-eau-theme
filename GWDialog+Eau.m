@@ -133,49 +133,49 @@ static void EAULayoutGWDialog(GWDialog *dialog)
      Cancel button should respond to Escape. This must be done carefully
      to avoid interfering with the existing target/action setup. */
   
-  EAULOG(@"EauDialog: Configuring button key equivalents and default button");
+  NSDebugLog(@"EauDialog: Configuring button key equivalents and default button");
   
   // Verify buttons exist and have proper targets/actions before modifying
   if (okButt && [okButt target] && [okButt action])
     {
-      EAULOG(@"EauDialog: OK button has target %@ and action %@", 
+      NSDebugLog(@"EauDialog: OK button has target %@ and action %@", 
              [okButt target], NSStringFromSelector([okButt action]));
       
       // Set Enter key to trigger OK button
       [okButt setKeyEquivalent: @"\r"];
       [okButt setKeyEquivalentModifierMask: 0];
-      EAULOG(@"EauDialog: Set OK button key equivalent to Enter");
+      NSDebugLog(@"EauDialog: Set OK button key equivalent to Enter");
       
       // Mark OK as the default button - this triggers pulsating animation
       NSButtonCell *okCell = [okButt cell];
       if (okCell)
         {
           [dialog setDefaultButtonCell: okCell];
-          EAULOG(@"EauDialog: Set OK button cell %@ as default button", okCell);
+          NSDebugLog(@"EauDialog: Set OK button cell %@ as default button", okCell);
         }
       else
         {
-          EAULOG(@"EauDialog: WARNING - OK button has no cell, cannot set as default");
+          NSDebugLog(@"EauDialog: WARNING - OK button has no cell, cannot set as default");
         }
     }
   else
     {
-      EAULOG(@"EauDialog: WARNING - OK button missing target or action, not setting key equivalent");
+      NSDebugLog(@"EauDialog: WARNING - OK button missing target or action, not setting key equivalent");
     }
   
   if (cancelButt && [cancelButt target] && [cancelButt action])
     {
-      EAULOG(@"EauDialog: Cancel button has target %@ and action %@",
+      NSDebugLog(@"EauDialog: Cancel button has target %@ and action %@",
              [cancelButt target], NSStringFromSelector([cancelButt action]));
       
       // Set Escape key to trigger Cancel button
       [cancelButt setKeyEquivalent: @"\e"];
       [cancelButt setKeyEquivalentModifierMask: 0];
-      EAULOG(@"EauDialog: Set Cancel button key equivalent to Escape");
+      NSDebugLog(@"EauDialog: Set Cancel button key equivalent to Escape");
     }
   else
     {
-      EAULOG(@"EauDialog: WARNING - Cancel button missing target or action, not setting key equivalent");
+      NSDebugLog(@"EauDialog: WARNING - Cancel button missing target or action, not setting key equivalent");
     }
 
   // Set up key view loop for tab navigation.
@@ -183,7 +183,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   [editField setNextKeyView: okButt];
   [okButt setNextKeyView: cancelButt];
   [cancelButt setNextKeyView: editField];
-  EAULOG(@"EauDialog: Configured key view loop for tab navigation");
+  NSDebugLog(@"EauDialog: Configured key view loop for tab navigation");
 
   // Set initial first responder to the edit field for immediate keyboard input.
   // This ensures the text field gets focus automatically when the dialog opens,
@@ -191,13 +191,13 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   // This is now safe because we don't set a problematic delegate on GWDialog
   // (see NSWindow+Eau.m eau_setDefaultButtonCell for delegate handling).
   [dialog setInitialFirstResponder: editField];
-  EAULOG(@"EauDialog: Set initial first responder to edit field %p", editField);
+  NSDebugLog(@"EauDialog: Set initial first responder to edit field %p", editField);
 
   // Position dialog using golden ratio centering.
   [dialog center];
 
   // Log dialog content for diagnostics.
-  EAULOG(@"EauDialog: GWDialog layout title='%@' edit='%@' switch='%@'", 
+  NSDebugLog(@"EauDialog: GWDialog layout title='%@' edit='%@' switch='%@'", 
          [titleField stringValue],
          [editField stringValue],
          (switchButt != nil) ? [switchButt title] : @"");
@@ -257,7 +257,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   if (originalRunModal && eauRunModal)
     {
       method_exchangeImplementations(originalRunModal, eauRunModal);
-      EAULOG(@"GWDialog+Eau: Swizzled runModal for focus management");
+      NSDebugLog(@"GWDialog+Eau: Swizzled runModal for focus management");
     }
 
   // Swizzle NSWindow validRequestorForSendType:returnType: to avoid crashes
@@ -286,15 +286,15 @@ static void EAULayoutGWDialog(GWDialog *dialog)
                editText: (NSString *)eText
             switchTitle: (NSString *)swTitle
 {
-  EAULOG(@"EauDialog: Eau-themed init starting for title='%@'", title);
+  NSDebugLog(@"EauDialog: Eau-themed init starting for title='%@'", title);
   
   // Call the original implementation (which is now named eau_initWithTitle due to swizzling)
   id dialog = [self eau_initWithTitle: title editText: eText switchTitle: swTitle];
   if (dialog != nil)
     {
-      EAULOG(@"EauDialog: Original init completed, applying Eau layout and focus setup");
+      NSDebugLog(@"EauDialog: Original init completed, applying Eau layout and focus setup");
       EAULayoutGWDialog((GWDialog *)dialog);
-      EAULOG(@"EauDialog: Initialization complete for dialog %p", dialog);
+      NSDebugLog(@"EauDialog: Initialization complete for dialog %p", dialog);
     }
   return dialog;
 }
@@ -316,7 +316,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
  */
 - (NSModalResponse)eau_runModal
 {
-  EAULOG(@"GWDialog: eau_runModal called - activating app and making window key");
+  NSDebugLog(@"GWDialog: eau_runModal called - activating app and making window key");
   
   // Activate the application to bring it to front
   [[NSApplication sharedApplication] activateIgnoringOtherApps: YES];
@@ -324,7 +324,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   // Make this dialog the key window so it receives keyboard input
   [self makeKeyAndOrderFront: nil];
   
-  EAULOG(@"GWDialog: Window is now key: %d, first responder: %@", 
+  NSDebugLog(@"GWDialog: Window is now key: %d, first responder: %@", 
          [self isKeyWindow], [[self firstResponder] class]);
   
   // Call the original runModal (which is now named eau_runModal due to swizzling)
