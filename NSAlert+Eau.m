@@ -22,16 +22,6 @@ static void setButton(NSView *content, NSButton *control, NSButton *templateBtn)
 static void setKeyEquivalent(NSButton *button);
 static NSScrollView *makeScrollViewWithRect(NSRect rect);
 
-static id EAUGetAlertIvar(id obj, const char *name)
-{
-    Ivar ivar = class_getInstanceVariable([obj class], name);
-    if (ivar == NULL)
-    {
-        return nil;
-    }
-    return object_getIvar(obj, ivar);
-}
-
 // Declare -beep on NSApplication so callers in this file don't warn at compile time
 @interface NSApplication (EauBeep)
 - (void)beep;
@@ -48,12 +38,26 @@ static id EAUGetAlertIvar(id obj, const char *name)
 
 #pragma mark - EauAlertPanel Implementation
 
-@implementation EauAlertPanel
+// Re-entrant guard flag, stored as an associated object so EauAlertPanel
+// method implementations are safe to swizzle onto any class (e.g., GSAlertPanel)
+// that shares the same ivar layout but lacks a dedicated _isStoppingModal ivar.
+static const void *kEAUAlertIsStoppingKey = &kEAUAlertIsStoppingKey;
+static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
+
+static BOOL eauAlertIsStopping(id panel)
 {
-    BOOL _isStoppingModal;
+    return [objc_getAssociatedObject(panel, kEAUAlertIsStoppingKey) boolValue];
 }
 
-static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
+static void eauAlertSetStopping(id panel, BOOL val)
+{
+    objc_setAssociatedObject(panel,
+                             kEAUAlertIsStoppingKey,
+                             @(val),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+@implementation EauAlertPanel
 
 + (void) initialize
 {
@@ -156,8 +160,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     
     result = NSAlertErrorReturn;
     isGreen = YES;
-    _isStoppingModal = NO;
-    
+
     NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
     return self;
 }
@@ -183,65 +186,44 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     return [self initWithContentRect: NSMakeRect(x, y, winW, winH)];
 }
 
-// Helper method injected into GSAlertPanel via swizzling
-// - Calls original _initWithoutGModel
-// - Removes legacy separator line
-// - Applies Eau fonts to match AppearanceMetrics
+// Helper method injected into GSAlertPanel via swizzling.
+// Instead of building a GSAlertPanel (the old look), morphs `self` into an
+// EauAlertPanel at the ObjC runtime level so it renders with full Eau metrics.
+//
+// GSAlertPanel and EauAlertPanel have identical ivar layouts (same ivars, same
+// types, same order), so object_setClass() is safe — every ivar access resolves
+// to the correct offset regardless of which class's method table we dispatch
+// through.  The only previous difference was a _isStoppingModal ivar on
+// EauAlertPanel, which has been refactored into an associated object
+// (eauAlertIsStopping / eauAlertSetStopping) so the instance sizes match.
 - (id) eau_initWithoutGModelHelper
 {
-    // Call the original implementation (which is now at this selector after swizzling)
-    id panel = [self eau_initWithoutGModel];
-    if (panel == nil)
-        return nil;
+    // Do NOT call the original GSAlertPanel _initWithoutGModel — we're building
+    // an EauAlertPanel from scratch instead.
 
-    // Apply Eau fonts to legacy GSAlertPanel controls
-    NSTextField *legacyTitleField = (NSTextField *)EAUGetAlertIvar(panel, "titleField");
-    NSTextField *legacyMessageField = (NSTextField *)EAUGetAlertIvar(panel, "messageField");
-    NSButton *legacyDefButton = (NSButton *)EAUGetAlertIvar(panel, "defButton");
-    NSButton *legacyAltButton = (NSButton *)EAUGetAlertIvar(panel, "altButton");
-    NSButton *legacyOthButton = (NSButton *)EAUGetAlertIvar(panel, "othButton");
+    // Morph this GSAlertPanel instance into an EauAlertPanel.
+    // GSAlertPanel and EauAlertPanel have identical ivar layouts (the old
+    // _isStoppingModal ivar was refactored into an associated object), so
+    // object_setClass() is safe.
+    object_setClass(self, [EauAlertPanel class]);
 
-    if (legacyTitleField != nil)
-    {
-        [legacyTitleField setFont: METRICS_FONT_SYSTEM_BOLD_13];
-    }
-    if (legacyMessageField != nil)
-    {
-        [legacyMessageField setFont: METRICS_FONT_SYSTEM_REGULAR_11];
-    }
-    if (legacyDefButton != nil)
-    {
-        [legacyDefButton setFont: METRICS_FONT_SYSTEM_BOLD_13];
-        [legacyDefButton sizeToFit];
-    }
-    if (legacyAltButton != nil)
-    {
-        [legacyAltButton setFont: METRICS_FONT_SYSTEM_REGULAR_13];
-        [legacyAltButton sizeToFit];
-    }
-    if (legacyOthButton != nil)
-    {
-        [legacyOthButton setFont: METRICS_FONT_SYSTEM_REGULAR_13];
-        [legacyOthButton sizeToFit];
-    }
-    
-    // Remove the horizontal line (NSBox with NSGrooveBorder)
-    NSView *content = [(NSPanel *)panel contentView];
-    NSArray *subviews = [[content subviews] copy];
-    for (NSView *subview in subviews)
-    {
-        if ([subview isKindOfClass: [NSBox class]])
-        {
-            NSBox *box = (NSBox *)subview;
-            // The line has NSGrooveBorder and is very thin (height <= 3)
-            if ([box borderType] == NSGrooveBorder && [box frame].size.height <= 3.0)
-            {
-                [box removeFromSuperview];
-                NSDebugLog(@"Eau: Removed horizontal line from GSAlertPanel");
-            }
-        }
-    }
-    return panel;
+    // Call EauAlertPanel's initWithContentRect: directly (not init, to avoid ARC
+    // self-assignment constraints in non-init-family helper methods).  This
+    // initializes the NSPanel part and creates all subviews with Eau metrics
+    // from AppearanceMetrics.h.
+    //
+    // Compute a centered initial frame the same way EauAlertPanel.init does.
+    NSScreen *screen = [NSScreen mainScreen];
+    CGFloat winW = METRICS_WIN_MIN_WIDTH;
+    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat screenW = [screen visibleFrame].size.width;
+    CGFloat screenH = [screen visibleFrame].size.height;
+    CGFloat x = ([screen visibleFrame].origin.x
+                 + (screenW - winW) / 2);
+    CGFloat y = ([screen visibleFrame].origin.y
+                 + (screenH - winH) / 2);
+
+    return [self initWithContentRect: NSMakeRect(x, y, winW, winH)];
 }
 
 // Helper method to get the default button from GSAlertPanel
@@ -560,20 +542,21 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
 - (void) buttonAction: (id)sender
 {
-    NSLog(@"Eau: buttonAction called, sender: %@, _isStoppingModal: %d", sender, _isStoppingModal);
+    BOOL stopping = eauAlertIsStopping(self);
+    NSLog(@"Eau: buttonAction called, sender: %@, stopping: %d", sender, stopping);
     if (sender == nil)
     {
         NSLog(@"Eau: WARNING - buttonAction called with nil sender");
         return;
     }
-    
+
     // Prevent re-entrant calls while stopping modal
-    if (_isStoppingModal)
+    if (stopping)
     {
         NSLog(@"Eau: WARNING - buttonAction called while already stopping modal, ignoring");
         return;
     }
-    
+
     NSInteger tag = [sender tag];
     NSLog(@"Eau: buttonAction tag: %ld", tag);
     if (![self isActivePanel])
@@ -581,20 +564,20 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
         NSLog(@"Eau: WARNING - buttonAction called when not in modal loop");
         return;
     }
-    
+
     result = tag;
-    _isStoppingModal = YES;
-    
+    eauAlertSetStopping(self, YES);
+
     NSLog(@"Eau: buttonAction will stop modal with result: %ld", result);
-    
+
     // Defer stopping the modal to the next run loop iteration.
-    // We use performSelector with specific modes because dispatch_async to the 
+    // We use performSelector with specific modes because dispatch_async to the
     // main queue may not execute while the run loop is in NSModalPanelRunLoopMode.
     [self performSelector: @selector(_stopModalDeferred)
                withObject: nil
                afterDelay: 0.0
                   inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
-    
+
     NSLog(@"Eau: buttonAction scheduled deferred modal stop");
 }
 
@@ -607,7 +590,7 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     } else {
         NSLog(@"Eau: _stopModalDeferred skipped - panel no longer active");
     }
-    _isStoppingModal = NO;
+    eauAlertSetStopping(self, NO);
 }
 
 - (NSInteger) result
