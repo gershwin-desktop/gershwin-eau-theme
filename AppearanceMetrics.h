@@ -40,8 +40,9 @@ static const float METRICS_BUTTON_HEIGHT = 20.0;
 // Small buttons shall always be 17px high (resize any buttons requested to be 14-18px high to be 17px)
 static const float METRICS_BUTTON_SMALL_HEIGHT = 17.0;
 
-// Standard minimum button width shall be 69px
-static const float METRICS_BUTTON_MIN_WIDTH = 69.0;
+// Standard minimum button width shall be 100px to leave ~24px of space on
+// each side of the button text inside the pill shape.
+static const float METRICS_BUTTON_MIN_WIDTH = 100.0;
 
 // Margin between content and window edge shall be 15px at the top, 24px at the sides, and 20px at the bottom
 static const float METRICS_CONTENT_TOP_MARGIN = 15.0;

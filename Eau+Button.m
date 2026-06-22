@@ -1,5 +1,6 @@
 #import "Eau.h"
 #import "Eau+Button.h"
+#import "AppearanceMetrics.h"
 
 
 NSString * const kEauIsDefaultButton = @"kEauIsDefaultButton";
@@ -138,8 +139,32 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 }
 - (void) _drawRoundedBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
 {
-  float r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0;
-  [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: r];
+  [self _drawRoundedBezel: cellFrame withColor: backgroundColor inCell: nil];
+}
+- (void) _drawRoundedBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor inCell: (NSCell*)cell
+{
+  // Decide whether to use pill shape (fully rounded ends) or regular round corners.
+  // Pill shape is skipped for tall buttons that have no title text (graphic-only).
+  BOOL usePill = YES;
+  if (cell && cellFrame.size.height > METRICS_BUTTON_HEIGHT)
+    {
+      NSString *title = [cell title];
+      if (!title || [title length] == 0)
+        {
+          usePill = NO;
+        }
+    }
+
+  if (usePill)
+    {
+      float r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0;
+      [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: r];
+    }
+  else
+    {
+      // Fall back to regular round bezel (radius 4) for tall graphic-only buttons
+      [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: 4];
+    }
 }
 - (void) drawCircularBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
 {
@@ -164,19 +189,35 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 
 - (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style
 {
+  return [self buttonBezierPathWithRect: frame andStyle: style inCell: nil];
+}
+- (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style inCell: (NSCell*)cell
+{
   NSBezierPath* bezierPath;
   CGFloat r;
   CGFloat x;
+
+  // For rounded styles, check whether pill shape is appropriate
+  BOOL usePill = YES;
+  if (cell && frame.size.height > METRICS_BUTTON_HEIGHT)
+    {
+      NSString *title = [cell title];
+      if (!title || [title length] == 0)
+        {
+          usePill = NO;
+        }
+    }
+
   switch (style)
     {
       case NSRoundRectBezelStyle:
-        r = MIN(frame.size.width, frame.size.height) / 2.0;
+        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
-        r = MIN(frame.size.width, frame.size.height) / 2.0;
+        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
@@ -204,12 +245,12 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSDisclosureBezelStyle:
       case NSRoundedDisclosureBezelStyle:
       case NSRecessedBezelStyle:
-        r = MIN(frame.size.width, frame.size.height) / 2.0;
+        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
         bezierPath = [self _roundBezierPath: frame
                                   withRadius: r];
         break;
       default:
-        r = MIN(frame.size.width, frame.size.height) / 2.0;
+        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
         bezierPath = [self _roundBezierPath: frame
                                   withRadius: r];
     }
@@ -226,11 +267,11 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   switch (style)
     {
       case NSRoundRectBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color inCell: cell];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color inCell: cell];
         break;
       case NSTexturedSquareBezelStyle:
         frame = NSInsetRect(frame, 0, 1);
@@ -277,10 +318,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSDisclosureBezelStyle:
       case NSRoundedDisclosureBezelStyle:
       case NSRecessedBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color inCell: cell];
         break;
       default:
-        [self _drawRoundedBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color inCell: cell];
     }
 }
 

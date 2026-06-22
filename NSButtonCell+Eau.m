@@ -15,6 +15,7 @@
 #import "NSCell+Eau.h"
 #import "NSButtonCell+Eau.h"
 #import "Eau+Button.h"
+#import "AppearanceMetrics.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <dispatch/dispatch.h>
@@ -135,6 +136,12 @@ static NSMutableSet *returnImageCells = nil;
   Class cls = [NSButtonCell class];
   Method orig = class_getInstanceMethod(cls, @selector(drawInteriorWithFrame:inView:));
   Method swiz = class_getInstanceMethod(cls, @selector(EAU_drawInteriorWithFrame:inView:));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  // Swizzle -cellSize so buttons always request at least the minimum width
+  // (METRICS_BUTTON_MIN_WIDTH), giving the pill shape enough horizontal room.
+  orig = class_getInstanceMethod(cls, @selector(cellSize));
+  swiz = class_getInstanceMethod(cls, @selector(EAU_cellSize));
   if (orig && swiz) method_exchangeImplementations(orig, swiz);
 }
 
@@ -624,8 +631,20 @@ static NSMutableSet *returnImageCells = nil;
   }
   if (shouldRemoveImagePosition) {
     [self setImagePosition: oldPos];
-  
+
   }
+}
+
+// Enforce at least METRICS_BUTTON_MIN_WIDTH for bezeled buttons so pill-shaped
+// buttons have ~24px of horizontal padding around their text.
+- (NSSize) EAU_cellSize
+{
+  NSSize size = [self EAU_cellSize]; // call original (swizzled)
+  if (size.width < METRICS_BUTTON_MIN_WIDTH && [self isBezeled])
+    {
+      size.width = METRICS_BUTTON_MIN_WIDTH;
+    }
+  return size;
 }
 
 // Strategy 2: Search all windows for this button cell

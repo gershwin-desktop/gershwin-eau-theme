@@ -42,9 +42,11 @@
         else
           {
 
-        int bezel_style = [(NSButton*)view bezelStyle];
+        NSButton *focusButton = (NSButton*)view;
+        int bezel_style = [focusButton bezelStyle];
         path = [self buttonBezierPathWithRect: NSInsetRect([view bounds], 1, 1)
-                                     andStyle: bezel_style];
+                                     andStyle: bezel_style
+                                       inCell: [focusButton cell]];
           }
     }
   else if([view class] == [NSStepper class])

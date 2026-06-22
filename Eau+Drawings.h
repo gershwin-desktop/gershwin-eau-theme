@@ -11,4 +11,5 @@ void NSRoundRectFill(NSRect r, float radius);
 - (NSGradient *) _windowTitlebarGradientInactive;
 - (NSRect) drawInnerGrayBezel: (NSRect)border withClip: (NSRect)clip;
 - (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style;
+- (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style inCell: (NSCell*)cell;
 @end
