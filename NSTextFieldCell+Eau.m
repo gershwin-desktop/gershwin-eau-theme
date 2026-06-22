@@ -32,20 +32,20 @@
 
 @implementation Eau(NSTextFieldCell)
 - (void) _overrideNSTextFieldCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSTextFieldCellMethod_drawInteriorWithFrame:inView:");
+  NSDebugLog(@"_overrideNSTextFieldCellMethod_drawInteriorWithFrame:inView:");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself EAUdrawInteriorWithFrame:cellFrame inView:controlView];
 }
 
 - (void) _overrideNSTextFieldCellMethod_drawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSTextFieldCellMethod_drawWithFrame:inView:");
+  NSDebugLog(@"_overrideNSTextFieldCellMethod_drawWithFrame:inView:");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself EAUdrawWithFrame:cellFrame inView:controlView];
 }
 
 - (void) _overrideNSTextFieldCellMethod__drawEditorWithFrame: (NSRect)cellFrame
                                                      inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSTextFieldCellMethod__drawEditorWithFrame:inView:");
+  NSDebugLog(@"_overrideNSTextFieldCellMethod__drawEditorWithFrame:inView:");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself _EAUdrawEditorWithFrame:cellFrame inView:controlView];
 }
@@ -56,7 +56,7 @@
                 delegate: (id)anObject
                    start: (NSInteger)selStart
 		  length: (NSInteger)selLength {
-  EAULOG(@"_overrrideNSTextFieldCellMethod_selectWithFrame::::::");
+  NSDebugLog(@"_overrrideNSTextFieldCellMethod_selectWithFrame::::::");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself selectWithFrame:aRect
 		  inView:controlView
@@ -70,7 +70,7 @@
                 editor: (NSText*)textObject
               delegate: (id)anObject
 		event: (NSEvent*)theEvent {
-  EAULOG(@"_overrideNSTextFieldCellMethod_editWithFrame:");
+  NSDebugLog(@"_overrideNSTextFieldCellMethod_editWithFrame:");
   NSTextFieldCell *xself = (NSTextFieldCell*)self;
   [xself editWithFrame:aRect
 		inView:controlView
@@ -95,7 +95,7 @@
     }
   else
     {
-      EAULOG(@"EAUdrawWithFrame: Drawing in normal mode - standard behavior");
+      NSDebugLog(@"EAUdrawWithFrame: Drawing in normal mode - standard behavior");
     }
 }
 
@@ -113,7 +113,7 @@
   }
   else
     {
-      EAULOG(@"EAUdrawInteriorWithFrame: Drawing in normal mode");
+      NSDebugLog(@"EAUdrawInteriorWithFrame: Drawing in normal mode");
 	// cellFrame.origin.y-= 1;
 	// cellFrame.size.height += 2;
 

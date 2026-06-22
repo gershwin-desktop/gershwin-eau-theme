@@ -25,51 +25,51 @@
 
 @implementation Eau(NSSearchFieldCell)
 - (void) _overrideNSSearchFieldCellMethod_drawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_drawWithFrame:inView");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_drawWithFrame:inView");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   [xself EAUdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView];
 }
 
 - (NSRect) _overrideNSSearchFieldCellMethod_searchTextRectForBounds: (NSRect)rect {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_searchTextRectForBounds:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_searchTextRectForBounds:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   return [xself EAUsearchTextRectForBounds:rect];
 }
 
 - (void) _overrideNSSearchFieldCellMethod__drawBorderAndBackgroundWithFrame: (NSRect)cellFrame
 								     inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSSearchFieldCellMethod__drawBorderAndBackgroundWithFrame:inView:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod__drawBorderAndBackgroundWithFrame:inView:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   [xself _EAUdrawBorderAndBackgroundWithFrame:cellFrame inView:controlView];
 }
 
 - (void) _overrideNSSearchFieldCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_drawInteriorWithFrame:inView:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_drawInteriorWithFrame:inView:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   [xself EAUdrawInteriorWithFrame:cellFrame inView:controlView];
 }
 
 - (void) _overrideNSSearchFieldCellMethod__drawEditorWithFrame: (NSRect)cellFrame
 							inView: (NSView *)controlView {
-  EAULOG(@"_overrideNSSearchFieldCellMethod__drawEditorWithFrame:inView:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod__drawEditorWithFrame:inView:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   [xself _EAUdrawEditorWithFrame:cellFrame inView:controlView];
 }
 
 - (NSRect) _overrideNSSearchFieldCellMethod_titleRectForBounds: (NSRect)theRect {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_titleRectForBounds:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_titleRectForBounds:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   return [xself EAUtitleRectForBounds:theRect];
 }
 
 - (NSRect) _overrideNSSearchFieldCellMethod_searchButtonRectForBounds: (NSRect)rect {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_searchButtonRectForBounds:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_searchButtonRectForBounds:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   return [xself EAUsearchButtonRectForBounds:rect];  
 }
 
 - (NSRect) _overrideNSSearchFieldCellMethod_cancelButtonRectForBounds: (NSRect)rect {
-  EAULOG(@"_overrideNSSearchFieldCellMethod_cancelButtonRectForBounds:");
+  NSDebugLog(@"_overrideNSSearchFieldCellMethod_cancelButtonRectForBounds:");
   NSSearchFieldCell *xself = (NSSearchFieldCell*)self;
   return [xself EAUcancelButtonRectForBounds:rect];
 }

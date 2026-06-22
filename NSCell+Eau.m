@@ -12,7 +12,7 @@
 
 @implementation Eau(NSCell)
 - (void) _overrideNSCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSCellMethod_drawInteriorWithFrame:inView");
+  NSDebugLog(@"_overrideNSCellMethod_drawInteriorWithFrame:inView");
   NSCell *xself = (NSCell*) self;
   [xself EAUdrawInteriorWithFrame:cellFrame inView:controlView];
 }

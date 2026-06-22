@@ -16,13 +16,13 @@
 
 @implementation Eau(NSBox)
 - (void) _overrideNSBoxMethod_drawRect: (NSRect)rect {
-  EAULOG(@"_overrideNSBoxMethod_drawRect:");
+  NSDebugLog(@"_overrideNSBoxMethod_drawRect:");
   NSBox* xself = (NSBox*)self;
   [xself EAUdrawRect:rect];
 }
 
 - (NSRect) _overrideNSBoxMethod_calcSizesAllowingNegative: (BOOL)aFlag {
-  EAULOG(@"_overrideNSBoxMethod_calcSizesAllowingNegative:");
+  NSDebugLog(@"_overrideNSBoxMethod_calcSizesAllowingNegative:");
   NSBox* xself = (NSBox*)self;
   return [xself EAUcalcSizesAllowingNegative:aFlag];
 }

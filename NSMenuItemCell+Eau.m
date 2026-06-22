@@ -14,20 +14,20 @@
 
 // Swizzled implementation for titleWidth - adds padding
 - (CGFloat)eau_titleWidth {
-  EAULOG(@"NSMenuItemCell+Eau: eau_titleWidth called");
+  NSDebugLog(@"NSMenuItemCell+Eau: eau_titleWidth called");
 
   // After swizzling, this message sends the original titleWidth implementation
   CGFloat originalWidth = [self eau_titleWidth];
   CGFloat paddedWidth = originalWidth + EAU_MENU_ITEM_PADDING;
 
-  EAULOG(@"NSMenuItemCell+Eau: eau_titleWidth originalWidth=%f paddedWidth=%f", originalWidth, paddedWidth);
+  NSDebugLog(@"NSMenuItemCell+Eau: eau_titleWidth originalWidth=%f paddedWidth=%f", originalWidth, paddedWidth);
 
   return paddedWidth;
 }
 
 // Swizzled implementation for titleRectForBounds: - shifts title to center in padded space
 - (NSRect)eau_titleRectForBounds:(NSRect)cellFrame {
-  EAULOG(@"NSMenuItemCell+Eau: eau_titleRectForBounds: called with cellFrame=(%f, %f, %f, %f)",
+  NSDebugLog(@"NSMenuItemCell+Eau: eau_titleRectForBounds: called with cellFrame=(%f, %f, %f, %f)",
         cellFrame.origin.x, cellFrame.origin.y, cellFrame.size.width, cellFrame.size.height);
 
   // After swizzling, this message sends the original titleRectForBounds: implementation
@@ -36,7 +36,7 @@
   // Shift by half padding to horizontally center in padded space
   originalRect.origin.x += (EAU_MENU_ITEM_PADDING / 2.0);
 
-  EAULOG(@"NSMenuItemCell+Eau: eau_titleRectForBounds: returning rect=(%f, %f, %f, %f)",
+  NSDebugLog(@"NSMenuItemCell+Eau: eau_titleRectForBounds: returning rect=(%f, %f, %f, %f)",
         originalRect.origin.x, originalRect.origin.y, originalRect.size.width, originalRect.size.height);
 
   return originalRect;
@@ -106,7 +106,7 @@ static void initMenuItemCellSwizzling(void) {
 
 // Override drawKeyEquivalentWithFrame to intercept just the key equivalent drawing
 - (void) _overrideNSMenuItemCellMethod_drawKeyEquivalentWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
-  EAULOG(@"_overrideNSMenuItemCellMethod_drawKeyEquivalentWithFrame:inView:");
+  NSDebugLog(@"_overrideNSMenuItemCellMethod_drawKeyEquivalentWithFrame:inView:");
   NSMenuItemCell *xself = (NSMenuItemCell*)self;
   [xself EAUdrawKeyEquivalentWithFrame:cellFrame inView:controlView];
 }
@@ -153,10 +153,10 @@ static void initMenuItemCellSwizzling(void) {
       
       [arrow compositeToPoint: position operation: NSCompositeSourceOver];
       
-      EAULOG(@"NSMenuItemCell+Eau: Drew submenu arrow at position: {%.1f, %.1f} size: {%.1f, %.1f}",
+      NSDebugLog(@"NSMenuItemCell+Eau: Drew submenu arrow at position: {%.1f, %.1f} size: {%.1f, %.1f}",
              position.x, position.y, size.width, size.height);
     } else {
-      EAULOG(@"NSMenuItemCell+Eau: WARNING - No arrow image found for submenu item '%@'", [menuItem title]);
+      NSDebugLog(@"NSMenuItemCell+Eau: WARNING - No arrow image found for submenu item '%@'", [menuItem title]);
     }
     return; // Submenu items don't have key equivalents, so we're done
   }
@@ -166,7 +166,7 @@ static void initMenuItemCellSwizzling(void) {
     NSString *originalKeyEquivalent = [menuItem keyEquivalent];
     NSUInteger modifierMask = [menuItem keyEquivalentModifierMask];
     
-    EAULOG(@"NSMenuItemCell+Eau: Drawing key equivalent for '%@': '%@', modifiers: %lu", 
+    NSDebugLog(@"NSMenuItemCell+Eau: Drawing key equivalent for '%@': '%@', modifiers: %lu", 
            [menuItem title], originalKeyEquivalent, (unsigned long)modifierMask);
     
     // Convert the key equivalent to Mac style if needed
@@ -174,7 +174,7 @@ static void initMenuItemCellSwizzling(void) {
       NSString *macStyleKeyEquivalent = [self EAUconvertKeyEquivalentToMacStyle:originalKeyEquivalent withModifiers:modifierMask];
       
       if (![macStyleKeyEquivalent isEqualToString:originalKeyEquivalent]) {
-        EAULOG(@"NSMenuItemCell+Eau: Drawing Mac style key equivalent '%@' instead of '%@'", macStyleKeyEquivalent, originalKeyEquivalent);
+        NSDebugLog(@"NSMenuItemCell+Eau: Drawing Mac style key equivalent '%@' instead of '%@'", macStyleKeyEquivalent, originalKeyEquivalent);
         
         // Draw the Mac-style key equivalent manually
         NSFont *font = [NSFont menuFontOfSize:0];
@@ -203,7 +203,7 @@ static void initMenuItemCellSwizzling(void) {
         
         [macStyleKeyEquivalent drawInRect:textRect withAttributes:attributes];
         
-        EAULOG(@"NSMenuItemCell+Eau: Drew Mac style key equivalent at rect: {{%.1f, %.1f}, {%.1f, %.1f}}", 
+        NSDebugLog(@"NSMenuItemCell+Eau: Drew Mac style key equivalent at rect: {{%.1f, %.1f}, {%.1f, %.1f}}", 
                textRect.origin.x, textRect.origin.y, textRect.size.width, textRect.size.height);
         return;
       }
@@ -211,12 +211,12 @@ static void initMenuItemCellSwizzling(void) {
   }
   
   // If no conversion needed, do nothing - let the normal drawing process handle it
-  EAULOG(@"NSMenuItemCell+Eau: No conversion needed, skipping custom drawing");
+  NSDebugLog(@"NSMenuItemCell+Eau: No conversion needed, skipping custom drawing");
 }
 
 - (NSString*) EAUconvertKeyEquivalentToMacStyle: (NSString*)keyEquivalent withModifiers: (NSUInteger)modifierMask
 {
-  EAULOG(@"NSMenuItemCell+Eau: Converting key equivalent '%@' with modifiers %lu", keyEquivalent, (unsigned long)modifierMask);
+  NSDebugLog(@"NSMenuItemCell+Eau: Converting key equivalent '%@' with modifiers %lu", keyEquivalent, (unsigned long)modifierMask);
   
   if (!keyEquivalent || [keyEquivalent length] == 0) {
     return keyEquivalent;
@@ -227,7 +227,7 @@ static void initMenuItemCellSwizzling(void) {
     NSString *key = [keyEquivalent substringFromIndex:1];
     NSString *result = [NSString stringWithFormat:@"⌘%@", [key uppercaseString]];
     
-    EAULOG(@"NSMenuItemCell+Eau: Converted old format '%@' to Mac style: '%@'", keyEquivalent, result);
+    NSDebugLog(@"NSMenuItemCell+Eau: Converted old format '%@' to Mac style: '%@'", keyEquivalent, result);
     return result;
   }
   
@@ -282,11 +282,11 @@ static void initMenuItemCellSwizzling(void) {
     
     [result appendString:keyToAdd];
     
-    EAULOG(@"NSMenuItemCell+Eau: Converted to Mac style: '%@'", result);
+    NSDebugLog(@"NSMenuItemCell+Eau: Converted to Mac style: '%@'", result);
     return result;
   }
   
-  EAULOG(@"NSMenuItemCell+Eau: No conversion needed for '%@'", keyEquivalent);
+  NSDebugLog(@"NSMenuItemCell+Eau: No conversion needed for '%@'", keyEquivalent);
   return keyEquivalent;
 }
 

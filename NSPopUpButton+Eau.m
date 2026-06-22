@@ -7,7 +7,7 @@
 
 @implementation Eau (NSPopUpButton)
 - (void) _overrideNSPopUpButtonMethod_mouseDown: (NSEvent*)theEvent {
-  EAULOG(@"_overrideNSPopUpButtonMethod_mouseDown:");
+  NSDebugLog(@"_overrideNSPopUpButtonMethod_mouseDown:");
   NSPopUpButton *xself = (NSPopUpButton*)self;
   [xself EAUmouseDown:theEvent];
 }

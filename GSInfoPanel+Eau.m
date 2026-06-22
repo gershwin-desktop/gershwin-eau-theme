@@ -76,7 +76,7 @@
           method_exchangeImplementations(originalMethod, swizzledMethod);
         }
 
-      EAULOG(@"GSInfoPanel+Eau: Swizzled initWithDictionary:");
+      NSDebugLog(@"GSInfoPanel+Eau: Swizzled initWithDictionary:");
     }
   }
 

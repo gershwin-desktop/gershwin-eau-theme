@@ -26,7 +26,7 @@ static char originalFrameKey;  // Store original frame before zoom
 @implementation Eau(GSStandardWindowDecorationView)
 - (void) _overrideGSStandardWindowDecorationViewMethod_updateRects {
   GSStandardWindowDecorationView* xself = (GSStandardWindowDecorationView*)self;
-  EAULOG(@"GSStandardDecorationView+Eau updateRects");
+  NSDebugLog(@"GSStandardDecorationView+Eau updateRects");
   [xself EAUupdateRects];
 }
 @end
@@ -41,9 +41,9 @@ static char originalFrameKey;  // Store original frame before zoom
 
   // Initialize zoom button if not already done (only for resizable windows)
   NSUInteger styleMask = [[self window] styleMask];
-  EAULOG(@"Checking zoom button creation: hasZoomButton=%d, hasTitleBar=%d, resizable=%d", [self hasZoomButton], hasTitleBar, (int)(styleMask & NSResizableWindowMask));
+  NSDebugLog(@"Checking zoom button creation: hasZoomButton=%d, hasTitleBar=%d, resizable=%d", [self hasZoomButton], hasTitleBar, (int)(styleMask & NSResizableWindowMask));
   if (![self hasZoomButton] && hasTitleBar && (styleMask & NSResizableWindowMask)) {
-    EAULOG(@"Creating zoom button for window decoration view");
+    NSDebugLog(@"Creating zoom button for window decoration view");
     NSButton *zButton;
     if (isOrb) {
       EauWindowButton *orbButton = [[EauWindowButton alloc] init];
@@ -60,16 +60,16 @@ static char originalFrameKey;  // Store original frame before zoom
       zButton = [EauTitleBarButton maximizeButton];
     }
     if (zButton) {
-      EAULOG(@"Zoom button created successfully, setting up target and action");
+      NSDebugLog(@"Zoom button created successfully, setting up target and action");
       [self setZoomButton:zButton];
       [zButton setTarget:self];
       [zButton setAction:@selector(EAUzoomButtonClicked:)];
       [zButton setEnabled:YES];
       [self addSubview:zButton];
       [self setHasZoomButton:YES];
-      EAULOG(@"Zoom button target: %@, action: %@, window: %@", [zButton target], NSStringFromSelector([zButton action]), window);
+      NSDebugLog(@"Zoom button target: %@, action: %@, window: %@", [zButton target], NSStringFromSelector([zButton action]), window);
     } else {
-      EAULOG(@"Failed to create zoom button - zButton is nil");
+      NSDebugLog(@"Failed to create zoom button - zButton is nil");
     }
   }
 
@@ -182,7 +182,7 @@ static char originalFrameKey;  // Store original frame before zoom
 
       NSButton *zoomButton = [self zoomButton];
       if (zoomButton) {
-        EAULOG(@"Updating zoom button frame: %@", NSStringFromRect(zoomButtonRect));
+        NSDebugLog(@"Updating zoom button frame: %@", NSStringFromRect(zoomButtonRect));
 
         [zoomButton setTarget:self];
         [zoomButton setAction:@selector(EAUzoomButtonClicked:)];
@@ -236,39 +236,39 @@ static char originalFrameKey;  // Store original frame before zoom
 
 - (void) EAUzoomButtonClicked:(id)sender
 {
-  EAULOG(@"*** ZOOM BUTTON CLICKED! sender: %@, window: %@", sender, window);
-  EAULOG(@"*** Window isZoomed: %d", [window isZoomed]);
+  NSDebugLog(@"*** ZOOM BUTTON CLICKED! sender: %@, window: %@", sender, window);
+  NSDebugLog(@"*** Window isZoomed: %d", [window isZoomed]);
 
   if ([window isZoomed]) {
     // Window is zoomed, manually restore it to original frame
-    EAULOG(@"*** Window is zoomed, attempting manual unzoom");
+    NSDebugLog(@"*** Window is zoomed, attempting manual unzoom");
 
     NSValue *originalFrameValue = objc_getAssociatedObject(window, &originalFrameKey);
     if (originalFrameValue) {
       NSRect originalFrame = [originalFrameValue rectValue];
-      EAULOG(@"*** Restoring window to original frame: %@", NSStringFromRect(originalFrame));
+      NSDebugLog(@"*** Restoring window to original frame: %@", NSStringFromRect(originalFrame));
       [window setFrame:originalFrame display:YES animate:NO];
 
       // Clear the stored frame
       objc_setAssociatedObject(window, &originalFrameKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     } else {
-      EAULOG(@"*** No original frame stored, falling back to performZoom");
+      NSDebugLog(@"*** No original frame stored, falling back to performZoom");
       [window performZoom:sender];
     }
   } else {
     // Window is not zoomed, store current frame and zoom it
-    EAULOG(@"*** Window is not zoomed, storing frame and zooming");
+    NSDebugLog(@"*** Window is not zoomed, storing frame and zooming");
 
     // Store current frame before zooming
     NSRect currentFrame = [window frame];
     NSValue *frameValue = [NSValue valueWithRect:currentFrame];
     objc_setAssociatedObject(window, &originalFrameKey, frameValue, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    EAULOG(@"*** Stored original frame: %@", NSStringFromRect(currentFrame));
+    NSDebugLog(@"*** Stored original frame: %@", NSStringFromRect(currentFrame));
 
     [window zoom:sender];
   }
 
-  EAULOG(@"*** After zoom call - Window isZoomed: %d", [window isZoomed]);
+  NSDebugLog(@"*** After zoom call - Window isZoomed: %d", [window isZoomed]);
 }
 
 #pragma mark - Title text truncation
