@@ -81,6 +81,13 @@ static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
     [self setLevel: NSModalPanelWindowLevel];
     [self setHidesOnDeactivate: NO];
     [self setBecomesKeyOnlyIfNeeded: NO];
+    // One-shot: destroys the X11 back-end window when ordered out (during
+    // alert dismissal).  This prevents a crash at dealloc time: NSWindow
+    // dealloc calls _terminateBackendWindow, but if the X11 window was
+    // already destroyed, _windowNum is 0 and _terminateBackendWindow is
+    // safely skipped.  Without this, _terminateBackendWindow in dealloc
+    // tries to destroy the X11 window and crashes (segfault).
+    [self setOneShot: YES];
     
     NSView *content = [self contentView];
     NSFont *titleFont = METRICS_FONT_SYSTEM_BOLD_13;
