@@ -80,14 +80,21 @@
 
 - (void) EAUdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView
 {
-  // TS: unused
-  // NSRect frame = cellFrame;
-  [super drawWithFrame: [self searchTextRectForBounds: cellFrame ]
-	 inView: controlView];
- [_search_button_cell drawWithFrame: [self searchButtonRectForBounds: cellFrame] inView: controlView];
+  // Draw the Eau search bezel + the text interior directly. We must NOT call
+  // [super drawWithFrame:] here: Eau's theme-override mechanism re-dispatches
+  // drawWithFrame: dynamically back into THIS method (super does not escape the
+  // override), so the original code recursed until the stack overflowed and the
+  // app crashed (SIGSEGV) on first draw of any NSSearchField.
+  // Calling the EAU* helpers directly reproduces what NSCell's drawWithFrame:
+  // would have done (border/background + interior) without re-dispatching.
+  [self _EAUdrawBorderAndBackgroundWithFrame: cellFrame inView: controlView];
+  [self EAUdrawInteriorWithFrame: cellFrame inView: controlView];
+
+  [_search_button_cell drawWithFrame: [self searchButtonRectForBounds: cellFrame]
+			      inView: controlView];
   if ([[self stringValue] length] > 0)
     [_cancel_button_cell drawWithFrame: [self cancelButtonRectForBounds: cellFrame]
-		       inView: controlView];
+			        inView: controlView];
 }
 
 /* This method put the "x" cell inside the Text cell */
