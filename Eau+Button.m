@@ -131,6 +131,9 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 
 - (void) _drawRoundBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
 {
+  // Default round bezel uses radius 4.  This is used by the shared theme
+  // drawing paths (including NSPopUpButtonCell, NSTableView corner views,
+  // etc.) — keep at 4 to avoid affecting non-button controls.
   [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: 4];
 }
 - (void) _drawRoundedBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
@@ -167,8 +170,9 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   switch (style)
     {
       case NSRoundRectBezelStyle:
+        r = MIN(frame.size.width, frame.size.height) / 2.0;
         bezierPath = [self _roundBezierPath: frame
-                                 withRadius: 4];
+                                 withRadius: r];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
@@ -205,8 +209,9 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
                                   withRadius: r];
         break;
       default:
+        r = MIN(frame.size.width, frame.size.height) / 2.0;
         bezierPath = [self _roundBezierPath: frame
-                                  withRadius: 4];
+                                  withRadius: r];
     }
   return bezierPath;
 }
@@ -221,7 +226,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   switch (style)
     {
       case NSRoundRectBezelStyle:
-        [self _drawRoundBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
@@ -272,10 +277,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSDisclosureBezelStyle:
       case NSRoundedDisclosureBezelStyle:
       case NSRecessedBezelStyle:
-        [self _drawRoundBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color];
         break;
       default:
-        [self _drawRoundBezel: frame withColor: color];
+        [self _drawRoundedBezel: frame withColor: color];
     }
 }
 

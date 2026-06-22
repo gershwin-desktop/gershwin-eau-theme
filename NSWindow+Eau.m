@@ -124,6 +124,60 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     }
 }
 
+// Forward declaration so static helper functions below can call
+// NSWindow(EauTheme) methods before their formal @implementation.
+@interface NSWindow (EAUAutoPlacement)
+- (void) EAUcenter;
+@end
+
+/* Returns YES for windows that should be auto-positioned as dialogs:
+ * classic dialog types (NSPanel, modal-level, utility) plus small
+ * titled non-resizable windows (the pattern used by GWDialog,
+ * RunExternalController, and similar custom dialogs). */
+static BOOL EAUShouldPositionDialog(NSWindow *window)
+{
+  if (window == nil) return NO;
+  if (EAUIsDialogWindow(window)) return YES;
+
+  NSUInteger mask = [window styleMask];
+  if ((mask & NSTitledWindowMask) && !(mask & NSResizableWindowMask))
+    {
+      NSRect wf = [window frame];
+      if (wf.size.width < 600 && wf.size.height < 400)
+        {
+          return YES;
+        }
+    }
+  return NO;
+}
+
+/* Position a dialog window using the golden ratio (vertical placement
+ * ~38% from the top), centered horizontally.  Called from the orderFront: /
+ * orderFrontRegardless / makeKeyAndOrderFront: swizzles so that
+ * non-positioned dialog-style windows appear at a consistent, visually
+ * pleasing location.
+ *
+ * Only positions windows that are not yet visible AND whose frame is at
+ * the default (0,0) origin — meaning the creating code did not explicitly
+ * set a position.  Windows that were positioned by their creator (e.g.,
+ * EauAlertPanel's -init which centers itself, or any code that calls
+ * -setFrame: before ordering in) are left untouched. */
+static void EAUPlaceDialogWindow(NSWindow *window)
+{
+  if (window == nil || [window isVisible])
+    {
+      return;
+    }
+  /* If the window's origin is not at (0,0), the creating code already
+   * positioned it explicitly — leave it alone. */
+  NSRect wf = [window frame];
+  if (wf.origin.x != 0 || wf.origin.y != 0)
+    {
+      return;
+    }
+  [window EAUcenter];
+}
+
 @implementation NSWindow (EauLogging)
 
 + (void) load
@@ -176,6 +230,10 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 - (void) eau_orderFront: (id)sender
 {
+  if (EAUShouldPositionDialog(self))
+    {
+      EAUPlaceDialogWindow(self);
+    }
   EAUWindowLog(@"orderFront", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_orderFront: sender];
@@ -183,6 +241,10 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 - (void) eau_orderFrontRegardless
 {
+  if (EAUShouldPositionDialog(self))
+    {
+      EAUPlaceDialogWindow(self);
+    }
   EAUWindowLog(@"orderFrontRegardless", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_orderFrontRegardless];
@@ -190,6 +252,10 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 - (void) eau_makeKeyAndOrderFront: (id)sender
 {
+  if (EAUShouldPositionDialog(self))
+    {
+      EAUPlaceDialogWindow(self);
+    }
   EAUWindowLog(@"makeKeyAndOrderFront", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_makeKeyAndOrderFront: sender];
