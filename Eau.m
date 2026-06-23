@@ -1558,10 +1558,73 @@ static Eau *gSharedEauInstance = nil;
       NSDebugLog(@"Eau: Proposing menu visibility NO for GNUstep IPC");
       return NO;
     }
-  
-  NSDebugLog(@"Eau: Proposing standard menu visibility %@ (Menu.app %@)", 
+
+  NSDebugLog(@"Eau: Proposing standard menu visibility %@ (Menu.app %@)",
          visibility ? @"YES" : @"NO", menuServerAvailable ? @"available" : @"unavailable");
   return [super proposedVisibility: visibility forMenu: menu];
+}
+
+/**
+ * Override GSTheme's keyForKeyEquivalent: to convert GNUstep key equivalent
+ * strings to Mac-style symbols with Shift shown after Command.
+ *
+ * The NSMenuItemCell _keyEquivalentString produces strings like "/#s" where
+ * modifiers are single-character codes (^=Control, +=Alternate, /=Shift, #=Command)
+ * ordered Control → Alternate → Shift → Command → Key.
+ *
+ * This override converts to Mac Unicode symbols (⌃⌥⌘⇧) and reorders to
+ * Control → Alternate → Command → Shift → Key.
+ */
+- (NSString *) keyForKeyEquivalent: (NSString *)aString
+{
+  if (!aString || [aString length] == 0)
+    {
+      return aString;
+    }
+
+  // Parse standard GNUstep modifier codes from the front of the string
+  //
+  // Format: [^][+][/][#]key
+  //         ^ = Control   += Alternate/Option   /= Shift   # = Command
+  NSUInteger pos = 0;
+  NSUInteger len = [aString length];
+  BOOL hasControl = NO;
+  BOOL hasAlternate = NO;
+  BOOL hasShift = NO;
+  BOOL hasCommand = NO;
+
+  while (pos < len)
+    {
+      unichar ch = [aString characterAtIndex: pos];
+      if (ch == '^')   { hasControl = YES;  pos++; }
+      else if (ch == '+') { hasAlternate = YES; pos++; }
+      else if (ch == '/') { hasShift = YES;    pos++; }
+      else if (ch == '#') { hasCommand = YES;  pos++; }
+      else { break; }
+    }
+
+  // Remaining characters are the key name
+  NSString *key = [aString substringFromIndex: pos];
+
+  // Build Mac-style string: Control ⌃ → Option ⌥ → Command ⌘ → Shift ⇧ → Key
+  NSMutableString *result = [NSMutableString string];
+  if (hasControl)  { [result appendString: @"⌃"]; }
+  if (hasAlternate){ [result appendString: @"⌥"]; }
+  if (hasCommand)  { [result appendString: @"⌘"]; }
+  if (hasShift)    { [result appendString: @"⇧"]; }
+
+  // Uppercase single-letter keys
+  if ([key length] == 1)
+    {
+      unichar ch = [key characterAtIndex: 0];
+      if (ch >= 'a' && ch <= 'z')
+        {
+          key = [key uppercaseString];
+        }
+    }
+
+  [result appendString: key];
+  return result;
 }
 
 @end
