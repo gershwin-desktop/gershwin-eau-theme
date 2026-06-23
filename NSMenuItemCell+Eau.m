@@ -242,11 +242,11 @@ static void initMenuItemCellSwizzling(void) {
     if (modifierMask & NSAlternateKeyMask) {
       [result appendString:@"⌥"]; // Option/Alt symbol  
     }
-    if (modifierMask & NSShiftKeyMask) {
-      [result appendString:@"⇧"]; // Shift symbol
-    }
     if (modifierMask & NSCommandKeyMask) {
       [result appendString:@"⌘"]; // Command symbol
+    }
+    if (modifierMask & NSShiftKeyMask) {
+      [result appendString:@"⇧"]; // Shift symbol (after Command)
     }
     
     // Convert key equivalent to uppercase if it's a letter, or to symbol for special keys
