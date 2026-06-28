@@ -21,28 +21,29 @@
 - (void)beep
 {
     static BOOL isPlaying = NO;
-    
+
     // Prevent recursive calls
     if (isPlaying) {
         NSDebugLog(@"Re-entrant beep ignored");
         return;
     }
-    
+
     isPlaying = YES;
     NSDebugLog(@"-beep called");
-    
+
     @autoreleasepool {
         // Load preferences for alert sound
         NSString *prefsPath = [NSHomeDirectory() stringByAppendingPathComponent:
                               @".config/gershwin/sound-defaults.plist"];
         NSDebugLog(@"prefsPath: %@", prefsPath);
-        
+
         NSDictionary *prefs = [NSDictionary dictionaryWithContentsOfFile:prefsPath];
-        
+
         if (prefs) {
             NSDebugLog(@"Loaded prefs");
             NSString *alertSoundName = [prefs objectForKey:@"alertSound"];
-            
+            NSNumber *alertVolume = [prefs objectForKey:@"alertVolume"];
+
             if (alertSoundName) {
                 NSDebugLog(@"alertSound: %@", alertSoundName);
                 // Search for the sound file
@@ -52,14 +53,14 @@
                     @"/usr/local/share/sounds",
                     [NSHomeDirectory() stringByAppendingPathComponent:@"Library/Sounds"]
                 ];
-                
+
                 NSArray *extensions = @[@"aiff", @"aif", @"wav", @"au", @"snd"];
-                
+
                 for (NSString *basePath in soundPaths) {
                     for (NSString *ext in extensions) {
                         NSString *soundPath = [basePath stringByAppendingPathComponent:
                                              [alertSoundName stringByAppendingPathExtension:ext]];
-                        
+
                         if ([[NSFileManager defaultManager] fileExistsAtPath:soundPath]) {
                             NSDebugLog(@"Found sound at %@", soundPath);
                             // Play the sound using NSSound
@@ -67,6 +68,10 @@
                                                                         byReference:YES];
                             if (sound) {
                                 NSDebugLog(@"Playing sound %@", soundPath);
+                                // Respect the alert volume setting
+                                if (alertVolume) {
+                                    [sound setVolume:[alertVolume floatValue]];
+                                }
                                 [sound play];
                                 isPlaying = NO;
                                 return;
@@ -83,13 +88,13 @@
         } else {
             NSDebugLog(@"No prefs found at %@", prefsPath);
         }
-        
+
         // Fall back to system beep (PC speaker or /dev/console)
         NSDebugLog(@"Falling back to system bell");
         printf("\a");
         fflush(stdout);
     }
-    
+
     isPlaying = NO;
 }
 
