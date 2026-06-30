@@ -1,8 +1,8 @@
 /*
    NSMenu+Eau.m
 
-   Swizzles NSMenu methods to enable NSMacintoshInterfaceStyle support
-   with upstream (unmodified) libs-gui.
+   Swizzles NSMenu and related classes to enable NSMacintoshInterfaceStyle
+   support with upstream (unmodified) libs-gui.
 
    This allows the Eau theme to:
    1. Receive notifications when the main menu changes
@@ -10,25 +10,88 @@
    3. Detect and close orphaned dropdown menu windows that should have
       been closed when the user switched to a different top-level menu
       item but weren't due to a tracking-loop cleanup gap
+   4. Implement overflowing menu scrolling (Leopard-style) when a menu
+      has more items than fit on screen
 */
 
 #import <AppKit/AppKit.h>
 #import <GNUstepGUI/GSTheme.h>
 #import <objc/runtime.h>
+#import <string.h>
 #import <X11/Xlib.h>
 #import <X11/Xutil.h>
 
 #import "Eau.h"
+#import "EauMenuScrollManager.h"
 
 /* ---- NSMenuPanel forward declaration (private) ---- */
 @interface NSObject (EauMenuPanel)
 - (id)_menu;
 @end
 
+/* Forward declaration of private NSMenuView methods used for
+   coordinate calculations. These exist in GNUstep's NSMenuView.m. */
+@interface NSMenuView (EauScrollHelper)
+- (CGFloat) yOriginForItem: (NSInteger)item;
+- (CGFloat) heightForItem: (NSInteger)item;
+- (CGFloat) totalHeight;
+@end
+
+/* ---- Helper: find NSMenuView in an NSMenuPanel's content view hierarchy ---- */
+static NSMenuView *_eau_findMenuViewInWindow(NSWindow *window)
+{
+  if (!window) return nil;
+  NSView *contentView = [window contentView];
+  if (!contentView) return nil;
+
+  // NSMenuView is typically a direct subview of the content view.
+  // Look through all subviews for an NSMenuView.
+  for (NSView *subview in [contentView subviews])
+    {
+      if ([subview isKindOfClass: objc_getClass("NSMenuView")])
+        {
+          return (NSMenuView *)subview;
+        }
+    }
+  return nil;
+}
+
+/* ---- Overflow handling for tall menus ---- */
+
+/**
+ * Detect if the menu contained in `window` overflows the available screen
+ * space and, if so, configure the scroll manager and resize the window.
+ *
+ * Returns YES if overflow mode was entered (window was resized).
+ */
+static BOOL _eau_handleMenuOverflow(NSWindow *window, NSRect *frame)
+{
+  NSMenuView *menuView = _eau_findMenuViewInWindow(window);
+  if (!menuView) return NO;
+
+  // Delegate the full overflow-detection / setup logic to the shared
+  // class method on EauMenuScrollManager.  This method is still needed
+  // because the caller (clamp helper) uses a modified frame pointer to
+  // apply the window resize via the original IMP, avoiding re-entry.
+  BOOL result = [EauMenuScrollManager setupOverflowForMenuView: menuView];
+  if (result)
+    {
+      // The class method already resized the window and view.  Read the
+      // new window frame so the caller can apply it via the original IMP
+      // (the class method uses a swizzled setFrame: which would recurse
+      // if we didn't go through the original IMP here).
+      NSRect newFrame = [window frame];
+      frame->size.height = newFrame.size.height;
+      frame->origin.y = newFrame.origin.y;
+    }
+  return result;
+}
+
 /* ---- NSMenuPanel swizzles: clamp menu windows to screen bounds ---- */
 
 // Shared bottom-clamp helper: if the window extends past the screen
 // borders, shift it to fit entirely on screen.
+// Also detects overflow and resizes the window if the menu is too tall.
 // Uses the original setFrame:display: IMP to avoid recursion.
 static void (*s_orig_menuWindowSetFrameDisplay)(id, SEL, NSRect, BOOL) = NULL;
 
@@ -75,9 +138,19 @@ static BOOL _eau_clampMenuWindowToScreenBounds(id window)
       // Use the original IMP directly to avoid re-entering the swizzle.
       if (s_orig_menuWindowSetFrameDisplay)
         s_orig_menuWindowSetFrameDisplay(window, @selector(setFrame:display:), frame, NO);
+    }
+
+  // Now handle overflow: if the menu is too tall for the screen,
+  // resize it and activate scrolling.
+  if (_eau_handleMenuOverflow(window, &frame))
+    {
+      // Apply the overflow-resized frame
+      if (s_orig_menuWindowSetFrameDisplay)
+        s_orig_menuWindowSetFrameDisplay(window, @selector(setFrame:display:), frame, NO);
       return YES;
     }
-  return NO;
+
+  return needsClamp;
 }
 
 static void (*s_orig_menuWindowSetFrameOrigin)(id, SEL, NSPoint) = NULL;
@@ -228,7 +301,6 @@ static void _eau_destroyX11MenuWindows(void)
 
 /* ---- trackWithEvent: swizzle (increment/decrement, then cleanup) ---- */
 
-/* ---- trackWithEvent: swizzle (increment/decrement, then cleanup) ---- */
 static BOOL (*s_orig_trackWithEvent)(id, SEL, id) = NULL;
 
 static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
@@ -244,6 +316,71 @@ static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
   _eau_activeTrackingCount--;
   _eau_destroyX11MenuWindows();
   return result;
+}
+
+/* ---- nextEventMatchingMask: swizzle for scroll wheel during tracking ---- */
+
+static NSEvent* (*s_orig_nextEventMatchingMask)(id, SEL, NSUInteger, NSDate*, NSString*, BOOL) = NULL;
+
+static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, NSDate *date, NSString *mode, BOOL dequeue)
+{
+  // During menu tracking, add scroll wheel to the event mask so we can
+  // process scroll events in the tracking loop.
+  if (_eau_activeTrackingCount > 0)
+    {
+      mask |= NSScrollWheelMask;
+    }
+
+  NSEvent *event = s_orig_nextEventMatchingMask(self, _cmd, mask, date, mode, dequeue);
+
+  if (event && _eau_activeTrackingCount > 0)
+    {
+      // --- Edge scrolling: poll mouse position and scroll if near edge ---
+      // We do this on EVERY event during tracking because NSTimer-based
+      // edge scrolling doesn't fire reliably in NSEventTrackingRunLoopMode
+      // on this GNUstep version.  pollEdgeScroll has its own throttle.
+      {
+        NSWindow *keyWindow = [NSApp keyWindow];
+        if (keyWindow)
+          {
+            EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForWindow: keyWindow];
+            if (!mgr)
+              {
+                NSMenuView *menuView = _eau_findMenuViewInWindow(keyWindow);
+                if (menuView)
+                  {
+                    mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+                  }
+              }
+            [mgr pollEdgeScroll];
+          }
+      }
+
+      // --- Scroll wheel handling ---
+      if ([event type] == NSScrollWheel)
+        {
+          NSWindow *keyWindow = [NSApp keyWindow];
+          if (keyWindow)
+            {
+              EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForWindow: keyWindow];
+              if (!mgr)
+                {
+                  NSMenuView *menuView = _eau_findMenuViewInWindow(keyWindow);
+                  if (menuView)
+                    {
+                      mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+                    }
+                }
+              if (mgr && [mgr isScrolling])
+                {
+                  CGFloat deltaY = [event deltaY];
+                  [mgr scrollByDelta: deltaY];
+                }
+            }
+        }
+    }
+
+  return event;
 }
 
 @implementation NSMenu (Eau)
@@ -482,4 +619,25 @@ static void initNSMenuSwizzling(void)
   // menu windows to the bottom screen border. This catches ALL menu
   // positioning regardless of which code path is used.
   _eau_swizzleMenuWindowFrameMethods();
+
+  // Swizzle nextEventMatchingMask:untilDate:inMode:dequeue: on NSApplication
+  // to add scroll wheel support during menu tracking.
+  {
+    Class appClass = objc_getClass("NSApplication");
+    if (appClass)
+      {
+        SEL sel = sel_registerName("nextEventMatchingMask:untilDate:inMode:dequeue:");
+        Method m = class_getInstanceMethod(appClass, sel);
+        if (m)
+          {
+            {
+              // Use memcpy for type-punning to avoid -Wincompatible-function-pointer-types
+              IMP imp = method_getImplementation(m);
+              memcpy(&s_orig_nextEventMatchingMask, &imp, sizeof(s_orig_nextEventMatchingMask));
+            }
+            method_setImplementation(m, (IMP)s_eau_nextEventMatchingMask);
+            NSDebugLog(@"Eau: Swizzled NSApplication nextEventMatchingMask: for scroll wheel menu support");
+          }
+      }
+  }
 }

@@ -1,10 +1,143 @@
 // NSMenuView+Eau.m
 // Eau Theme NSMenuView Extensions
+//
+// Custom submenu positioning and scrollable overflowing menu support.
+// When a menu's total height exceeds the available screen space, the
+// menu enters overflow mode: the window is resized to fill the screen
+// and items are scrolled via a virtual viewport with no visible scrollbar,
+// matching Mac OS X 10.5 (Leopard) behavior.
 
 #import "Eau.h"
+#import "EauMenuScrollManager.h"
 #import "NSMenuView+Eau.h"
 #import <AppKit/NSMenuView.h>
 #import <objc/runtime.h>
+
+// Forward declare private NSMenuView methods we need
+@interface NSMenuView (PrivateKnown)
+- (CGFloat) yOriginForItem: (NSInteger)item;
+- (CGFloat) heightForItem: (NSInteger)item;
+- (CGFloat) totalHeight;
+@end
+
+#pragma mark - Scroll-Offset Swizzles
+
+// Original IMP for rectOfItemAtIndex:
+// We swizzle this to subtract the scroll offset, bringing items from
+// content coordinates into viewport coordinates.  Points from the event
+// system are already in viewport coordinates (the window clips to the
+// visible viewport), so indexOfItemAtPoint: needs no separate swizzle.
+static NSRect (*s_orig_rectOfItemAtIndex)(id, SEL, NSInteger) = NULL;
+
+static NSRect s_eau_rectOfItemAtIndex(id self, SEL _cmd, NSInteger index)
+{
+  NSRect r = s_orig_rectOfItemAtIndex(self, _cmd, index);
+
+  NSMenuView *menuView = (NSMenuView *)self;
+  if (![menuView isHorizontal])
+    {
+      EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+      if (mgr && [mgr isScrolling])
+        {
+          r.origin.y -= [mgr scrollOffset];
+        }
+    }
+
+  return r;
+}
+
+// Original IMP for sizeToFit:
+static void (*s_orig_sizeToFit)(id, SEL) = NULL;
+
+static void s_eau_sizeToFit(id self, SEL _cmd)
+{
+  s_orig_sizeToFit(self, _cmd);
+
+  // After sizing, if we're in overflow mode, clamp the view height
+  // back to the visible viewport so items don't extend past the window.
+  NSMenuView *menuView = (NSMenuView *)self;
+  if ([menuView isHorizontal]) return;
+
+  EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+  if (mgr && [mgr isScrolling])
+    {
+      NSSize viewSize = [menuView frame].size;
+      CGFloat visibleHeight = [mgr visibleHeight];
+      if (viewSize.height > visibleHeight)
+        {
+          viewSize.height = visibleHeight;
+          [menuView setFrameSize: viewSize];
+        }
+    }
+  else
+    {
+      // No scroll manager yet.  The window frame may have been set
+      // before the menu view was attached, so the swizzled window-
+      // frame methods in NSMenu+Eau.m saw no menu view and silently
+      // skipped overflow setup.  Run overflow detection *now* that
+      // the view is definitely in the window.
+      [EauMenuScrollManager setupOverflowForMenuView: menuView];
+    }
+}
+
+// Original IMP for mouseDown:
+static void (*s_orig_mouseDown)(id, SEL, id) = NULL;
+
+static void s_eau_mouseDown(id self, SEL _cmd, NSEvent *event)
+{
+  s_orig_mouseDown(self, _cmd, event);
+}
+
+// Original IMP for trackWithEvent:
+static BOOL (*s_orig_trackWithEvent_NSMenuView)(id, SEL, id) = NULL;
+
+static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
+{
+  return s_orig_trackWithEvent_NSMenuView(self, _cmd, event);
+}
+
+#pragma mark - setHighlightedItemIndex: Swizzle
+
+static void (*s_orig_setHighlightedItemIndex)(id, SEL, NSInteger) = NULL;
+
+static void s_eau_setHighlightedItemIndex(id self, SEL _cmd, NSInteger index)
+{
+  s_orig_setHighlightedItemIndex(self, _cmd, index);
+
+  // Scroll the newly-highlighted item into view so the user can reach
+  // items beyond the viewport by moving the mouse near the edge.
+  // We guard against edge scrolling: during active edge scrolling the
+  // edge-scroll timer (pollEdgeScroll) handles content positioning and
+  // scroll-into-view would fight it, creating a feedback loop.
+  NSMenuView *menuView = (NSMenuView *)self;
+  EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+  if (mgr && [mgr isScrolling] && ![mgr isEdgeScrolling])
+    {
+      [mgr scrollItemAtIndexToVisible: index];
+    }
+}
+
+#pragma mark - drawRect: Swizzle (scroll arrow indicators)
+
+static void (*s_orig_drawRect)(id, SEL, NSRect) = NULL;
+
+static void s_eau_drawRect(id self, SEL _cmd, NSRect dirtyRect)
+{
+  // Let the original draw all items first.
+  s_orig_drawRect(self, _cmd, dirtyRect);
+
+  // Overlay scroll-direction arrows on overflowing menus.
+  NSMenuView *menuView = (NSMenuView *)self;
+  if ([menuView isHorizontal]) return;
+
+  EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
+  if (mgr && [mgr isScrolling])
+    {
+      [mgr drawScrollIndicatorsInView: menuView];
+    }
+}
+
+#pragma mark - Submenu Positioning
 
 @implementation NSMenuView (EauTheme)
 
@@ -26,7 +159,7 @@
       if (itemIndex < 0) return NSZeroPoint;
 
       // Get the item's rect in window coordinates, then screen.
-      NSRect itemRect = [menuView rectOfItemAtIndex:itemIndex];
+      NSRect itemRect = [menuView rectOfItemAtIndex: itemIndex];
       itemRect = [menuView convertRect:itemRect toView:nil];
       NSPoint screenOrigin = [window convertBaseToScreen:itemRect.origin];
 
@@ -73,6 +206,7 @@
   // Vertical dropdown menu: position child submenu to the right, aligned
   // vertically with the parent item so the submenu's first item appears
   // at the same level as the item that triggered it.
+
   if (!window || !aSubmenu) return NSZeroPoint;
 
   // Find the item in THIS menu that has the submenu.
@@ -80,11 +214,14 @@
   NSInteger itemIndex = [myMenu indexOfItemWithSubmenu:aSubmenu];
   if (itemIndex < 0) return NSZeroPoint;
 
-  // Get the item's rect in window coordinates, then screen.
-  NSRect itemRect = [menuView rectOfItemAtIndex:itemIndex];
+  // Get the item's rect in the view's coordinate system.
+  // In overflow scrolling mode, rectOfItemAtIndex: already returns
+  // viewport-adjusted coordinates (scroll offset subtracted).
+  NSRect itemRect = [menuView rectOfItemAtIndex: itemIndex];
+  CGFloat itemH = NSHeight(itemRect);
+
   itemRect = [menuView convertRect:itemRect toView:nil];
   NSPoint screenOrigin = [window convertBaseToScreen:itemRect.origin];
-  CGFloat itemH = NSHeight(itemRect);
 
   // Get the submenu's window frame to know its height and width.
   NSRect subFrame = [[[aSubmenu menuRepresentation] window] frame];
@@ -101,8 +238,6 @@
   // In GNUstep screen coords (bottom-left origin):
   //   item top = screenOrigin.y + itemH
   //   submenu origin (bottom-left) at: itemTop - subH
-  // This makes the submenu's first row of items appear level with
-  // the parent item.
   CGFloat yPos = screenOrigin.y + itemH - subH;
   // If the menu would extend past the bottom screen border, shift it up.
   if (yPos < 0)
@@ -144,42 +279,111 @@
 
 @end
 
+#pragma mark - Swizzle Registration
+
 // This function runs when the bundle is loaded
 __attribute__((constructor))
-static void initMenuViewSwizzling(void) {
-  // NSLog(@"NSMenuView+Eau: Constructor called - setting up swizzling");
-
+static void initMenuViewSwizzling(void)
+{
   Class menuViewClass = objc_getClass("NSMenuView");
-  if (!menuViewClass) {
-    NSDebugLog(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
-    return;
+  if (!menuViewClass)
+    {
+      NSDebugLog(@"NSMenuView+Eau: ERROR - NSMenuView class not found");
+      return;
+    }
+
+  // --- Swizzle locationForSubmenu: ---
+  {
+    SEL originalSelector = sel_registerName("locationForSubmenu:");
+    SEL swizzledSelector = @selector(eau_locationForSubmenu:);
+    Method originalMethod = class_getInstanceMethod(menuViewClass, originalSelector);
+    Method swizzledMethod = class_getInstanceMethod(menuViewClass, swizzledSelector);
+    if (originalMethod && swizzledMethod)
+      {
+        IMP originalIMP = method_getImplementation(originalMethod);
+        IMP swizzledIMP = method_getImplementation(swizzledMethod);
+        if (originalIMP != swizzledIMP)
+          {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+            NSDebugLog(@"NSMenuView+Eau: Swizzled locationForSubmenu:");
+          }
+      }
+    else
+      {
+        NSDebugLog(@"NSMenuView+Eau: Could not swizzle locationForSubmenu: (orig=%p swiz=%p)",
+              originalMethod, swizzledMethod);
+      }
   }
 
-  // Swizzle locationForSubmenu: with eau_locationForSubmenu:
-  SEL originalSelector = sel_registerName("locationForSubmenu:");
-  SEL swizzledSelector = @selector(eau_locationForSubmenu:);
-
-  Method originalMethod = class_getInstanceMethod(menuViewClass, originalSelector);
-  Method swizzledMethod = class_getInstanceMethod(menuViewClass, swizzledSelector);
-
-  if (!originalMethod) {
-    NSDebugLog(@"NSMenuView+Eau: ERROR - Could not find original locationForSubmenu: method");
-    return;
+  // --- Swizzle rectOfItemAtIndex: (for scroll offset) ---
+  {
+    SEL sel = sel_registerName("rectOfItemAtIndex:");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_rectOfItemAtIndex = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_rectOfItemAtIndex);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled rectOfItemAtIndex: for scroll support");
+      }
   }
 
-  if (!swizzledMethod) {
-    NSDebugLog(@"NSMenuView+Eau: ERROR - Could not find eau_locationForSubmenu: method on NSMenuView");
-    return;
+  // --- Swizzle sizeToFit (preserve overflow view height after relayout) ---
+  {
+    SEL sel = sel_registerName("sizeToFit");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_sizeToFit = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_sizeToFit);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled sizeToFit for overflow height preservation");
+      }
   }
 
-  // Avoid double-swizzling: if the IMPs are already the same, do nothing.
-  IMP originalIMP = method_getImplementation(originalMethod);
-  IMP swizzledIMP = method_getImplementation(swizzledMethod);
-  if (originalIMP == swizzledIMP) {
-    NSDebugLog(@"NSMenuView+Eau: Swizzling skipped - implementations already identical");
-    return;
+  // --- Swizzle setHighlightedItemIndex: (for scroll-into-view) ---
+  {
+    SEL sel = sel_registerName("setHighlightedItemIndex:");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_setHighlightedItemIndex = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_setHighlightedItemIndex);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled setHighlightedItemIndex: for scroll-into-view");
+      }
   }
 
-  method_exchangeImplementations(originalMethod, swizzledMethod);
-  // NSLog(@"NSMenuView+Eau: Successfully swizzled locationForSubmenu: with eau_locationForSubmenu:");
+  // --- Swizzle drawRect: (overlay scroll-arrow indicators) ---
+  {
+    SEL sel = sel_registerName("drawRect:");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_drawRect = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_drawRect);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled drawRect: for scroll-arrow indicators");
+      }
+  }
+
+  // --- Swizzle mouseDown: (for edge autoscroll start/stop) ---
+  {
+    SEL sel = sel_registerName("mouseDown:");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_mouseDown = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_mouseDown);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled mouseDown: for edge autoscroll");
+      }
+  }
+
+  // --- Swizzle trackWithEvent: (for edge autoscroll) ---
+  {
+    SEL sel = sel_registerName("trackWithEvent:");
+    Method m = class_getInstanceMethod(menuViewClass, sel);
+    if (m)
+      {
+        s_orig_trackWithEvent_NSMenuView = (void *)method_getImplementation(m);
+        method_setImplementation(m, (IMP)s_eau_trackWithEvent);
+        NSDebugLog(@"NSMenuView+Eau: Swizzled trackWithEvent: for edge autoscroll");
+      }
+  }
 }
