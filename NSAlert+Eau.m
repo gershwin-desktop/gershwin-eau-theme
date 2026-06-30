@@ -749,15 +749,76 @@ static void eauAlertSetStopping(id panel, BOOL val)
     [super keyDown: event];
 }
 
+- (void) copyAllTextToPasteboard
+{
+    NSMutableArray *parts = [NSMutableArray array];
+    NSString *winTitle = [self title];
+    if ([winTitle length] > 0)
+    {
+        [parts addObject: winTitle];
+    }
+    if (useControl(titleField))
+    {
+        NSString *t = [titleField stringValue];
+        if ([t length] > 0)
+        {
+            [parts addObject: t];
+        }
+    }
+    if (useControl(messageField))
+    {
+        NSString *m = [messageField stringValue];
+        if ([m length] > 0)
+        {
+            [parts addObject: m];
+        }
+    }
+    NSMutableArray *btnLabels = [NSMutableArray array];
+    if (useControl(defButton))
+    {
+        [btnLabels addObject: [defButton title]];
+    }
+    if (useControl(altButton))
+    {
+        [btnLabels addObject: [altButton title]];
+    }
+    if (useControl(othButton))
+    {
+        [btnLabels addObject: [othButton title]];
+    }
+    if ([btnLabels count] > 0)
+    {
+        [parts addObject: [btnLabels componentsJoinedByString: @"    "]];
+    }
+    if ([parts count] == 0)
+    {
+        return;
+    }
+    NSString *summary = [parts componentsJoinedByString: @"\n"];
+    NSPasteboard *pb = [NSPasteboard generalPasteboard];
+    [pb declareTypes: [NSArray arrayWithObject: NSPasteboardTypeString]
+               owner: nil];
+    [pb setString: summary forType: NSPasteboardTypeString];
+    NSDebugLog(@"Eau: Copied dialog text to pasteboard: %@", summary);
+}
+
 - (BOOL) performKeyEquivalent: (NSEvent *)event
 {
     NSString *chars = [event characters];
     NSUInteger modifiers = [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
     NSLog(@"Eau: performKeyEquivalent received: '%@', modifiers: %lu, isActivePanel: %d", chars, (unsigned long)modifiers, [self isActivePanel]);
-    
+
     // During modal operation, intercept ALL keyboard events to prevent app shortcuts
     if ([self isActivePanel])
     {
+        // Handle Cmd-C (Alt-C on GNUstep) to copy all dialog text to clipboard
+        if ((modifiers & NSCommandKeyMask) && [chars caseInsensitiveCompare: @"c"] == NSOrderedSame)
+        {
+            NSLog(@"Eau: performKeyEquivalent Cmd-C pressed, copying dialog text");
+            [self copyAllTextToPasteboard];
+            return YES;
+        }
+
         // Handle Return/Enter for default button
         if ([chars isEqualToString: @"\r"] && useControl(defButton))
         {
@@ -765,7 +826,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
             [self buttonAction: defButton];
             return YES;
         }
-        
+
         // Handle Spacebar for default button
         if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
         {
@@ -773,7 +834,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
             [self buttonAction: defButton];
             return YES;
         }
-        
+
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
@@ -781,14 +842,14 @@ static void eauAlertSetStopping(id panel, BOOL val)
             [self buttonAction: altButton];
             return YES;
         }
-        
+
         // CRITICAL: Block ALL other keyboard events while modal is active
         // This prevents ANY app-level shortcuts from interfering with the dialog
         // Return YES to consume the event and prevent it from reaching the application
         NSLog(@"Eau: Blocking event during modal: '%@' with modifiers: %lu", chars, (unsigned long)modifiers);
         return YES;  // Consume ALL events to prevent app shortcuts
     }
-    
+
     return [super performKeyEquivalent: event];
 }
 
