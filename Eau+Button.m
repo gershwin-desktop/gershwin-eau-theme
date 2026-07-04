@@ -211,7 +211,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   switch (style)
     {
       case NSRoundRectBezelStyle:
-        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
+        if (cell && [cell isKindOfClass: [NSPopUpButtonCell class]])
+          r = 4;
+        else
+          r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
@@ -245,12 +248,12 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSDisclosureBezelStyle:
       case NSRoundedDisclosureBezelStyle:
       case NSRecessedBezelStyle:
-        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
+        r = 4;
         bezierPath = [self _roundBezierPath: frame
                                   withRadius: r];
         break;
       default:
-        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
+        r = 4;
         bezierPath = [self _roundBezierPath: frame
                                   withRadius: r];
     }
@@ -267,7 +270,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   switch (style)
     {
       case NSRoundRectBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color inCell: cell];
+        if ([cell isKindOfClass: [NSPopUpButtonCell class]])
+          [self _drawRoundBezel: frame withColor: color];
+        else
+          [self _drawRoundedBezel: frame withColor: color inCell: cell];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
@@ -318,10 +324,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSDisclosureBezelStyle:
       case NSRoundedDisclosureBezelStyle:
       case NSRecessedBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color inCell: cell];
+        [self _drawRoundBezel: frame withColor: color];
         break;
       default:
-        [self _drawRoundedBezel: frame withColor: color inCell: cell];
+        [self _drawRoundBezel: frame withColor: color];
     }
 }
 
