@@ -192,6 +192,18 @@ static Eau *gSharedEauInstance = nil;
 
 + (void)_registerUIBridgeService:(id)unused
 {
+  // Allow apps to opt out via environment variable.  Set
+  // EAU_DISABLE_UIBRIDGE=1 before the Eau bundle loads to skip
+  // UIBridge registration entirely, avoiding the NSMessagePort
+  // socket polling that burns CPU on every runloop iteration.
+  {
+    const char *val = getenv("EAU_DISABLE_UIBRIDGE");
+    if (val != NULL && strcmp(val, "1") == 0) {
+      NSDebugLog(@"Eau: UIBridge disabled via EAU_DISABLE_UIBRIDGE");
+      return;
+    }
+  }
+
   // Check if we have a valid Eau instance
   if (!gSharedEauInstance) {
     // Try to get from GSTheme
@@ -245,21 +257,13 @@ static Eau *gSharedEauInstance = nil;
                                                  name:NSConnectionDidInitializeNotification
                                                object:nil];
     
-    // Add ports to the main runloop BEFORE registration
-    NSPort *recvPort = [gUIBridgeThemeConnection receivePort];
-    NSPort *sendPort = [gUIBridgeThemeConnection sendPort];
-    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSDefaultRunLoopMode];
-    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSModalPanelRunLoopMode];
-    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSEventTrackingRunLoopMode];
-    [[NSRunLoop mainRunLoop] addPort:recvPort forMode:NSRunLoopCommonModes];
-    if (sendPort && sendPort != recvPort) {
-      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSDefaultRunLoopMode];
-      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSModalPanelRunLoopMode];
-      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSEventTrackingRunLoopMode];
-      [[NSRunLoop mainRunLoop] addPort:sendPort forMode:NSRunLoopCommonModes];
-    }
+    // Don't manually add ports to the runloop here - [registerName:] adds the
+    // receive port in the standard modes.  The send port is for outgoing data
+    // only and must NOT be polled.  Adding it to the runloop causes redundant
+    // poll/recvmsg cycles on its socket fds, burning CPU on every event loop
+    // iteration when no data is available.
     
-    NSLog(@"Eau: Ports added to main runloop");
+    NSLog(@"Eau: Ports will be registered via registerName:");
     
     BOOL ok = [gUIBridgeThemeConnection registerName:name];
     NSLog(@"Eau: registerName returned: %d", ok);
@@ -296,15 +300,9 @@ static Eau *gSharedEauInstance = nil;
   [menuClientConnection setRootObject:self];
   menuClientReceivePort = [menuClientConnection receivePort];
   
-  // Set up the connection to receive messages
-  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
-                              forMode:NSDefaultRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
-                              forMode:NSModalPanelRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
-                              forMode:NSEventTrackingRunLoopMode];
-  [[NSRunLoop currentRunLoop] addPort:menuClientReceivePort
-                              forMode:NSRunLoopCommonModes];
+  // Don't manually add the port to the runloop - [registerName:] handles this.
+  // Manual addPort: creates redundant socket fd polling on every event loop
+  // iteration, wasting CPU.
 
   NSString *clientName = [self _menuClientName];
   BOOL registered = [menuClientConnection registerName:clientName];
@@ -313,14 +311,6 @@ static Eau *gSharedEauInstance = nil;
       NSDebugLog(@"Eau: Failed to register GNUstep menu client name: %@", clientName);
       if (menuClientReceivePort != nil)
         {
-          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
-                                         forMode:NSDefaultRunLoopMode];
-          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
-                                         forMode:NSModalPanelRunLoopMode];
-          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
-                                         forMode:NSEventTrackingRunLoopMode];
-          [[NSRunLoop currentRunLoop] removePort:menuClientReceivePort
-                                         forMode:NSRunLoopCommonModes];
           menuClientReceivePort = nil;
         }
       menuClientConnection = nil;
