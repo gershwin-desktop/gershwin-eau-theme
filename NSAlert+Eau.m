@@ -161,7 +161,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     result = NSAlertErrorReturn;
     isGreen = YES;
 
-    NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
+    //NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
     return self;
 }
 
@@ -531,7 +531,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     isGreen = NO;
     NSLog(@"Eau: sizePanelToFit displaying content");
     [content display];
-    NSLog(@"Eau: sizePanelToFit completed successfully");
+    //NSLog(@"Eau: sizePanelToFit completed successfully");
     }
     @catch (NSException *exception) {
         NSLog(@"Eau: EXCEPTION in sizePanelToFit: %@", exception);
@@ -966,7 +966,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // Always use left alignment for consistent appearance
     [messageField setAlignment: NSLeftTextAlignment];
     
-    NSLog(@"Eau: setTitleBar completed successfully");
+    //NSLog(@"Eau: setTitleBar completed successfully");
     }
     @catch (NSException *exception) {
         NSLog(@"Eau: EXCEPTION in setTitleBar: %@", exception);
@@ -1107,7 +1107,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     NSLog(@"Eau: sizePanelToFit completed from setButtons");
     isGreen = YES;
     result = NSAlertErrorReturn;
-    NSLog(@"Eau: setButtons completed successfully");
+    //NSLog(@"Eau: setButtons completed successfully");
     }
     @catch (NSException *exception) {
         NSLog(@"Eau: EXCEPTION in setButtons: %@", exception);
@@ -1551,7 +1551,7 @@ static void setKeyEquivalent(NSButton *button)
         NSLog(@"Eau: CRITICAL - EauAlertPanel init returned nil");
         return;
     }
-    NSLog(@"Eau: EauAlertPanel created successfully: %@", panel);
+    //NSLog(@"Eau: EauAlertPanel created successfully: %@", panel);
     
     // Access NSAlert's ivars through KVC or accessor methods
     NSLog(@"Eau: Accessing NSAlert properties");
@@ -1683,7 +1683,7 @@ static void setKeyEquivalent(NSButton *button)
         }
     }
     
-    NSLog(@"Eau: eau_setupPanel completed successfully");
+    //NSLog(@"Eau: eau_setupPanel completed successfully");
     }
     @catch (NSException *exception) {
         NSLog(@"Eau: FATAL EXCEPTION in eau_setupPanel: %@", exception);
