@@ -143,28 +143,8 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 }
 - (void) _drawRoundedBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor inCell: (NSCell*)cell
 {
-  // Decide whether to use pill shape (fully rounded ends) or regular round corners.
-  // Pill shape is skipped for tall buttons that have no title text (graphic-only).
-  BOOL usePill = YES;
-  if (cell && cellFrame.size.height > METRICS_BUTTON_HEIGHT)
-    {
-      NSString *title = [cell title];
-      if (!title || [title length] == 0)
-        {
-          usePill = NO;
-        }
-    }
-
-  if (usePill)
-    {
-      float r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0;
-      [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: r];
-    }
-  else
-    {
-      // Fall back to regular round bezel (radius 4) for tall graphic-only buttons
-      [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: 4];
-    }
+  float r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0;
+  [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: r];
 }
 - (void) drawCircularBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
 {
@@ -197,30 +177,23 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   CGFloat r;
   CGFloat x;
 
-  // For rounded styles, check whether pill shape is appropriate
-  BOOL usePill = YES;
-  if (cell && frame.size.height > METRICS_BUTTON_HEIGHT)
-    {
-      NSString *title = [cell title];
-      if (!title || [title length] == 0)
-        {
-          usePill = NO;
-        }
-    }
-
   switch (style)
     {
       case NSRoundRectBezelStyle:
         if (cell && [cell isKindOfClass: [NSPopUpButtonCell class]])
           r = 4;
         else
-          r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
+          r = MIN(frame.size.width, frame.size.height) / 2.0;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
-        r = usePill ? MIN(frame.size.width, frame.size.height) / 2.0 : 4;
+      case 0:
+        if (cell && [cell isKindOfClass: [NSPopUpButtonCell class]])
+          r = 4;
+        else
+          r = MIN(frame.size.width, frame.size.height) / 2.0;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
@@ -277,7 +250,11 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
         break;
       case NSTexturedRoundedBezelStyle:
       case NSRoundedBezelStyle:
-        [self _drawRoundedBezel: frame withColor: color inCell: cell];
+      case 0:
+        if ([cell isKindOfClass: [NSPopUpButtonCell class]])
+          [self _drawRoundBezel: frame withColor: color];
+        else
+          [self _drawRoundedBezel: frame withColor: color inCell: cell];
         break;
       case NSTexturedSquareBezelStyle:
         frame = NSInsetRect(frame, 0, 1);
