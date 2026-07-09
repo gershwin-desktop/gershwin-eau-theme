@@ -427,8 +427,8 @@ static Eau *gSharedEauInstance = nil;
       return nil;
     }
 
-  // TOM: update 'enabled' states
-  [menu update];
+  // Recursively validate ALL items before serializing
+  [self _recursiveMenuUpdate:menu];
 
   NSMutableArray *items = [NSMutableArray array];
   NSArray *itemArray = [menu itemArray];
@@ -770,10 +770,10 @@ static Eau *gSharedEauInstance = nil;
 
   @try
     {
-      // Run NSMenuValidation so items get fresh enabled/state values before we
-      // push them to Menu.app.  Without this, [item isEnabled] returns stale
-      // values set at the time the menu was last serialized.
-      [menu update];
+      // Recursively validate ALL items (visible and hidden) before we push
+      // states to Menu.app.  Without this, submenu items retain stale
+      // enabled/state values.
+      [self _recursiveMenuUpdate:menu];
 
       // Serialize with index paths — includes fresh enabled/state after [menu update]
       NSDictionary *menuData = [self _serializeMenuWithIndexPaths:menu];
@@ -789,6 +789,24 @@ static Eau *gSharedEauInstance = nil;
   @catch (NSException *exception)
     {
       NSDebugLog(@"Eau: Exception pushing enabled states: %@", exception);
+    }
+}
+
+// Recursively call [menu update] on the given menu and ALL its submenus,
+// regardless of visibility.  GNUstep's built-in [NSMenu update] only calls
+// _autoenableItem: on items in visible menus (via _updateSubmenu); hidden
+// submenus keep stale enabled states.  This helper ensures every item in the
+// tree gets fresh validation before we push states to Menu.app.
+- (void)_recursiveMenuUpdate:(NSMenu *)menu
+{
+  if (!menu) return;
+  [menu update];
+  for (NSMenuItem *item in [menu itemArray])
+    {
+      if ([item hasSubmenu])
+        {
+          [self _recursiveMenuUpdate:[item submenu]];
+        }
     }
 }
 
@@ -1469,8 +1487,8 @@ static Eau *gSharedEauInstance = nil;
       return nil;
     }
 
-  // Run NSMenuValidation so items get fresh enabled/state values
-  [menu update];
+  // Recursively validate ALL items before collecting states
+  [self _recursiveMenuUpdate:menu];
 
   // Return a flat array of @[title, enabled, state] triples.
   // No nested dictionaries — copies over DO in one batch instantly.
