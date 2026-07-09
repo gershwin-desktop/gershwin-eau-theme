@@ -12,6 +12,7 @@
 #import "NSMenuView+Eau.h"
 #import <AppKit/NSMenuView.h>
 #import <objc/runtime.h>
+#import <X11/Xlib.h>
 
 // Forward declare private NSMenuView methods we need
 @interface NSMenuView (PrivateKnown)
@@ -19,6 +20,11 @@
 - (CGFloat) heightForItem: (NSInteger)item;
 - (CGFloat) totalHeight;
 @end
+
+// Accessors from NSMenu+Eau.m
+NSMenuView *EauGetTrackedMenuView(void);
+BOOL EauGetKeyboardNavActive(void);
+void EauSetKeyboardNavActive(BOOL active);
 
 #pragma mark - Scroll-Offset Swizzles
 
@@ -80,6 +86,291 @@ static void s_eau_sizeToFit(id self, SEL _cmd)
     }
 }
 
+// Original IMP for keyDown:
+static void (*s_orig_keyDown)(id, SEL, id) = NULL;
+
+static NSInteger s_eau_nextSelectableItem(NSMenuView *menuView, NSInteger from, NSInteger dir)
+{
+  NSMenu *menu = [menuView menu];
+  NSInteger count = [menu numberOfItems];
+  NSInteger i = from + dir;
+  while (i >= 0 && i < count)
+    {
+      NSMenuItem *item = [menu itemAtIndex: i];
+      if ([item isEnabled] && ![item isSeparatorItem])
+        return i;
+      i += dir;
+    }
+  return -1;
+}
+
+// Find the parent of a given submenu view by walking the attachedMenuView
+// chain from the root tracking view.
+// Warp the mouse cursor to the center of item `index` on `menuView`.
+static void s_eau_warpToItem(NSMenuView *menuView, NSInteger index)
+{
+  if (index < 0) return;
+  NSRect r = [menuView rectOfItemAtIndex: index];
+  r = [menuView convertRect: r toView: nil];
+  NSWindow *win = [menuView window];
+  if (!win) return;
+  NSPoint sp = [win convertBaseToScreen: r.origin];
+  int cx = (int)(sp.x + r.size.width / 2);
+  int cy = (int)(sp.y + r.size.height / 2);
+  Display *dpy = XOpenDisplay(NULL);
+  if (dpy)
+    {
+      XWarpPointer(dpy, None, DefaultRootWindow(dpy), 0, 0, 0, 0, cx, cy);
+      XFlush(dpy);
+      XCloseDisplay(dpy);
+    }
+}
+
+// Switch to the adjacent menu title's dropdown: detach current, move
+// highlight to prev/next, attach that title's submenu.
+static void s_eau_switchToAdjacentMenu(NSMenuView *menuView, NSInteger dir)
+{
+  NSMenuView *root = EauGetTrackedMenuView();
+  if (!root || ![root isHorizontal]) return;
+
+  // Save before detachSubmenu clears it to -1.
+  NSInteger cur = [root highlightedItemIndex];
+  [root detachSubmenu];
+
+  NSInteger next = s_eau_nextSelectableItem(root, cur >= 0 ? cur : (dir > 0 ? -1 : [[root menu] numberOfItems]), dir);
+  if (next >= 0)
+    {
+      [root setHighlightedItemIndex: next];
+      NSMenuItem *item = [[root menu] itemAtIndex: next];
+      if (item && [item submenu] && [item isEnabled])
+        {
+          [root attachSubmenuForItemAtIndex: next];
+        }
+      s_eau_warpToItem(root, next);
+    }
+}
+
+static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
+{
+  NSString *chars = [event characters];
+  NSUInteger mods = [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
+  // Only reject if one of the standard modifier keys is pressed.
+  // GNUstep may set additional bits (e.g. 0x800000) even when no
+  // modifier key is physically held; we must ignore those.
+  BOOL hasModifier = (mods & (NSShiftKeyMask | NSControlKeyMask
+                              | NSAlternateKeyMask | NSCommandKeyMask
+                              | NSAlphaShiftKeyMask)) != 0;
+  NSLog(@"Eau+Menu: keyDown chars=%@ mods=0x%lx hasMod=%d self=%@",
+        chars, (unsigned long)mods, hasModifier, self);
+  if ([chars length] == 0 || hasModifier)
+    {
+      s_orig_keyDown(self, _cmd, event);
+      return;
+    }
+
+  unichar c = [chars characterAtIndex: 0];
+  NSMenuView *menuView = (NSMenuView *)self;
+  NSInteger cur = [menuView highlightedItemIndex];
+  BOOL isHoriz = [menuView isHorizontal];
+  NSInteger newIdx;
+
+  NSLog(@"Eau+Menu: keyDown c=0x%04x cur=%ld horiz=%d isAttached=%d",
+        c, (long)cur, isHoriz, [menuView isAttached]);
+
+  // Any keyboard navigation key activates keyboard-nav mode, which
+  // suppresses mouse-moved events until the user clicks again.
+  if (c == NSUpArrowFunctionKey || c == NSDownArrowFunctionKey
+      || c == NSLeftArrowFunctionKey || c == NSRightArrowFunctionKey
+      || c == '\r' || c == '\n' || c == ' ' || c == 0x1B)
+    {
+      EauSetKeyboardNavActive(YES);
+    }
+
+  switch (c)
+    {
+      /* ── Up arrow ── */
+      case NSUpArrowFunctionKey:
+        if (isHoriz) return;                     // no-op on menu bar
+        newIdx = s_eau_nextSelectableItem(menuView, cur >= 0 ? cur : 0, -1);
+        NSLog(@"Eau+Menu: Up cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
+        if (newIdx >= 0)
+          {
+            [menuView setHighlightedItemIndex: newIdx];
+          }
+        else if (cur >= 0 && [menuView isAttached])
+          {
+            // At the first item — close dropdown back to parent.
+            NSMenuView *root = EauGetTrackedMenuView();
+            NSMenuView *parent = nil;
+            if (root && root != menuView)
+              {
+                NSMenuView *p = root;
+                while (p)
+                  {
+                    NSMenuView *attached = [p attachedMenuView];
+                    if (attached == menuView) { parent = p; break; }
+                    p = attached;
+                  }
+              }
+            NSMenu *parentMenu = [parent menu];
+            NSMenu *childMenu = [menuView menu];
+            NSInteger parentIdx = (parentMenu && childMenu)
+              ? [parentMenu indexOfItemWithSubmenu: childMenu] : -1;
+            [parent detachSubmenu];
+            if (parentIdx >= 0)
+              {
+                [parent setHighlightedItemIndex: parentIdx];
+                s_eau_warpToItem(parent, parentIdx);
+              }
+            [[menuView window] orderOut: nil];
+          }
+        return;
+
+      /* ── Down arrow ── */
+      case NSDownArrowFunctionKey:
+        if (isHoriz)
+          {
+            if (cur < 0)
+              {
+                newIdx = s_eau_nextSelectableItem(menuView, -1, 1);
+                NSLog(@"Eau+Menu: Down first newIdx=%ld", (long)newIdx);
+                if (newIdx >= 0) [menuView setHighlightedItemIndex: newIdx];
+                return;
+              }
+            // Open dropdown for highlighted menu title
+            NSMenuItem *item = [[menuView menu] itemAtIndex: cur];
+            NSLog(@"Eau+Menu: Down open submenu for idx=%ld item=%@ submenu=%d enabled=%d",
+                  (long)cur, [item title], [item submenu] != nil, [item isEnabled]);
+            if (item && [item submenu] && [item isEnabled])
+              {
+                [menuView attachSubmenuForItemAtIndex: cur];
+                s_eau_warpToItem(menuView, cur);
+              }
+          }
+        else
+          {
+            newIdx = s_eau_nextSelectableItem(menuView, cur >= 0 ? cur : -1, 1);
+            NSLog(@"Eau+Menu: Down cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
+            if (newIdx >= 0)
+              [menuView setHighlightedItemIndex: newIdx];
+          }
+        return;
+
+      /* ── Right arrow ── */
+      case NSRightArrowFunctionKey:
+        if (isHoriz)
+          {
+            s_eau_switchToAdjacentMenu(menuView, 1);
+          }
+        else
+          {
+            if (cur >= 0)
+              {
+                NSMenuItem *item = [[menuView menu] itemAtIndex: cur];
+                if (item && [item submenu] && [item isEnabled])
+                  {
+                    [menuView attachSubmenuForItemAtIndex: cur];
+                    s_eau_warpToItem(menuView, cur);
+                    return;
+                  }
+              }
+            // No submenu (or no highlighted item) → next menu title
+            s_eau_switchToAdjacentMenu(menuView, 1);
+          }
+        return;
+
+      /* ── Left arrow ── */
+      case NSLeftArrowFunctionKey:
+        if (isHoriz)
+          {
+            s_eau_switchToAdjacentMenu(menuView, -1);
+          }
+        else
+          {
+            // If parent is the menu bar (horizontal), this is a root
+            // dropdown — switch to previous title's dropdown.
+            // If parent is another dropdown (vertical), this is a
+            // submenu — close it and return to the parent.
+            NSMenuView *parent = nil;
+            NSMenuView *root = EauGetTrackedMenuView();
+            if (root && root != menuView)
+              {
+                NSMenuView *p = root;
+                while (p)
+                  {
+                    NSMenuView *attached = [p attachedMenuView];
+                    if (attached == menuView) { parent = p; break; }
+                    p = attached;
+                  }
+              }
+            if (parent && ![parent isHorizontal])
+              {
+                // Submenu of another dropdown — close just this level.
+                // Find which item in the parent owns this submenu.
+                NSMenu *parentMenu = [parent menu];
+                NSMenu *childMenu = [menuView menu];
+                NSInteger parentIdx = (parentMenu && childMenu)
+                  ? [parentMenu indexOfItemWithSubmenu: childMenu] : -1;
+                [parent detachSubmenu];
+                if (parentIdx >= 0)
+                  [parent setHighlightedItemIndex: parentIdx];
+                [[menuView window] orderOut: nil];
+              }
+            else if (root && [root isHorizontal])
+              {
+                // Root dropdown attached to menu bar — switch title.
+                s_eau_switchToAdjacentMenu(menuView, -1);
+              }
+            else
+              {
+                // Standalone popup — close it.
+                [NSApp abortModal];
+              }
+          }
+        return;
+
+      /* ── Enter / Space — perform action ── */
+      case '\r':
+      case '\n':
+      case ' ':
+        if (cur >= 0)
+          {
+            NSMenuItem *item = [[menuView menu] itemAtIndex: cur];
+            if (item && [item submenu] && [item isEnabled])
+              {
+                // Item has submenu — open it instead of activating
+                [menuView attachSubmenuForItemAtIndex: cur];
+              }
+            else
+              {
+                [[menuView menu] performActionForItemAtIndex: cur];
+                [NSApp abortModal];
+              }
+          }
+        return;
+
+      /* ── Escape — close all menus ── */
+      case 0x1B:
+        {
+          // Post a synthetic left-mouse-up at the front of the queue so
+          // the tracking loop processes it immediately and exits.
+          NSEvent *up = [NSEvent mouseEventWithType: NSLeftMouseUp
+                                           location: NSZeroPoint
+                                      modifierFlags: 0
+                                          timestamp: [NSDate timeIntervalSinceReferenceDate]
+                                       windowNumber: 0
+                                            context: nil
+                                        eventNumber: 0
+                                         clickCount: 1
+                                           pressure: 0.0];
+          [NSApp postEvent: up atStart: YES];
+        }
+        return;
+    }
+
+  s_orig_keyDown(self, _cmd, event);
+}
+
 // Original IMP for mouseDown:
 static void (*s_orig_mouseDown)(id, SEL, id) = NULL;
 
@@ -88,13 +379,8 @@ static void s_eau_mouseDown(id self, SEL _cmd, NSEvent *event)
   s_orig_mouseDown(self, _cmd, event);
 }
 
-// Original IMP for trackWithEvent:
-static BOOL (*s_orig_trackWithEvent_NSMenuView)(id, SEL, id) = NULL;
-
-static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
-{
-  return s_orig_trackWithEvent_NSMenuView(self, _cmd, event);
-}
+// trackWithEvent: not swizzled here — NSMenu+Eau.m owns that swizzle
+// for tracking-count management and keyboard event injection.
 
 #pragma mark - setHighlightedItemIndex: Swizzle
 
@@ -363,6 +649,24 @@ static void initMenuViewSwizzling(void)
       }
   }
 
+  // --- Install keyDown: on NSMenuView (keyboard navigation) ---
+  // NSMenuView inherits keyDown: from NSResponder.  We must *add* a new
+  // method to NSMenuView (not patch NSResponder), otherwise our handler
+  // fires on every NSView/NSResponder subclass that hasn't overridden
+  // keyDown: — including NSView, MenuGradientView, etc.
+  {
+    SEL sel = @selector(keyDown:);
+    Method nsresp = class_getInstanceMethod([NSResponder class], sel);
+    if (nsresp)
+      {
+        s_orig_keyDown = (void *)method_getImplementation(nsresp);
+        const char *enc = method_getTypeEncoding(nsresp);
+        class_addMethod(menuViewClass, sel, (IMP)s_eau_keyDown, enc);
+        NSLog(@"Eau+Menu: Installed keyDown: on NSMenuView (orig=%p new=%p enc=%s)",
+              s_orig_keyDown, s_eau_keyDown, enc);
+      }
+  }
+
   // --- Swizzle mouseDown: (for edge autoscroll start/stop) ---
   {
     SEL sel = sel_registerName("mouseDown:");
@@ -375,15 +679,4 @@ static void initMenuViewSwizzling(void)
       }
   }
 
-  // --- Swizzle trackWithEvent: (for edge autoscroll) ---
-  {
-    SEL sel = sel_registerName("trackWithEvent:");
-    Method m = class_getInstanceMethod(menuViewClass, sel);
-    if (m)
-      {
-        s_orig_trackWithEvent_NSMenuView = (void *)method_getImplementation(m);
-        method_setImplementation(m, (IMP)s_eau_trackWithEvent);
-        NSDebugLog(@"NSMenuView+Eau: Swizzled trackWithEvent: for edge autoscroll");
-      }
-  }
 }

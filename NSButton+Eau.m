@@ -120,18 +120,36 @@
     {
       unichar keyChar = [characters characterAtIndex: 0];
       
-      // Handle spacebar - critical for focus ring interaction
+      // Handle spacebar - activate the focused button
       if (keyChar == ' ' || keyChar == 0x20)
         {
           [self performClick: self];
           return;
         }
       
-      // Handle Enter/Return
+      // Handle Enter/Return — activate the window's default button,
+      // not necessarily the focused button (macOS convention).
       if (keyChar == '\r' || keyChar == '\n' || keyChar == 0x03)
         {
-          [self performClick: self];
-          return;
+          NSWindow *win = [self window];
+          if (win)
+            {
+              id defaultCell = [win defaultButtonCell];
+              if (defaultCell && [defaultCell respondsToSelector: @selector(performClick:)])
+                {
+                  // Find the NSButton that owns the default cell and click it
+                  if ([defaultCell isKindOfClass: [NSButtonCell class]])
+                    {
+                      NSButton *defaultBtn = (NSButton *)[(NSButtonCell *)defaultCell controlView];
+                      if (defaultBtn && [defaultBtn isEnabled])
+                        {
+                          [defaultBtn performClick: nil];
+                          return;
+                        }
+                    }
+                }
+            }
+          // No default button: fall through to original implementation
         }
     }
   

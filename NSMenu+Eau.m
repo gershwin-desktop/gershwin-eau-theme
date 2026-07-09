@@ -201,7 +201,14 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
 
 /* ---- Tracked windows + active tracking counter ---- */
 static volatile int _eau_activeTrackingCount = 0;
+static __weak NSMenuView *_eau_trackedMenuView = nil;
+static BOOL _eau_keyboardNavActive = NO;
 static Display *_eau_x11_display = NULL;
+
+// Accessors for other compilation units (NSMenuView+Eau.m)
+NSMenuView *EauGetTrackedMenuView(void) { return _eau_trackedMenuView; }
+BOOL EauGetKeyboardNavActive(void) { return _eau_keyboardNavActive; }
+void EauSetKeyboardNavActive(BOOL active) { _eau_keyboardNavActive = active; }
 
 static void _eau_ensureState(void)
 {
@@ -306,6 +313,9 @@ static BOOL (*s_orig_trackWithEvent)(id, SEL, id) = NULL;
 static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
 {
   _eau_activeTrackingCount++;
+  _eau_trackedMenuView = (NSMenuView *)self;
+  NSDebugLog(@"Eau+Menu: trackWithEvent start tracking=%d view=%@",
+             _eau_activeTrackingCount, self);
   BOOL result = NO;
   @try
     {
@@ -314,6 +324,10 @@ static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
     }
   @catch (NSException *e) {}
   _eau_activeTrackingCount--;
+  if (_eau_activeTrackingCount == 0)
+    _eau_trackedMenuView = nil;
+  NSDebugLog(@"Eau+Menu: trackWithEvent end tracking=%d",
+             _eau_activeTrackingCount);
   _eau_destroyX11MenuWindows();
   return result;
 }
@@ -324,14 +338,36 @@ static NSEvent* (*s_orig_nextEventMatchingMask)(id, SEL, NSUInteger, NSDate*, NS
 
 static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, NSDate *date, NSString *mode, BOOL dequeue)
 {
-  // During menu tracking, add scroll wheel to the event mask so we can
-  // process scroll events in the tracking loop.
+  // During menu tracking, add scroll wheel and keyboard events to the mask
+  // so we can process them in the tracking loop.
   if (_eau_activeTrackingCount > 0)
     {
+      NSDebugLog(@"Eau+Menu: nextEvent adding KeyDown mask");
       mask |= NSScrollWheelMask;
+      mask |= NSKeyDownMask;
     }
 
   NSEvent *event = s_orig_nextEventMatchingMask(self, _cmd, mask, date, mode, dequeue);
+
+  // When keyboard navigation is active, ignore mouse-moved events so the
+  // tracking loop doesn't re-evaluate highlight based on stale cursor position.
+  if (_eau_keyboardNavActive && event && [event type] == NSMouseMoved)
+    {
+      // Discard and fetch the next event (up to a limit to avoid infinite loop).
+      int limit = 50;
+      while (limit-- > 0)
+        {
+          event = s_orig_nextEventMatchingMask(self, _cmd, mask, date, mode, dequeue);
+          if (!event || [event type] != NSMouseMoved)
+            break;
+        }
+    }
+  // Any mouse click deactivates keyboard nav.
+  if (event && ([event type] == NSLeftMouseDown || [event type] == NSRightMouseDown
+                || [event type] == NSOtherMouseDown))
+    {
+      _eau_keyboardNavActive = NO;
+    }
 
   if (event && _eau_activeTrackingCount > 0)
     {
@@ -377,6 +413,30 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
                   [mgr scrollByDelta: deltaY];
                 }
             }
+        }
+
+      // --- Keyboard navigation (arrows, Enter, Escape) ---
+      if ([event type] == NSKeyDown && _eau_trackedMenuView)
+        {
+          // Route to deepest OPEN submenu, or top-level tracking view.
+          // GNUstep's detachSubmenu doesn't clear _attachedMenu, so
+          // attachedMenuView may return a closed submenu.  Check the
+          // submenu window's visibility to skip detached-but-not-cleared
+          // submenus.
+          NSMenuView *target = _eau_trackedMenuView;
+          NSMenuView *attached = [target attachedMenuView];
+          while (attached)
+            {
+              NSWindow *w = [attached window];
+              if (!w || ![w isVisible]) break; // closed
+              target = attached;
+              attached = [target attachedMenuView];
+            }
+          NSLog(@"Eau+Menu: key '%@' tracking=%d target=%@ horiz=%d cur=%ld",
+                [event characters], _eau_activeTrackingCount,
+                target, [target isHorizontal],
+                (long)[target highlightedItemIndex]);
+          [target keyDown: event];
         }
     }
 

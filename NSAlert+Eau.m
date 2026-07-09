@@ -690,11 +690,30 @@ static void eauAlertSetStopping(id panel, BOOL val)
         return;
     }
     
-    // Handle Spacebar for default button - CRITICAL
-    if (keyChar == ' ' && useControl(defButton))
+    // Handle Spacebar to activate focused button
+    if (keyChar == ' ')
     {
-        NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-        [self buttonAction: defButton];
+        NSView *current = (NSView *)[self firstResponder];
+        if (current == defButton && useControl(defButton))
+        {
+            NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
+            [self buttonAction: defButton];
+        }
+        else if (current == altButton && useControl(altButton))
+        {
+            NSLog(@"Eau: keyDown Spacebar pressed, clicking alternate button");
+            [self buttonAction: altButton];
+        }
+        else if (current == othButton && useControl(othButton))
+        {
+            NSLog(@"Eau: keyDown Spacebar pressed, clicking other button");
+            [self buttonAction: othButton];
+        }
+        else if (useControl(defButton))
+        {
+            NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
+            [self buttonAction: defButton];
+        }
         return;
     }
     
@@ -741,6 +760,56 @@ static void eauAlertSetStopping(id panel, BOOL val)
         else if (useControl(defButton))
         {
             [self makeFirstResponder: defButton];
+        }
+        return;
+    }
+    
+    // Handle Right Arrow to cycle forward through buttons
+    if (keyChar == NSRightArrowFunctionKey && (([event modifierFlags] & (NSShiftKeyMask | NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask)) == 0))
+    {
+        NSView *current = (NSView *)[self firstResponder];
+        if (current == defButton)
+        {
+            if (useControl(altButton))
+                [self makeFirstResponder: altButton];
+            else if (useControl(othButton))
+                [self makeFirstResponder: othButton];
+        }
+        else if (current == altButton)
+        {
+            if (useControl(othButton))
+                [self makeFirstResponder: othButton];
+            else
+                [self makeFirstResponder: defButton];
+        }
+        else if (current == othButton)
+        {
+            [self makeFirstResponder: defButton];
+        }
+        return;
+    }
+    
+    // Handle Left Arrow to cycle backward through buttons
+    if (keyChar == NSLeftArrowFunctionKey && (([event modifierFlags] & (NSShiftKeyMask | NSCommandKeyMask | NSAlternateKeyMask | NSControlKeyMask)) == 0))
+    {
+        NSView *current = (NSView *)[self firstResponder];
+        if (current == defButton)
+        {
+            if (useControl(othButton))
+                [self makeFirstResponder: othButton];
+            else if (useControl(altButton))
+                [self makeFirstResponder: altButton];
+        }
+        else if (current == altButton)
+        {
+            [self makeFirstResponder: defButton];
+        }
+        else if (current == othButton)
+        {
+            if (useControl(altButton))
+                [self makeFirstResponder: altButton];
+            else if (useControl(defButton))
+                [self makeFirstResponder: defButton];
         }
         return;
     }
@@ -843,11 +912,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
             return YES;
         }
 
-        // CRITICAL: Block ALL other keyboard events while modal is active
-        // This prevents ANY app-level shortcuts from interfering with the dialog
-        // Return YES to consume the event and prevent it from reaching the application
-        NSLog(@"Eau: Blocking event during modal: '%@' with modifiers: %lu", chars, (unsigned long)modifiers);
-        return YES;  // Consume ALL events to prevent app shortcuts
+        // Let unhandled events (Tab, arrow keys) propagate to keyDown:
+        return NO;
     }
 
     return [super performKeyEquivalent: event];
