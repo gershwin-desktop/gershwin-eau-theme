@@ -160,8 +160,8 @@ static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
   BOOL hasModifier = (mods & (NSShiftKeyMask | NSControlKeyMask
                               | NSAlternateKeyMask | NSCommandKeyMask
                               | NSAlphaShiftKeyMask)) != 0;
-  NSLog(@"Eau+Menu: keyDown chars=%@ mods=0x%lx hasMod=%d self=%@",
-        chars, (unsigned long)mods, hasModifier, self);
+// NSLog(@"Eau+Menu: keyDown chars=%@ mods=0x%lx hasMod=%d self=%@",
+//         chars, (unsigned long)mods, hasModifier, self);
   if ([chars length] == 0 || hasModifier)
     {
       s_orig_keyDown(self, _cmd, event);
@@ -174,8 +174,8 @@ static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
   BOOL isHoriz = [menuView isHorizontal];
   NSInteger newIdx;
 
-  NSLog(@"Eau+Menu: keyDown c=0x%04x cur=%ld horiz=%d isAttached=%d",
-        c, (long)cur, isHoriz, [menuView isAttached]);
+// NSLog(@"Eau+Menu: keyDown c=0x%04x cur=%ld horiz=%d isAttached=%d",
+//         c, (long)cur, isHoriz, [menuView isAttached]);
 
   // Any keyboard navigation key activates keyboard-nav mode, which
   // suppresses mouse-moved events until the user clicks again.
@@ -192,7 +192,7 @@ static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
       case NSUpArrowFunctionKey:
         if (isHoriz) return;                     // no-op on menu bar
         newIdx = s_eau_nextSelectableItem(menuView, cur >= 0 ? cur : 0, -1);
-        NSLog(@"Eau+Menu: Up cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
+        // NSLog(@"Eau+Menu: Up cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
         if (newIdx >= 0)
           {
             [menuView setHighlightedItemIndex: newIdx];
@@ -233,14 +233,14 @@ static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
             if (cur < 0)
               {
                 newIdx = s_eau_nextSelectableItem(menuView, -1, 1);
-                NSLog(@"Eau+Menu: Down first newIdx=%ld", (long)newIdx);
+                // NSLog(@"Eau+Menu: Down first newIdx=%ld", (long)newIdx);
                 if (newIdx >= 0) [menuView setHighlightedItemIndex: newIdx];
                 return;
               }
             // Open dropdown for highlighted menu title
             NSMenuItem *item = [[menuView menu] itemAtIndex: cur];
-            NSLog(@"Eau+Menu: Down open submenu for idx=%ld item=%@ submenu=%d enabled=%d",
-                  (long)cur, [item title], [item submenu] != nil, [item isEnabled]);
+            // NSLog(@"Eau+Menu: Down open submenu for idx=%ld item=%@ submenu=%d enabled=%d",
+            //       (long)cur, [item title], [item submenu] != nil, [item isEnabled]);
             if (item && [item submenu] && [item isEnabled])
               {
                 [menuView attachSubmenuForItemAtIndex: cur];
@@ -250,7 +250,7 @@ static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
         else
           {
             newIdx = s_eau_nextSelectableItem(menuView, cur >= 0 ? cur : -1, 1);
-            NSLog(@"Eau+Menu: Down cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
+            // NSLog(@"Eau+Menu: Down cur=%ld newIdx=%ld", (long)cur, (long)newIdx);
             if (newIdx >= 0)
               [menuView setHighlightedItemIndex: newIdx];
           }
@@ -662,8 +662,8 @@ static void initMenuViewSwizzling(void)
         s_orig_keyDown = (void *)method_getImplementation(nsresp);
         const char *enc = method_getTypeEncoding(nsresp);
         class_addMethod(menuViewClass, sel, (IMP)s_eau_keyDown, enc);
-        NSLog(@"Eau+Menu: Installed keyDown: on NSMenuView (orig=%p new=%p enc=%s)",
-              s_orig_keyDown, s_eau_keyDown, enc);
+        // NSLog(@"Eau+Menu: Installed keyDown: on NSMenuView (orig=%p new=%p enc=%s)",
+        //       s_orig_keyDown, s_eau_keyDown, enc);
       }
   }
 

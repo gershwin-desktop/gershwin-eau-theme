@@ -432,10 +432,10 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
               target = attached;
               attached = [target attachedMenuView];
             }
-          NSLog(@"Eau+Menu: key '%@' tracking=%d target=%@ horiz=%d cur=%ld",
-                [event characters], _eau_activeTrackingCount,
-                target, [target isHorizontal],
-                (long)[target highlightedItemIndex]);
+          // NSLog(@"Eau+Menu: key '%@' tracking=%d target=%@ horiz=%d cur=%ld",
+          //       [event characters], _eau_activeTrackingCount,
+          //       target, [target isHorizontal],
+          //       (long)[target highlightedItemIndex]);
           [target keyDown: event];
         }
     }
