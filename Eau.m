@@ -10,6 +10,10 @@
 #import "Eau+Button.h"
 #import "EauMenuRelaunchManager.h"
 
+@interface Eau (NSWindowTitle)
++ (void)EAUswizzleNSWindowSetTitle;
+@end
+
 static BOOL gForceExternalMenuByEnv = NO;
 
 static BOOL EauEnvironmentContainsAppMenuToken(void)
@@ -138,7 +142,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
     // Enable multi-threading on all child connections immediately
     [newConnection enableMultipleThreads];
     [newConnection setIndependentConversationQueueing:YES];
-    NSLog(@"Eau: [Delegate] Enabled multi-threading on new connection: %@ (parent: %@)", newConnection, parentConnection);
+    // NSLog(@"Eau: [Delegate] Enabled multi-threading on new connection: %@ (parent: %@)", newConnection, parentConnection);
     return newConnection;
 }
 
@@ -147,7 +151,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
     // Enable multi-threading before the connection becomes active
     [newConnection enableMultipleThreads];
     [newConnection setIndependentConversationQueueing:YES];
-    NSLog(@"Eau: [Delegate] shouldMakeNewConnection - enabled multi-threading on: %@", newConnection);
+    // NSLog(@"Eau: [Delegate] shouldMakeNewConnection - enabled multi-threading on: %@", newConnection);
     return YES;
 }
 @end
@@ -163,14 +167,14 @@ static EauUIBridgeProxy *gUIBridgeProxy = nil;
 + (void)load
 {
   // Swizzle NSWindow setTitle: to add middle-ellipsis truncation for long titles
-  [(id)self performSelector: NSSelectorFromString(@"EAUswizzleNSWindowSetTitle")];
+  [self EAUswizzleNSWindowSetTitle];
 
   gForceExternalMenuByEnv = EauEnvironmentContainsAppMenuToken();
   if (gForceExternalMenuByEnv)
     {
       NSDebugLog(@"Eau: appmenu token detected in environment, forcing external menu mode");
     }
-  NSLog(@"Eau: +load called");
+  // NSLog(@"Eau: +load called");
   // Schedule UIBridge service registration after a delay to ensure run loop is active
   // Using dispatch_after ensures this runs even if performSelector isn't processed
   dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
@@ -184,7 +188,7 @@ static EauUIBridgeProxy *gUIBridgeProxy = nil;
   // Enable multi-threading on all new connections to handle cross-process requests
   [conn enableMultipleThreads];
   [conn setIndependentConversationQueueing:YES];
-  NSLog(@"Eau: Enabled multi-threading on new connection: %@", conn);
+  // NSLog(@"Eau: Enabled multi-threading on new connection: %@", conn);
 }
 
 // Static variable to hold the shared Eau instance for UIBridge
@@ -218,31 +222,31 @@ static Eau *gSharedEauInstance = nil;
   
   // Already registered?
   if (gUIBridgeThemeConnection) {
-    NSLog(@"Eau: UIBridge service already registered, skipping");
+    // NSLog(@"Eau: UIBridge service already registered, skipping");
     return;
   }
   
   pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
   // Register per-PID service so each app has its own unique UIBridge service
   NSString *name = [NSString stringWithFormat:@"org.gershwin.Gershwin.Theme.UIBridge.%d", pid];
-  NSLog(@"Eau: Registering per-PID UIBridge theme service: %@", name);
+  // NSLog(@"Eau: Registering per-PID UIBridge theme service: %@", name);
   
   @try {
-    NSLog(@"Eau: Theme object class: %@, responds to listMenus: %d", 
-          [gSharedEauInstance class], 
-          (int)[gSharedEauInstance respondsToSelector:@selector(listMenus)]);
+    // NSLog(@"Eau: Theme object class: %@, responds to listMenus: %d",
+    //       [gSharedEauInstance class],
+    //       (int)[gSharedEauInstance respondsToSelector:@selector(listMenus)]);
     
     // Create a proxy object that explicitly implements UIBridgeProtocol
     gUIBridgeProxy = [[EauUIBridgeProxy alloc] initWithTheme:gSharedEauInstance];
-    NSLog(@"Eau: Created UIBridge proxy: %@", gUIBridgeProxy);
+    // NSLog(@"Eau: Created UIBridge proxy: %@", gUIBridgeProxy);
     
     // Create connection delegate to handle child connections
     gUIBridgeConnectionDelegate = [[EauConnectionDelegate alloc] init];
     
     gUIBridgeThemeConnection = [[NSConnection alloc] init];
-    NSLog(@"Eau: Connection created - receivePort: %@, sendPort: %@", 
-          [gUIBridgeThemeConnection receivePort], 
-          [gUIBridgeThemeConnection sendPort]);
+    // NSLog(@"Eau: Connection created - receivePort: %@, sendPort: %@",
+    //       [gUIBridgeThemeConnection receivePort],
+    //       [gUIBridgeThemeConnection sendPort]);
     [gUIBridgeThemeConnection setRootObject:gUIBridgeProxy];
     // Set delegate to enable multi-threading on child connections BEFORE they process messages
     [gUIBridgeThemeConnection setDelegate:gUIBridgeConnectionDelegate];
@@ -263,12 +267,12 @@ static Eau *gSharedEauInstance = nil;
     // poll/recvmsg cycles on its socket fds, burning CPU on every event loop
     // iteration when no data is available.
     
-    NSLog(@"Eau: Ports will be registered via registerName:");
+    // NSLog(@"Eau: Ports will be registered via registerName:");
     
     BOOL ok = [gUIBridgeThemeConnection registerName:name];
-    NSLog(@"Eau: registerName returned: %d", ok);
+    //NSLog(@"Eau: registerName returned: %d", ok);
     if (ok) {
-      NSLog(@"Eau: Successfully registered per-PID UIBridge theme service: %@", name);
+      // NSLog(@"Eau: Successfully registered per-PID UIBridge theme service: %@", name);
     } else {
       NSLog(@"Eau: Failed to register per-PID UIBridge service as %@", name);
       gUIBridgeThemeConnection = nil;
@@ -317,8 +321,8 @@ static Eau *gSharedEauInstance = nil;
       return NO;
     }
 
-  NSDebugLog(@"Eau: Registered GNUstep menu client as %@ with receive port %@", clientName, [menuClientConnection receivePort]);
-  NSDebugLog(@"Eau: Registered GNUstep menu client as %@ with receive port added to run loop", clientName);
+  // NSDebugLog(@"Eau: Registered GNUstep menu client as %@ with receive port %@", clientName, [menuClientConnection receivePort]);
+  // NSDebugLog(@"Eau: Registered GNUstep menu client as %@ with receive port added to run loop", clientName);
   [[NSNotificationCenter defaultCenter] removeObserver:self name:NSConnectionDidDieNotification object:menuClientConnection];
   [[NSNotificationCenter defaultCenter] addObserver:self
                                            selector:@selector(_menuClientConnectionDidDie:)
@@ -364,7 +368,7 @@ static Eau *gSharedEauInstance = nil;
                                                selector:@selector(_menuServerConnectionDidDie:)
                                                    name:NSConnectionDidDieNotification
                                                  object:menuServerConnection];
-      NSDebugLog(@"Eau: Connected to GNUstep menu server");
+      // NSDebugLog(@"Eau: Connected to GNUstep menu server");
       return YES;
     }
 
@@ -541,7 +545,7 @@ static Eau *gSharedEauInstance = nil;
       [self _ensureMenuServerConnection];
       
       // Register UIBridge service so server can query menus from theme
-      NSLog(@"Eau: Registering UIBridge service from initWithBundle");
+      // NSLog(@"Eau: Registering UIBridge service from initWithBundle");
       [[self class] _registerUIBridgeService:nil];
 
       // Observe menu changes so Menu.app can stay in sync
@@ -1017,7 +1021,7 @@ static Eau *gSharedEauInstance = nil;
     // Also include the application's main menu (Application menu) as a global fallback
     NSMenu *appMainMenu = [NSApp mainMenu];
     if (appMainMenu) {
-      NSLog(@"Eau: Including application mainMenu as fallback");
+      // NSLog(@"Eau: Including application mainMenu as fallback");
       NSDictionary *appMenuData = [self _serializeMenuWithIndexPaths:appMainMenu];
       // Use nil windowId to indicate it's the global app menu
       [result addObject:@{ @"windowId": [NSNull null], @"menu": appMenuData }];

@@ -544,8 +544,8 @@ static void s_eau_drawRect(id self, SEL _cmd, NSRect dirtyRect)
       // Clamp horizontally so the submenu fits on screen.
       if (xPos + subW > NSMaxX(screenFrame))
         {
-          // Try showing on the left side of the parent instead
-          xPos = screenFrame.origin.x;
+          // Show on the left side of the parent instead
+          xPos = NSMinX(parentFrame) - subW;
         }
       if (xPos + subW > NSMaxX(screenFrame))
         {

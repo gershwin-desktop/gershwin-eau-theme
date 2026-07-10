@@ -8,6 +8,7 @@
 @interface NSMenuItemCell (EauSwizzling)
 - (CGFloat)eau_titleWidth;
 - (NSRect)eau_titleRectForBounds:(NSRect)cellFrame;
+- (NSColor *)eau_textColor;
 @end
 
 @implementation NSMenuItemCell (EauSwizzling)
@@ -40,6 +41,14 @@
         originalRect.origin.x, originalRect.origin.y, originalRect.size.width, originalRect.size.height);
 
   return originalRect;
+}
+
+// Swizzled implementation for textColor - returns lighter grey for disabled menu items
+- (NSColor *)eau_textColor {
+  if (![self isEnabled]) {
+    return [NSColor colorWithCalibratedWhite: 0.65 alpha: 1.0];
+  }
+  return [self eau_textColor];
 }
 
 @end
@@ -98,6 +107,25 @@ static void initMenuItemCellSwizzling(void) {
     }
     if (!swizzledTitleRectMethod) {
       NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_titleRectForBounds: method on NSMenuItemCell");
+    }
+  }
+
+  // Swizzle textColor - returns lighter grey for disabled items
+  SEL textColorSelector = sel_registerName("textColor");
+  Method originalTextColorMethod = class_getInstanceMethod(menuItemCellClass, textColorSelector);
+  Method swizzledTextColorMethod = class_getInstanceMethod(menuItemCellClass, @selector(eau_textColor));
+  if (originalTextColorMethod && swizzledTextColorMethod) {
+    IMP originalIMP = method_getImplementation(originalTextColorMethod);
+    IMP swizzledIMP = method_getImplementation(swizzledTextColorMethod);
+    if (originalIMP != swizzledIMP) {
+      method_exchangeImplementations(originalTextColorMethod, swizzledTextColorMethod);
+    }
+  } else {
+    if (!originalTextColorMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find original textColor method");
+    }
+    if (!swizzledTextColorMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_textColor method on NSMenuItemCell");
     }
   }
 }
@@ -178,16 +206,7 @@ static void initMenuItemCellSwizzling(void) {
         
         // Draw the Mac-style key equivalent manually
         NSFont *font = [NSFont menuFontOfSize:0];
-        NSColor *textColor = [NSColor controlTextColor];
-        
-        // If this menu item is highlighted, use highlighted text color
-        if ([self isHighlighted]) {
-          textColor = [NSColor selectedMenuItemTextColor];
-        }
-        // If this menu item is disabled, use disabled text color (greyed out)
-        else if (![self isEnabled]) {
-          textColor = [NSColor disabledControlTextColor];
-        }
+        NSColor *textColor = [self textColor];
         
         NSDictionary *attributes = @{
           NSFontAttributeName: font,
