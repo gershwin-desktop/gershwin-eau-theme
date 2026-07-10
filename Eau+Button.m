@@ -143,7 +143,11 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 }
 - (void) _drawRoundedBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor inCell: (NSCell*)cell
 {
-  float r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0;
+  float r;
+  if (cellFrame.size.height <= 25.0)
+    r = MIN(cellFrame.size.width, cellFrame.size.height) / 2.0; // pill
+  else
+    r = 4; // tall buttons: slightly rounded
   [self _drawRoundBezel: cellFrame withColor: backgroundColor andRadius: r];
 }
 - (void) drawCircularBezel: (NSRect)cellFrame withColor: (NSColor*)backgroundColor
@@ -163,7 +167,15 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 - (NSRect) drawButton: (NSRect)border withClip: (NSRect)clip
 {
   NSColor * c = [NSColor controlBackgroundColor];
-  [self _drawRoundBezel: border withColor: c];
+  if (border.size.height <= 25.0)
+    {
+      float r = MIN(border.size.width, border.size.height) / 2.0;
+      [self _drawRoundBezel: border withColor: c andRadius: r];
+    }
+  else
+    {
+      [self _drawRoundBezel: border withColor: c];
+    }
   return border;
 }
 
@@ -182,8 +194,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case NSRoundRectBezelStyle:
         if (cell && [cell isKindOfClass: [NSPopUpButtonCell class]])
           r = 4;
-        else
+        else if (frame.size.height <= 25.0)
           r = MIN(frame.size.width, frame.size.height) / 2.0;
+        else
+          r = 4;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
@@ -192,8 +206,10 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
       case 0:
         if (cell && [cell isKindOfClass: [NSPopUpButtonCell class]])
           r = 4;
-        else
+        else if (frame.size.height <= 25.0)
           r = MIN(frame.size.width, frame.size.height) / 2.0;
+        else
+          r = 4;
         bezierPath = [self _roundBezierPath: frame
                                  withRadius: r];
         break;
