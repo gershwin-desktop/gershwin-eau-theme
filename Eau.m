@@ -15,6 +15,8 @@
 @end
 
 static BOOL gForceExternalMenuByEnv = NO;
+static BOOL gPendingMenuUpdate = NO;
+static NSWindow *gPendingMenuWindow = nil;
 
 static BOOL EauEnvironmentContainsAppMenuToken(void)
 {
@@ -906,9 +908,22 @@ static Eau *gSharedEauInstance = nil;
       return;
     }
 
-  // Rate-limited menu updating
-  [NSObject cancelPreviousPerformRequestsWithTarget:self selector:@selector(sendMenu:) object:w];
-  [self performSelector:@selector(sendMenu:) withObject:w afterDelay:0.1];
+  // Rate-limited menu updating (coalesced with dispatch to avoid messaging freed objects)
+  gPendingMenuWindow = w;
+  if (!gPendingMenuUpdate)
+    {
+      gPendingMenuUpdate = YES;
+      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
+                     dispatch_get_main_queue(), ^{
+        gPendingMenuUpdate = NO;
+        NSWindow *win = gPendingMenuWindow;
+        gPendingMenuWindow = nil;
+        if (win)
+          {
+            [self sendMenu: win];
+          }
+      });
+    }
 }
 
 - (void)_performMenuActionFromIPC:(NSDictionary *)info
