@@ -50,7 +50,7 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
   static NSTimeInterval pulseStart = 0;
   if (pulseStart == 0) pulseStart = [NSDate timeIntervalSinceReferenceDate];
   NSTimeInterval elapsed = [NSDate timeIntervalSinceReferenceDate] - pulseStart;
-  double phase = fmod(elapsed, 0.7) / 0.7;
+  double phase = fmod(elapsed, METRICS_PULSE_DURATION) / METRICS_PULSE_DURATION;
   double pulse = sin(M_PI * phase);
   
   NSColor * color;

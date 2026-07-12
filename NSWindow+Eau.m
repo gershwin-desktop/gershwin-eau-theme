@@ -3,6 +3,7 @@
 #include "EauTitleBarButton.h"
 #include "Eau+TitleBarButtons.h"
 #include "EauGrowBoxView.h"
+#include "AppearanceMetrics.h"
 #include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSImage.h>
@@ -495,7 +496,7 @@ static void EAUPlaceDialogWindow(NSWindow *window)
     return;
   }
   
-  animation = [[DefaultButtonAnimation alloc] initWithDuration:0.7
+  animation = [[DefaultButtonAnimation alloc] initWithDuration:METRICS_PULSE_DURATION
                                 animationCurve:NSAnimationEaseInOut];
   animation.reverse = reverse;
   [animation addProgressMark: 1.0];

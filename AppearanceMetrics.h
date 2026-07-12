@@ -18,6 +18,9 @@ static const float METRICS_WIN_MIN_HEIGHT = 100.0;
 // Max dialog height before a scroll view is used for the message text
 static const float METRICS_WIN_MAX_HEIGHT = 350.0;
 
+// Default button pulse cycle duration in seconds
+static const float METRICS_PULSE_DURATION = 3.0; /* like breathing at rest */
+
 // Icon size for dialogs and alerts shall be 64x64px
 static const float METRICS_ICON_SIDE = 64.0;
 static const float METRICS_ICON_LEFT = 24.0;
