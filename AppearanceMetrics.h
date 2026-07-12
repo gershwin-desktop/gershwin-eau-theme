@@ -15,6 +15,8 @@
 // Window dimensions
 static const float METRICS_WIN_MIN_WIDTH = 500.0;
 static const float METRICS_WIN_MIN_HEIGHT = 100.0;
+// Max dialog height before a scroll view is used for the message text
+static const float METRICS_WIN_MAX_HEIGHT = 350.0;
 
 // Icon size for dialogs and alerts shall be 64x64px
 static const float METRICS_ICON_SIDE = 64.0;
