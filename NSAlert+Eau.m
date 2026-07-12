@@ -630,24 +630,24 @@ static void eauAlertSetStopping(id panel, BOOL val)
             // NSLog(@"Eau: EauAlertPanel sizePanelToFit completed");
         }
     
-        NSLog(@"[EauTrace] EauAlertPanel runModal: BEFORE center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
-              NSStringFromRect([self frame]),
-              [self frame].origin.x, [self frame].origin.y,
-              [self frame].size.width, [self frame].size.height);
+        // NSLog(@"[EauTrace] EauAlertPanel runModal: BEFORE center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+        //       NSStringFromRect([self frame]),
+        //       [self frame].origin.x, [self frame].origin.y,
+        //       [self frame].size.width, [self frame].size.height);
     
     // Ensure we're the key window and can handle events
     [self center];
     
-        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
-              NSStringFromRect([self frame]),
-              [self frame].origin.x, [self frame].origin.y,
-              [self frame].size.width, [self frame].size.height);
+        // NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
+        //       NSStringFromRect([self frame]),
+        //       [self frame].origin.x, [self frame].origin.y,
+        //       [self frame].size.width, [self frame].size.height);
     
     // Raise the window to ensure it gets input focus
     [NSApp activateIgnoringOtherApps: YES];
     [self orderFrontRegardless];
-        NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
-              NSStringFromRect([self frame]));
+        // NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
+        //       NSStringFromRect([self frame]));
     [self makeKeyAndOrderFront: self];
     
     // Make sure the default button has focus for Enter key handling
