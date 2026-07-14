@@ -327,8 +327,18 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   NSDebugLog(@"GWDialog: Window is now key: %d, first responder: %@", 
          [self isKeyWindow], [[self firstResponder] class]);
   
+  // Abort modal if window is force-closed externally
+  __block id closeObs = [[NSNotificationCenter defaultCenter]
+    addObserverForName: NSWindowWillCloseNotification
+    object: self queue: nil usingBlock: ^(NSNotification *note) {
+      [NSApp abortModal];
+    }];
+  
   // Call the original runModal (which is now named eau_runModal due to swizzling)
-  return [self eau_runModal];
+  NSModalResponse result = [self eau_runModal];
+  
+  [[NSNotificationCenter defaultCenter] removeObserver: closeObs];
+  return result;
 }
 
 @end

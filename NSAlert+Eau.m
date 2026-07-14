@@ -660,7 +660,13 @@ static void eauAlertSetStopping(id panel, BOOL val)
     NSDebugLog(@"Eau: runModal - first responder: %@", [self firstResponder]);
     
     // NSLog(@"Eau: About to call runModalForWindow");
+    __block id closeObs = [[NSNotificationCenter defaultCenter]
+      addObserverForName: NSWindowWillCloseNotification
+      object: self queue: nil usingBlock: ^(NSNotification *note) {
+        [NSApp abortModal];
+      }];
     result = [NSApp runModalForWindow: self];
+    [[NSNotificationCenter defaultCenter] removeObserver: closeObs];
     // NSLog(@"Eau: runModalForWindow returned with result: %ld", result);
     [self orderOut: self];
     // NSLog(@"Eau: EauAlertPanel runModal completed");
