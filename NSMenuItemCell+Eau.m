@@ -9,6 +9,7 @@
 - (CGFloat)eau_titleWidth;
 - (NSRect)eau_titleRectForBounds:(NSRect)cellFrame;
 - (NSColor *)eau_textColor;
+- (CGFloat)eau_imageWidth;
 @end
 
 @implementation NSMenuItemCell (EauSwizzling)
@@ -49,6 +50,17 @@
     return [NSColor colorWithCalibratedWhite: 0.65 alpha: 1.0];
   }
   return [self eau_textColor];
+}
+
+// Swizzled implementation for imageWidth - returns 0 when image IS the title
+- (CGFloat)eau_imageWidth {
+  NSMenuItem *item = [self menuItem];
+  NSImage *image = [item image];
+  NSString *title = [item title];
+  if (image && (!title || [title length] == 0)) {
+    return 0;
+  }
+  return [self eau_imageWidth];
 }
 
 @end
@@ -126,6 +138,25 @@ static void initMenuItemCellSwizzling(void) {
     }
     if (!swizzledTextColorMethod) {
       NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_textColor method on NSMenuItemCell");
+    }
+  }
+
+  // Swizzle imageWidth - returns 0 when image IS the title
+  SEL imageWidthSelector = sel_registerName("imageWidth");
+  Method originalImageWidthMethod = class_getInstanceMethod(menuItemCellClass, imageWidthSelector);
+  Method swizzledImageWidthMethod = class_getInstanceMethod(menuItemCellClass, @selector(eau_imageWidth));
+  if (originalImageWidthMethod && swizzledImageWidthMethod) {
+    IMP originalIMP = method_getImplementation(originalImageWidthMethod);
+    IMP swizzledIMP = method_getImplementation(swizzledImageWidthMethod);
+    if (originalIMP != swizzledIMP) {
+      method_exchangeImplementations(originalImageWidthMethod, swizzledImageWidthMethod);
+    }
+  } else {
+    if (!originalImageWidthMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find original imageWidth method");
+    }
+    if (!swizzledImageWidthMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_imageWidth method on NSMenuItemCell");
     }
   }
 }
