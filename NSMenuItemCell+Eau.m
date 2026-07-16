@@ -9,7 +9,7 @@
 - (CGFloat)eau_titleWidth;
 - (NSRect)eau_titleRectForBounds:(NSRect)cellFrame;
 - (NSColor *)eau_textColor;
-- (CGFloat)eau_imageWidth;
+- (void)eau_drawImageWithFrame:(NSRect)cellFrame inView:(NSView*)controlView;
 @end
 
 @implementation NSMenuItemCell (EauSwizzling)
@@ -52,15 +52,31 @@
   return [self eau_textColor];
 }
 
-// Swizzled implementation for imageWidth - returns 0 when image IS the title
-- (CGFloat)eau_imageWidth {
+// Swizzled implementation for drawImageWithFrame:inView: —
+// when image IS the title (image + empty title), draw centered in full cell
+- (void)eau_drawImageWithFrame:(NSRect)cellFrame inView:(NSView*)controlView
+{
   NSMenuItem *item = [self menuItem];
   NSImage *image = [item image];
   NSString *title = [item title];
-  if (image && (!title || [title length] == 0)) {
-    return 0;
-  }
-  return [self eau_imageWidth];
+  if (image && (!title || [title length] == 0))
+    {
+      NSSize imgSize = [image size];
+      CGFloat scale = MIN(cellFrame.size.width / imgSize.width,
+                          cellFrame.size.height / imgSize.height);
+      if (scale > 1.0) scale = 1.0;
+      NSSize drawSize = NSMakeSize(imgSize.width * scale,
+                                   imgSize.height * scale);
+      NSPoint drawPoint = NSMakePoint(NSMidX(cellFrame) - drawSize.width / 2,
+                                      NSMidY(cellFrame) - drawSize.height / 2);
+      [image drawInRect: NSMakeRect(drawPoint.x, drawPoint.y,
+                                    drawSize.width, drawSize.height)
+               fromRect: NSZeroRect
+              operation: NSCompositeSourceOver
+               fraction: 1.0];
+      return;
+    }
+  [self eau_drawImageWithFrame: cellFrame inView: controlView];
 }
 
 @end
@@ -141,22 +157,23 @@ static void initMenuItemCellSwizzling(void) {
     }
   }
 
-  // Swizzle imageWidth - returns 0 when image IS the title
-  SEL imageWidthSelector = sel_registerName("imageWidth");
-  Method originalImageWidthMethod = class_getInstanceMethod(menuItemCellClass, imageWidthSelector);
-  Method swizzledImageWidthMethod = class_getInstanceMethod(menuItemCellClass, @selector(eau_imageWidth));
-  if (originalImageWidthMethod && swizzledImageWidthMethod) {
-    IMP originalIMP = method_getImplementation(originalImageWidthMethod);
-    IMP swizzledIMP = method_getImplementation(swizzledImageWidthMethod);
+  // Swizzle drawImageWithFrame:inView: — draws image centered in full cell
+  // when the image IS the menu title (image + empty title)
+  SEL drawImageSelector = sel_registerName("drawImageWithFrame:inView:");
+  Method originalDrawImageMethod = class_getInstanceMethod(menuItemCellClass, drawImageSelector);
+  Method swizzledDrawImageMethod = class_getInstanceMethod(menuItemCellClass, @selector(eau_drawImageWithFrame:inView:));
+  if (originalDrawImageMethod && swizzledDrawImageMethod) {
+    IMP originalIMP = method_getImplementation(originalDrawImageMethod);
+    IMP swizzledIMP = method_getImplementation(swizzledDrawImageMethod);
     if (originalIMP != swizzledIMP) {
-      method_exchangeImplementations(originalImageWidthMethod, swizzledImageWidthMethod);
+      method_exchangeImplementations(originalDrawImageMethod, swizzledDrawImageMethod);
     }
   } else {
-    if (!originalImageWidthMethod) {
-      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find original imageWidth method");
+    if (!originalDrawImageMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find original drawImageWithFrame:inView: method");
     }
-    if (!swizzledImageWidthMethod) {
-      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_imageWidth method on NSMenuItemCell");
+    if (!swizzledDrawImageMethod) {
+      NSLog(@"NSMenuItemCell+Eau: ERROR - Could not find eau_drawImageWithFrame:inView: method on NSMenuItemCell");
     }
   }
 }
