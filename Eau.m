@@ -1,7 +1,6 @@
 #import "Eau.h"
 
 #import <AppKit/AppKit.h>
-#import <dispatch/dispatch.h>
 #import <GNUstepGUI/GSWindowDecorationView.h>
 #import <GNUstepGUI/GSDisplayServer.h>
 #import <Foundation/NSConnection.h>
@@ -908,21 +907,25 @@ static Eau *gSharedEauInstance = nil;
       return;
     }
 
-  // Rate-limited menu updating (coalesced with dispatch to avoid messaging freed objects)
+  // Rate-limited menu updating (coalesced to avoid messaging freed objects)
   gPendingMenuWindow = w;
   if (!gPendingMenuUpdate)
     {
       gPendingMenuUpdate = YES;
-      dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.1 * NSEC_PER_SEC)),
-                     dispatch_get_main_queue(), ^{
-        gPendingMenuUpdate = NO;
-        NSWindow *win = gPendingMenuWindow;
-        gPendingMenuWindow = nil;
-        if (win)
-          {
-            [self sendMenu: win];
-          }
-      });
+      [self performSelector: @selector(eau_sendPendingMenu)
+                 withObject: nil
+                 afterDelay: 0.1];
+    }
+}
+
+- (void) eau_sendPendingMenu
+{
+  gPendingMenuUpdate = NO;
+  NSWindow *win = gPendingMenuWindow;
+  gPendingMenuWindow = nil;
+  if (win)
+    {
+      [self sendMenu: win];
     }
 }
 
