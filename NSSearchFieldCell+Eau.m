@@ -284,16 +284,19 @@
   if (_cell.type == NSTextCellType)
     {
       NSRect frame = [self drawingRectForBounds: theRect];
-       //Add spacing between border and inside
       if (_cell.is_bordered || _cell.is_bezeled)
         {
           frame.origin.x += 20;
           frame.size.width -= 34;
-	  /*By Slex: If you modify this value, then the chars. will overlap when the text field is 		  *full filled of charcters. You'll see part of characters like 'p' or 'g' or 'j' taking
-          *the next line of the editor text field, looking very bad
-	  */
-          frame.size.height += 0;
-	  
+
+          /* Vertically centre the text within the search field */
+          CGFloat fontHeight = [[self font] boundingRectForFont].size.height;
+          if (fontHeight > 0 && fontHeight < NSHeight(frame))
+            {
+              CGFloat yShift = (NSHeight(frame) - fontHeight) / 2.0;
+              frame.origin.y += yShift;
+              frame.size.height = fontHeight;
+            }
         }
       return frame;
     }
