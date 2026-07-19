@@ -956,78 +956,57 @@ static Eau *gSharedEauInstance = nil;
 
 - (void)_performMenuActionFromIPC:(NSDictionary *)info
 {
-  NSDebugLog(@"Eau: _performMenuActionFromIPC called with info: %@", info);
-  NSDebugLog(@"Eau: _performMenuActionFromIPC called with info: %@", info);
-  
   NSNumber *windowId = [info objectForKey:@"windowId"];
   NSArray *indexPath = [info objectForKey:@"indexPath"];
 
   if (windowId == nil || indexPath == nil)
     {
-      NSDebugLog(@"Eau: Invalid GNUstep menu action payload");
       return;
     }
 
   NSMenu *menu = [menuByWindowId objectForKey:windowId];
   if (menu == nil)
     {
-      NSDebugLog(@"Eau: No menu cached for window %@", windowId);
-      NSDebugLog(@"Eau: Available windows in cache: %@", [menuByWindowId allKeys]);
-      
-      // Fallback: if we only have one cached menu, use it
-      // This handles the case where the window ID doesn't match exactly
-      // (e.g., different X11 window ID than expected)
       if ([menuByWindowId count] == 1)
         {
           menu = [[menuByWindowId allValues] firstObject];
-          NSDebugLog(@"Eau: Using fallback menu (only one cached menu)");
         }
       else if ([menuByWindowId count] > 0)
         {
-          // Multiple windows cached - use the first one (usually the main window)
           menu = [[menuByWindowId allValues] firstObject];
-          NSDebugLog(@"Eau: Using fallback menu (first of %lu cached menus)", (unsigned long)[menuByWindowId count]);
         }
-      
+
       if (menu == nil)
         {
-          NSDebugLog(@"Eau: No cached menu available for fallback");
+          menu = [NSApp mainMenu];
+        }
+
+      if (menu == nil)
+        {
           return;
         }
     }
 
-  NSDebugLog(@"Eau: Found menu for window %@, looking up item at path %@", windowId, indexPath);
-  
   NSMenuItem *menuItem = [self _menuItemForIndexPath:indexPath inMenu:menu];
   if (menuItem == nil)
     {
-      NSDebugLog(@"Eau: Menu item not found for window %@ path %@", windowId, indexPath);
       return;
     }
 
-  NSDebugLog(@"Eau: Found menu item '%@', checking if enabled", [menuItem title]);
-  
   if (![menuItem isEnabled])
     {
-      NSDebugLog(@"Eau: Menu item '%@' disabled, ignoring", [menuItem title]);
       return;
     }
 
   SEL action = [menuItem action];
   id target = [menuItem target];
-  
-  NSDebugLog(@"Eau: Menu item '%@' - action: %@, target: %@", [menuItem title], NSStringFromSelector(action), target);
-  
+
   if (action == NULL)
     {
-      NSDebugLog(@"Eau: Menu item '%@' has no action", [menuItem title]);
       return;
     }
 
-  NSDebugLog(@"Eau: Sending action %@ to target %@ from menu item '%@'", NSStringFromSelector(action), target, [menuItem title]);
-  BOOL handled __attribute__((unused)) = [NSApp sendAction:action to:target from:menuItem];
-  NSDebugLog(@"Eau: sendAction returned %@ for menu item '%@'", handled ? @"YES" : @"NO", [menuItem title]);
-  NSDebugLog(@"Eau: Action sent successfully");
+  [NSApp sendAction:action to:target from:menuItem];
 }
 
 #pragma mark - UIBridgeProtocol (exposes only the frontmost/active window)

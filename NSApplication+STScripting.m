@@ -6,15 +6,9 @@
  * NSApplication category for automatic StepTalk scripting environment
  * setup.  Loaded when the Eau theme bundle is loaded, so every app
  * that uses this theme gets StepTalk scripting automatically.
- *
- * StepTalk library is loaded via dlopen at runtime so we don't link
- * against it at build time — avoids bundle-load interference on
- * systems where libStepTalk is installed but shouldn't be pulled in
- * as an eager dependency.
  */
 
 #import <AppKit/AppKit.h>
-#import <dlfcn.h>
 
 static id gScriptEnv = nil;
 static NSConnection *gEnvConnection = nil;
@@ -68,25 +62,12 @@ static NSConnection *gEnvConnection = nil;
 
 @implementation NSApplication (STScripting)
 
-#pragma clang diagnostic push
-#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
 + (void)setupStepTalkScripting
 {
-  void *handle = dlopen("libStepTalk.so", RTLD_NOLOAD | RTLD_LAZY);
-  if (!handle)
-    {
-      handle = dlopen("libStepTalk.so", RTLD_LAZY | RTLD_LOCAL);
-    }
-  if (!handle)
-    {
-      return;
-    }
-
   Class stEnvClass = NSClassFromString(@"STEnvironment");
   Class stEnvDescClass = NSClassFromString(@"STEnvironmentDescription");
   if (!stEnvClass || !stEnvDescClass)
     {
-      dlclose(handle);
       return;
     }
 
@@ -109,10 +90,11 @@ static NSConnection *gEnvConnection = nil;
     }
   if (!gScriptEnv)
     {
-      dlclose(handle);
       return;
     }
 
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Warc-performSelector-leaks"
   SEL loadModuleSel = @selector(loadModule:);
   if ([gScriptEnv respondsToSelector: loadModuleSel])
     {
@@ -131,6 +113,7 @@ static NSConnection *gEnvConnection = nil;
       [gScriptEnv performSelector: setObjectSel withObject: [NSApplication sharedApplication]
                        withObject: @"Application"];
     }
+#pragma clang diagnostic pop
 
   /* Register environment provider under STEnvironment:<name> */
   NSString *appName = [[NSProcessInfo processInfo] processName];
@@ -145,7 +128,6 @@ static NSConnection *gEnvConnection = nil;
     NSLog(@"%@: Failed to register DO name '%@'", appName, envName);
   }
 }
-#pragma clang diagnostic pop
 
 - (id)scriptingEnvironment
 {

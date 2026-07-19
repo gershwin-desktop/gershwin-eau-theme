@@ -75,10 +75,9 @@ endif
 ADDITIONAL_TOOL_LIBS =
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions
 ADDITIONAL_LDFLAGS += -lX11
-# StepTalk is loaded dynamically via dlopen at runtime; no -lStepTalk here.
-# ifeq ($(with_steptalk), yes)
-#   ADDITIONAL_LDFLAGS += -lStepTalk
-# endif
+ifeq ($(with_steptalk), yes)
+  ADDITIONAL_LDFLAGS += -lStepTalk
+endif
 $(BUNDLE_NAME)_RESOURCE_FILES = \
 	./Resources/ThemeIcon.png\
 	./Resources/ThemePreview.png\
