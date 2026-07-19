@@ -9,6 +9,14 @@
 #import "Eau+Button.h"
 #import "EauMenuRelaunchManager.h"
 
+@interface NSApplication (EauStepTalk)
++ (void)setupStepTalkScripting;
+@end
+
+@interface Eau (StepTalkRegistration)
+- (void)eau_setupStepTalkOnLaunch:(NSNotification *)note;
+@end
+
 @interface Eau (NSWindowTitle)
 + (void)EAUswizzleNSWindowSetTitle;
 @end
@@ -613,6 +621,14 @@ static Eau *gSharedEauInstance = nil;
                name:NSMenuDidSendActionNotification
              object:nil];
 
+      // Set up StepTalk scripting environment after app finishes
+      // launching (safe: no +load or init-time hazards).
+      [[NSNotificationCenter defaultCenter]
+        addObserver:self
+           selector:@selector(eau_setupStepTalkOnLaunch:)
+               name:NSApplicationDidFinishLaunchingNotification
+             object:nil];
+
       NSDebugLog(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
@@ -837,6 +853,15 @@ static Eau *gSharedEauInstance = nil;
   dispatch_async(dispatch_get_main_queue(), ^{
     [self _pushMenuEnabledStates];
   });
+}
+
+- (void) eau_setupStepTalkOnLaunch:(NSNotification *)note
+{
+  (void)note;
+  [NSApplication setupStepTalkScripting];
+  [[NSNotificationCenter defaultCenter] removeObserver:self
+                                                  name:NSApplicationDidFinishLaunchingNotification
+                                                object:nil];
 }
 
 - (void) setMenu:(NSMenu*)m forWindow:(NSWindow*)w
