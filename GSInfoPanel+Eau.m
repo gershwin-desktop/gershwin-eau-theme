@@ -53,30 +53,55 @@
 
       Class class = [self class];
 
-      SEL originalSelector = @selector(initWithDictionary:);
-      SEL swizzledSelector = @selector(eau_initWithDictionary:);
+      {
+        SEL originalSelector = @selector(initWithDictionary:);
+        SEL swizzledSelector = @selector(eau_initWithDictionary:);
 
-      Method originalMethod = class_getInstanceMethod(class, originalSelector);
-      Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
+        Method originalMethod = class_getInstanceMethod(class, originalSelector);
+        Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
 
-      BOOL didAddMethod = class_addMethod(class,
-                                          originalSelector,
-                                          method_getImplementation(swizzledMethod),
-                                          method_getTypeEncoding(swizzledMethod));
+        BOOL didAddMethod = class_addMethod(class,
+                                            originalSelector,
+                                            method_getImplementation(swizzledMethod),
+                                            method_getTypeEncoding(swizzledMethod));
 
-      if (didAddMethod)
-        {
-          class_replaceMethod(class,
-                              swizzledSelector,
-                              method_getImplementation(originalMethod),
-                              method_getTypeEncoding(originalMethod));
-        }
-      else
-        {
-          method_exchangeImplementations(originalMethod, swizzledMethod);
-        }
+        if (didAddMethod)
+          {
+            class_replaceMethod(class,
+                                swizzledSelector,
+                                method_getImplementation(originalMethod),
+                                method_getTypeEncoding(originalMethod));
+          }
+        else
+          {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+          }
+      }
 
-      NSDebugLog(@"GSInfoPanel+Eau: Swizzled initWithDictionary:");
+      {
+        SEL originalSelector = @selector(setTitle:);
+        SEL swizzledSelector = @selector(eau_setTitle:);
+
+        Method originalMethod = class_getInstanceMethod(class, originalSelector);
+        Method swizzledMethod = class_getInstanceMethod(class, swizzledSelector);
+
+        BOOL didAddMethod = class_addMethod(class,
+                                            originalSelector,
+                                            method_getImplementation(swizzledMethod),
+                                            method_getTypeEncoding(swizzledMethod));
+
+        if (didAddMethod)
+          {
+            class_replaceMethod(class,
+                                swizzledSelector,
+                                method_getImplementation(originalMethod),
+                                method_getTypeEncoding(originalMethod));
+          }
+        else
+          {
+            method_exchangeImplementations(originalMethod, swizzledMethod);
+          }
+      }
     }
   }
 
@@ -86,6 +111,8 @@ static char kEauAppNameKey;
      __attribute__((objc_method_family(init)))
 {
   // ---- 1. Let the original build the full panel (side-by-side layout) ----
+  if (dictionary == nil)
+    dictionary = [NSDictionary dictionary];
   id result = [self eau_initWithDictionary:dictionary];
   if (!result) return nil;
 
@@ -145,9 +172,6 @@ static char kEauAppNameKey;
             {
               // Name label — make smaller and centered
               nameLabel = tf;
-              objc_setAssociatedObject(result, &kEauAppNameKey,
-                                       [tf stringValue],
-                                       OBJC_ASSOCIATION_COPY);
               [tf setFont: [NSFont boldSystemFontOfSize: 20]];
               [tf setAlignment: NSCenterTextAlignment];
               [tf sizeToFit];
@@ -489,22 +513,17 @@ static char kEauAppNameKey;
   [cv setNeedsDisplay: YES];
   [result center];
 
-  // Schedule title change — NSApplication will set it to "Info" right
-  // after we return, so we override it on the next runloop iteration.
-  [self performSelector: @selector(_eau_setAboutTitle)
-            withObject: nil
-            afterDelay: 0];
-
   return result;
 }
 
-- (void)_eau_setAboutTitle
+- (void)eau_setTitle:(NSString *)title
 {
-  // NSApplication sets title to "Info" right after init, so we override
-  // it on the next runloop spin via dispatch_async in eau_initWithDictionary:.
-  NSString *appName = objc_getAssociatedObject(self, &kEauAppNameKey);
-  if (appName)
-    [self setTitle: [NSString stringWithFormat: _(@"About %@"), appName]];
+  if ([title isEqualToString: NSLocalizedString(@"Info", @"Title of the Info Panel")])
+    {
+      NSString *appName = [[NSProcessInfo processInfo] processName];
+      title = [NSString stringWithFormat: _(@"About %@"), appName];
+    }
+  [self eau_setTitle: title];
 }
 
 - (void)_eau_openURL:(id)sender
