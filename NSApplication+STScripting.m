@@ -17,6 +17,54 @@
 #import <dlfcn.h>
 
 static id gScriptEnv = nil;
+static NSConnection *gEnvConnection = nil;
+
+@interface STEauEnvironmentProvider : NSObject
+{
+  id _environment;
+}
+- (id)initWithEnvironment:(id)env;
+- (void)interpretScript:(bycopy NSString *)aString;
+- (bycopy id)resultByCopy;
+@end
+
+@interface STEauConversation : NSObject
+- (id)initWithContext:(id)ctx language:(id)lang;
+- (void)interpretScript:(NSString *)script;
+@end
+
+@implementation STEauEnvironmentProvider
+
+- (id)initWithEnvironment:(id)env
+{
+  if ((self = [super init])) {
+    _environment = env;
+  }
+  return self;
+}
+
+- (void)_runScript:(NSString *)aString
+{
+  Class stConvClass = NSClassFromString(@"STConversation");
+  STEauConversation *conversation = (STEauConversation *)
+      [[stConvClass alloc] initWithContext:_environment
+                                  language:nil];
+  [conversation interpretScript:aString];
+}
+
+- (void)interpretScript:(bycopy NSString *)aString
+{
+  [self performSelectorOnMainThread:@selector(_runScript:)
+                         withObject:aString
+                      waitUntilDone:YES];
+}
+
+- (bycopy id)resultByCopy
+{
+  return nil;
+}
+
+@end
 
 @implementation NSApplication (STScripting)
 
@@ -83,6 +131,19 @@ static id gScriptEnv = nil;
       [gScriptEnv performSelector: setObjectSel withObject: [NSApplication sharedApplication]
                        withObject: @"Application"];
     }
+
+  /* Register environment provider under STEnvironment:<name> */
+  NSString *appName = [[NSProcessInfo processInfo] processName];
+  STEauEnvironmentProvider *provider =
+    [[STEauEnvironmentProvider alloc] initWithEnvironment:gScriptEnv];
+  NSString *envName = [NSString stringWithFormat:@"STEnvironment:%@", appName];
+  gEnvConnection = [[NSConnection alloc] init];
+  [gEnvConnection setRootObject:provider];
+  if ([gEnvConnection registerName:envName]) {
+    NSLog(@"%@: StepTalk environment registered as DO '%@'", appName, envName);
+  } else {
+    NSLog(@"%@: Failed to register DO name '%@'", appName, envName);
+  }
 }
 #pragma clang diagnostic pop
 
