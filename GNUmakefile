@@ -46,6 +46,7 @@ Eau_OBJC_FILES = \
 		EauScrollerArrowCell.m\
 		NSAlert+Eau.m\
 		NSBrowserCell+Eau.m\
+		NSSearchField+Eau.m\
 		NSSearchFieldCell+Eau.m\
 		NSBeep+Eau.m\
 		GWDialog+Eau.m\

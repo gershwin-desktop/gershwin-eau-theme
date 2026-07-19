@@ -996,6 +996,28 @@ static void eauAlertSetStopping(id panel, BOOL val)
     return YES;
 }
 
+/* GSExceptionPanel calls setUserInfo: on the panel after morphing it to
+   EauAlertPanel via object_setClass().  Store the userInfo via an
+   associated object to avoid adding an ivar. */
+static const void *kEAUUserInfoKey = &kEAUUserInfoKey;
+
+- (void) setUserInfo: (NSDictionary *)userInfo
+{
+    objc_setAssociatedObject(self, kEAUUserInfoKey, userInfo,
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+- (id) userInfo
+{
+    return objc_getAssociatedObject(self, kEAUUserInfoKey);
+}
+
+/* GSExceptionPanel calls userInfoPanel on the morphed panel to order it out. */
+- (id) userInfoPanel
+{
+    return self;
+}
+
 - (void) setTitleBar: (NSString *)titleBar
                 icon: (NSImage *)icon
                title: (NSString *)title
