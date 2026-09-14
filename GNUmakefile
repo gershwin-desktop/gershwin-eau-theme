@@ -14,6 +14,7 @@ Eau_OBJC_FILES = \
 		Eau.m\
 		EauMenuRelaunchManager.m\
 		EauMenuScrollManager.m\
+		EauMenuWindowFilter.m\
 		Eau+Drawings.m\
 		Eau+Button.m\
 		Eau+FocusFrame.m\

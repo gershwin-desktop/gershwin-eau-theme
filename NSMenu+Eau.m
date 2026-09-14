@@ -26,6 +26,16 @@
 
 #import "Eau.h"
 #import "EauMenuScrollManager.h"
+#import "EauMenuWindowFilter.h"
+
+/* Menu.app sizes its search panel and caches in user space, so the height up
+   to which its windows are not dropdowns grows with the same scale factor
+   GNUstep applies to them. */
+static int _eau_menuUtilityHeightLimit(void)
+{
+  return EauMenuUtilityHeightLimit([[GSTheme theme] menuBarHeight],
+                                   [[NSScreen mainScreen] userSpaceScaleFactor]);
+}
 
 /* ---- NSMenuPanel forward declaration (private) ---- */
 @interface NSObject (EauMenuPanel)
@@ -248,6 +258,7 @@ static void _eau_destroyX11MenuWindows(void)
                   &children, &nchildren))
     return;
 
+  int utilityLimit = _eau_menuUtilityHeightLimit();
   for (unsigned int i = 0; i < nchildren; i++)
     {
       Window w = children[i];
@@ -257,30 +268,8 @@ static void _eau_destroyX11MenuWindows(void)
       if (attr.map_state != IsViewable)
         continue;
 
-      /* Check WM_CLASS for "Menu".  GNUstep windows carry the class hint
-         "Menu", "Menu" (res_name=Menu, res_class=Menu) for ALL of a menu
-         app's windows - the bar, dropdowns, panels and caches alike.  The
-         old check for res_class "GNUstep" matched nothing, so orphaned
-         dropdowns were never cleaned up and wedged the menu bar. */
-      XClassHint classHint;
-      if (!XGetClassHint(_eau_x11_display, w, &classHint))
-        continue;
-      BOOL isMenu = (classHint.res_name
-                     && strcmp(classHint.res_name, "Menu") == 0
-                     && classHint.res_class
-                     && strcmp(classHint.res_class, "Menu") == 0);
-      XFree(classHint.res_name);
-      XFree(classHint.res_class);
-      if (!isMenu)
-        continue;
-
-      /* Only destroy windows that are clearly dropdown menus.  The menu bar
-         itself is a "Menu" "Menu" window too (at y=0, 22px tall), as are
-         small utility windows such as the 22px search panel and the 14/18px
-         GSCache windows.  A real dropdown is taller than a menu item
-         (menuItemHeight is 22px, so a single-item menu window is >22px);
-         skip anything at or below the bar height. */
-      if (attr.height <= 22)
+      if (!EauIsMenuDropdownWindow(_eau_x11_display, w, attr.height,
+                                   utilityLimit))
         continue;
 
       /* Found a visible GNUstep Menu window.  Destroy the parent
@@ -398,6 +387,7 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
                   &children, &nchildren))
     return;
 
+  int utilityLimit = _eau_menuUtilityHeightLimit();
   for (unsigned int i = 0; i < nchildren; i++)
     {
       Window w = children[i];
@@ -408,21 +398,8 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
       if (attr.map_state != IsViewable)
         continue;
 
-      XClassHint classHint;
-      if (!XGetClassHint(_eau_x11_display, w, &classHint))
-        continue;
-      BOOL isMenu = (classHint.res_name
-                     && strcmp(classHint.res_name, "Menu") == 0
-                     && classHint.res_class
-                     && strcmp(classHint.res_class, "Menu") == 0);
-      XFree(classHint.res_name);
-      XFree(classHint.res_class);
-      if (!isMenu)
-        continue;
-
-      /* Keep the existing guard: skip anything at or below the menu bar
-         height so the bar itself and the small utility windows survive. */
-      if (attr.height <= 22)
+      if (!EauIsMenuDropdownWindow(_eau_x11_display, w, attr.height,
+                                   utilityLimit))
         continue;
 
       if ([keepXids containsObject: [NSNumber numberWithUnsignedLong: (unsigned long)w]])
