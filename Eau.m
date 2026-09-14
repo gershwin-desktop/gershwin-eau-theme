@@ -958,8 +958,11 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   NSNumber *windowId = [info objectForKey:@"windowId"];
   NSArray *indexPath = [info objectForKey:@"indexPath"];
 
+  /* Each early return below drops a menu action sent by Menu.app; log them,
+     since a dropped action otherwise leaves no trace at all. */
   if (windowId == nil || indexPath == nil)
     {
+      NSLog(@"Eau: dropping menu action: window %@, index path %@", windowId, indexPath);
       return;
     }
 
@@ -982,6 +985,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
       if (menu == nil)
         {
+          NSLog(@"Eau: dropping menu action %@: no menu for window %@", indexPath, windowId);
           return;
         }
     }
@@ -989,11 +993,13 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   NSMenuItem *menuItem = [self _menuItemForIndexPath:indexPath inMenu:menu];
   if (menuItem == nil)
     {
+      NSLog(@"Eau: dropping menu action: no item at %@ in the menu of window %@", indexPath, windowId);
       return;
     }
 
   if (![menuItem isEnabled])
     {
+      NSLog(@"Eau: dropping menu action '%@': item is disabled", [menuItem title]);
       return;
     }
 
@@ -1002,6 +1008,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
   if (action == NULL)
     {
+      NSLog(@"Eau: dropping menu action '%@': item has no action", [menuItem title]);
       return;
     }
 
@@ -1020,7 +1027,10 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
   if (![NSThread isMainThread])
     {
-      NSDebugLog(@"Eau: Not on main thread, dispatching to main thread");
+      /* Logged because the action then depends on the libdispatch main
+         queue being drained by the run loop; if it never runs, this line is
+         the only trace. */
+      NSLog(@"Eau: menu action %@ arrived off the main thread, handing it to the main queue", indexPath);
       dispatch_async(dispatch_get_main_queue(), ^{
         [self _performMenuActionFromIPC:payload];
       });
