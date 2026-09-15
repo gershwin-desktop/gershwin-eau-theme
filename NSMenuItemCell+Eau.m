@@ -14,6 +14,18 @@
 - (NSRect)eau_imageRectForBounds:(NSRect)cellFrame;
 @end
 
+/* Centering an image in a cell whose frame is fractional (menu bar items are
+   as wide as their text) leaves its origin between device pixels, and the
+   backend then resamples the bitmap, smearing it.  Snap the origin to the
+   pixel grid but keep the size so the image is never rescaled. */
+static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size)
+{
+  NSRect rect = [view centerScanRect: NSMakeRect(origin.x, origin.y,
+                                                 size.width, size.height)];
+  rect.size = size;
+  return rect;
+}
+
 @implementation NSMenuItemCell (EauSwizzling)
 
 // Swizzled implementation for titleWidth - adds padding
@@ -98,8 +110,7 @@
                                        imgSize.height * scale);
           NSPoint drawPoint = NSMakePoint(NSMidX(cellFrame) - drawSize.width / 2,
                                           NSMidY(cellFrame) - drawSize.height / 2);
-          [image drawInRect: NSMakeRect(drawPoint.x, drawPoint.y,
-                                        drawSize.width, drawSize.height)
+          [image drawInRect: EauPixelAlignedImageRect(controlView, drawPoint, drawSize)
                    fromRect: NSZeroRect
                   operation: NSCompositeSourceOver
                    fraction: 1.0];
@@ -120,8 +131,7 @@
                                        imgSize.height * scale);
           NSPoint drawPoint = NSMakePoint(NSMidX(imageRect) - drawSize.width / 2,
                                           NSMidY(imageRect) - drawSize.height / 2);
-          [image drawInRect: NSMakeRect(drawPoint.x, drawPoint.y,
-                                        drawSize.width, drawSize.height)
+          [image drawInRect: EauPixelAlignedImageRect(controlView, drawPoint, drawSize)
                    fromRect: NSZeroRect
                   operation: NSCompositeSourceOver
                    fraction: 1.0];
