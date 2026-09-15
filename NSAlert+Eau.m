@@ -449,7 +449,13 @@ static void eauAlertSetStopping(id panel, BOOL val)
         wsize.width = ssize.width;
     else if (wsize.width < METRICS_WIN_MIN_WIDTH)
         wsize.width = METRICS_WIN_MIN_WIDTH;
-    
+
+    /* Whole pixels only (the height cap is a fraction of the screen):
+       scrolling copies the visible text, and at a fractional offset cairo
+       resamples it, so the text blurs a little more with every scroll step. */
+    wsize.width = floor(wsize.width);
+    wsize.height = floor(wsize.height);
+
     bounds = NSMakeRect(0, 0, wsize.width, wsize.height);
     bounds = [NSWindow frameRectForContentRect: bounds styleMask: mask];
     [self setMaxSize: bounds.size];
@@ -512,10 +518,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
             NSRect srect;
             float width;
             
+            /* The title height is measured text, so snap the text area's
+               edges to whole pixels as well (see the window size above). */
             srect.origin.x = METRICS_TEXT_LEFT;
-            srect.origin.y = buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN;
+            srect.origin.y = ceil(buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN);
             srect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-            srect.size.height = currentY - METRICS_TITLE_MESSAGE_GAP - srect.origin.y;
+            srect.size.height = floor(currentY - METRICS_TITLE_MESSAGE_GAP) - srect.origin.y;
             [scroll setFrame: srect];
             
             if (!useControl(scroll))

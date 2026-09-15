@@ -138,6 +138,22 @@ int main(void)
           PASS(knob > 0.0 && knob < 1.0,
                "scroller knob proportion (%.2f) shows more content below",
                (double)knob);
+
+          /* 5. Scrolling copies the visible text by the scroll distance;
+             only a text area on whole device pixels gets a whole-pixel
+             copy.  A fractional edge makes cairo resample the text on
+             every scroll step, so it gets blurrier the more it scrolls. */
+          NSClipView *clip = [scroll contentView];
+          NSRect inWindow = [clip convertRect: [clip bounds] toView: nil];
+          CGFloat contentHeight = [[panel contentView] bounds].size.height;
+          BOOL aligned = (inWindow.origin.x == floor(inWindow.origin.x))
+            && (inWindow.origin.y == floor(inWindow.origin.y))
+            && (inWindow.size.height == floor(inWindow.size.height))
+            && (contentHeight == floor(contentHeight));
+          PASS(aligned,
+               "scrolled text area sits on whole pixels (y %.2f, height %.2f,"
+               " window height %.2f)", (double)inWindow.origin.y,
+               (double)inWindow.size.height, (double)contentHeight);
         }
     }
 
