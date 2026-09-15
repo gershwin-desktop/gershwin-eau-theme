@@ -1,8 +1,10 @@
 #include "Eau.h"
 
+/* oneway: Eau runs inside the WindowManager too, and a WindowManager waiting
+ * for a reply from a busy Dock stops drawing the screen. */
 @protocol EauDockService
-- (void)setProgressValue:(double)value;
-- (void)setProgressVisible:(BOOL)visible;
+- (oneway void)setProgressValue:(double)value;
+- (oneway void)setProgressVisible:(BOOL)visible;
 @end
 
 @interface Eau(EauProgressIndicator)
@@ -38,7 +40,24 @@ static id<EauDockService> EauDockProgressProxy(void)
         [NSConnection connectionWithRegisteredName:@"DockIcon" host:nil];
       if (conn)
         {
-          dockProgressProxy = (id<EauDockService>)[conn rootProxy];
+          /* Fetching the root proxy is the one call that still waits for
+           * the Dock; bound it so a stuck Dock cannot stall this app.  The
+           * timeout raises, and this runs from progress drawing, so treat
+           * it like an unavailable Dock and retry later. */
+          [conn setReplyTimeout: 1.0];
+          @try
+            {
+              dockProgressProxy = (id<EauDockService>)[conn rootProxy];
+              /* Without a local protocol the proxy asks the Dock for every
+               * method signature and waits for the answer, which would
+               * defeat the oneway declarations. */
+              [(NSDistantObject *)dockProgressProxy
+                setProtocolForProxy: @protocol(EauDockService)];
+            }
+          @catch (NSException *e)
+            {
+              dockProgressProxy = nil;
+            }
         }
     }
   return dockProgressProxy;
