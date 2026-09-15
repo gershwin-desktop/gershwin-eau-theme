@@ -27,6 +27,9 @@ CGFloat GSWScaleFactorValue = 0;
 static BOOL gForceExternalMenuByEnv = NO;
 static BOOL gPendingMenuUpdate = NO;
 static NSWindow *gPendingMenuWindow = nil;
+static BOOL gPendingApplicationMenuPush = NO;
+/* Depth of _serializeMenu: calls in progress; see there. */
+static NSUInteger gSerializeDepth = 0;
 
 static BOOL EauEnvironmentContainsAppMenuToken(void)
 {
@@ -334,32 +337,53 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
 - (NSDictionary *)_serializeMenu:(NSMenu *)menu
 {
+  NSDictionary *result = nil;
+
   if (menu == nil)
     {
       return nil;
     }
 
-  // Recursively validate ALL items before serializing
-  [self _recursiveMenuUpdate:menu];
-
-  NSMutableArray *items = [NSMutableArray array];
-  NSArray *itemArray = [menu itemArray];
-  NSUInteger count = [itemArray count];
-
-  for (NSUInteger i = 0; i < count; i++)
+  /* Validating the items changes their enabled state, and every change
+     reaches macintoshMenuDidChange:, which would start another full
+     serialization and a synchronous push to Menu.app from inside this one -
+     one Menu.app round trip per changed item.  The depth lets that handler
+     ignore the changes we cause here, and lets the submenus serialized
+     through _serializeMenuItem: skip validating a tree the outermost call
+     has already validated. */
+  gSerializeDepth++;
+  @try
     {
-      NSMenuItem *item = [itemArray objectAtIndex:i];
-      NSDictionary *serialized = [self _serializeMenuItem:item];
-      if (serialized != nil)
+      if (gSerializeDepth == 1)
         {
-          [items addObject:serialized];
+          [self _recursiveMenuUpdate:menu];
         }
+
+      NSMutableArray *items = [NSMutableArray array];
+      NSArray *itemArray = [menu itemArray];
+      NSUInteger count = [itemArray count];
+
+      for (NSUInteger i = 0; i < count; i++)
+        {
+          NSMenuItem *item = [itemArray objectAtIndex:i];
+          NSDictionary *serialized = [self _serializeMenuItem:item];
+          if (serialized != nil)
+            {
+              [items addObject:serialized];
+            }
+        }
+
+      result = [NSDictionary dictionaryWithObjectsAndKeys:
+                          ([menu title] ?: @""), @"title",
+                          items, @"items",
+                          nil];
+    }
+  @finally
+    {
+      gSerializeDepth--;
     }
 
-  return [NSDictionary dictionaryWithObjectsAndKeys:
-                      ([menu title] ?: @""), @"title",
-                      items, @"items",
-                      nil];
+  return result;
 }
 
 // Helper: serialize menu with index-paths so remote clients can refer to specific
@@ -581,10 +605,38 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   // [[EauMenuRelaunchManager sharedManager] relaunchMenuProcessIfSnapshotAvailable];
 }
 
+/* Opening a window can change many menu items at once; a synchronous push
+   of the whole application menu for each of them stalled the app for
+   seconds, so the pushes are coalesced like eau_sendPendingMenu. */
+- (void) _schedulePushApplicationMenu
+{
+  if (gPendingApplicationMenuPush)
+    {
+      return;
+    }
+  gPendingApplicationMenuPush = YES;
+  [self performSelector: @selector(eau_sendPendingApplicationMenu)
+             withObject: nil
+             afterDelay: 0.1];
+}
+
+- (void) eau_sendPendingApplicationMenu
+{
+  gPendingApplicationMenuPush = NO;
+  [self _pushApplicationMenu];
+}
+
 - (void) macintoshMenuDidChange: (NSNotification*)notification
 {
   NSMenu *menu = [notification object];
-  
+
+  if (gSerializeDepth > 0)
+    {
+      /* Caused by the validation in _serializeMenu:, whose result already
+         carries the new state. */
+      return;
+    }
+
   if ([NSApp mainMenu] == menu)
     {
       NSWindow *keyWindow = [NSApp keyWindow];
@@ -599,9 +651,8 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
         }
       /* Always keep the application-level menu in sync too.  This is what the
          menu bar shows when the app is frontmost but has no window (windowless
-         app, or the last window closed).  Menu.app deduplicates identical
-         pushes, so sending it here on every menu change is cheap. */
-      [self _pushApplicationMenu];
+         app, or the last window closed). */
+      [self _schedulePushApplicationMenu];
     }
 }
 
@@ -703,8 +754,9 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 
 /* Push this app's application-level menu (its main menu) to Menu.app.  This
    is the menu the global bar shows when the app is the frontmost application
-   but has no window (windowless app, or the last window closed).  Menu.app
-   deduplicates identical pushes, so calling this frequently is cheap. */
+   but has no window (windowless app, or the last window closed).  This
+   serializes the whole menu and waits for Menu.app, so frequent callers go
+   through _schedulePushApplicationMenu. */
 - (void) _pushApplicationMenu
 {
   NSMenu *mainMenu = [NSApp mainMenu];
