@@ -92,7 +92,68 @@
       if (origM && swizM)
         method_exchangeImplementations(origM, swizM);
     }
+
+    // viewDidMoveToWindow swizzle - a button that already carries the Return
+    // key equivalent only learns its window here.  NSButton inherits this from
+    // NSView, so add-then-replace instead of exchanging, which would swap the
+    // implementation for every view in the application.
+    {
+      SEL origSelector = @selector(viewDidMoveToWindow);
+      SEL swizSelector = @selector(eau_viewDidMoveToWindow);
+      Method origMethod = class_getInstanceMethod(cls, origSelector);
+      Method swizMethod = class_getInstanceMethod(cls, swizSelector);
+      BOOL didAddMethod = class_addMethod(cls, origSelector,
+                                          method_getImplementation(swizMethod),
+                                          method_getTypeEncoding(swizMethod));
+      if (didAddMethod)
+        class_replaceMethod(cls, swizSelector,
+                            method_getImplementation(origMethod),
+                            method_getTypeEncoding(origMethod));
+      else
+        method_exchangeImplementations(origMethod, swizMethod);
+    }
   });
+}
+
+/* Hand this button's cell to its window as the default button cell.
+ *
+ * This lives on NSButton rather than on NSButtonCell because a view knows its
+ * window directly, while -[NSButtonCell controlView] is nil until the cell has
+ * been drawn for the first time.  The theme used to compensate for that by
+ * scanning every window and every subview of the application from the cell,
+ * and by retrying on a timer; that scan called -setDefaultButtonCell: back
+ * into the window that was in the middle of calling it, and it still missed
+ * the common case of a button that gets its key equivalent before being added
+ * to a window. */
+- (void) eauBecomeWindowDefaultButton
+{
+  NSWindow *window = [self window];
+  NSCell *cell = [self cell];
+
+  if (window == nil || cell == nil)
+    {
+      return;
+    }
+
+  /* Whoever got there first keeps the slot - including this very cell, so a
+   * repeated -setKeyEquivalent: does not tear the window's animation
+   * controller down and build it again. */
+  if ([window defaultButtonCell] != nil)
+    {
+      return;
+    }
+
+  [window setDefaultButtonCell: (NSButtonCell *)cell];
+}
+
+- (void) eau_viewDidMoveToWindow
+{
+  [self eau_viewDidMoveToWindow];
+
+  if ([[self keyEquivalent] isEqualToString: @"\r"])
+    {
+      [self eauBecomeWindowDefaultButton];
+    }
 }
 
 - (void) eau_setKeyEquivalent: (NSString *)key
@@ -125,6 +186,7 @@
           objc_setAssociatedObject(self, @selector(eau_setKeyEquivalent:), inv,
                                    OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
+      [self eauBecomeWindowDefaultButton];
     }
 }
 
