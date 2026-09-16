@@ -58,7 +58,7 @@ static CGFloat EauWholeDevicePixels(CGFloat points)
    fit this box, never up, so a large app bundle icon renders small. */
 - (CGFloat) menuSeparatorHeight
 {
-  return 1.0;
+  return EauWholeDevicePixels(1.0);
 }
 
 - (BOOL) menuShouldShowIcon
@@ -256,13 +256,16 @@ static CGFloat EauWholeDevicePixels(CGFloat points)
   // Draw a thin 1px separator line in light grey
   NSColor *separatorColor = [NSColor colorWithCalibratedRed: 0.8 green: 0.8 blue: 0.8 alpha: 1.0];
   [separatorColor set];
-  
-  // Draw a single pixel line in the middle of the cell frame
-  CGFloat y = cellFrame.origin.y + cellFrame.size.height / 2.0;
-  NSBezierPath *path = [NSBezierPath bezierPath];
-  [path setLineWidth: 1.0];
-  [path moveToPoint: NSMakePoint(cellFrame.origin.x + [self menuSeparatorInset], y)];
-  [path lineToPoint: NSMakePoint(cellFrame.origin.x + cellFrame.size.width - [self menuSeparatorInset], y)];
-  [path stroke];
+
+  /* Fill exactly one device pixel on the pixel grid.  A stroked line of one
+     point covers a fractional number of pixels at scale factors above 1 and
+     lands between them, so separators came out looking differently thick. */
+  CGFloat scale = GSWScaleFactor();
+  CGFloat onePixel = 1.0 / scale;
+  CGFloat inset = [self menuSeparatorInset];
+  CGFloat y = floor(NSMidY(cellFrame) * scale) / scale;
+
+  NSRectFill(NSMakeRect(cellFrame.origin.x + inset, y,
+                        cellFrame.size.width - 2.0 * inset, onePixel));
 }
 @end
