@@ -19,6 +19,18 @@
    as wide as their text) leaves its origin between device pixels, and the
    backend then resamples the bitmap, smearing it.  Snap the origin to the
    pixel grid but keep the size so the image is never rescaled. */
+/* libs-gui insets a horizontal menu cell by two points at its bottom edge, to
+   clear a menu border that a horizontal menu does not draw.  Centering an icon
+   in that inset rect leaves it one point above the middle of the menu bar, so
+   the icon is centered on the whole bar instead.  The inset stays for the
+   title, where it lifts the text off the descender and looks right. */
+static CGFloat EauImageCenterY(NSRect drawnRect, NSMenuItemCell *cell, NSView *controlView)
+{
+  if ([[cell menuView] isHorizontal])
+    return NSMidY([controlView bounds]);
+  return NSMidY(drawnRect);
+}
+
 static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size)
 {
   NSRect rect = [view centerScanRect: NSMakeRect(origin.x, origin.y,
@@ -110,7 +122,8 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
           NSSize drawSize = NSMakeSize(imgSize.width * scale,
                                        imgSize.height * scale);
           NSPoint drawPoint = NSMakePoint(NSMidX(cellFrame) - drawSize.width / 2,
-                                          NSMidY(cellFrame) - drawSize.height / 2);
+                                          EauImageCenterY(cellFrame, self, controlView)
+                                            - drawSize.height / 2);
           [image drawInRect: EauPixelAlignedImageRect(controlView, drawPoint, drawSize)
                    fromRect: NSZeroRect
                   operation: NSCompositeSourceOver
@@ -131,7 +144,8 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
           NSSize drawSize = NSMakeSize(imgSize.width * scale,
                                        imgSize.height * scale);
           NSPoint drawPoint = NSMakePoint(NSMidX(imageRect) - drawSize.width / 2,
-                                          NSMidY(imageRect) - drawSize.height / 2);
+                                          EauImageCenterY(imageRect, self, controlView)
+                                            - drawSize.height / 2);
           [image drawInRect: EauPixelAlignedImageRect(controlView, drawPoint, drawSize)
                    fromRect: NSZeroRect
                   operation: NSCompositeSourceOver
