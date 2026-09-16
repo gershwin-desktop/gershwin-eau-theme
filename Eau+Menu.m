@@ -1,6 +1,19 @@
 #import "Eau.h"
 #include <AppKit/AppKit.h>
 #import <Foundation/NSUserDefaults.h>
+#import "AppearanceMetrics.h"
+
+/* A menu row has to cover a whole number of device pixels.  At a fractional
+   scale factor a row of 22 points starts between pixels, so neighbouring
+   items leave a seam between them and their edges blur. */
+static CGFloat EauWholeDevicePixels(CGFloat points)
+{
+  CGFloat scale = GSWScaleFactor();
+
+  if (scale <= 0.0)
+    return points;
+  return floor(points * scale + 0.5) / scale;
+}
 @interface Eau(EauMenu)
 
 @end
@@ -32,12 +45,12 @@
 }
 - (CGFloat) menuBarHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return EauWholeDevicePixels(22); // Menus and menu items shall be 22px high
 }
 
 - (CGFloat) menuItemHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return EauWholeDevicePixels(22); // Menus and menu items shall be 22px high
 }
 
 /* Maximum size for the icon shown in front of a menu item (the image column,
