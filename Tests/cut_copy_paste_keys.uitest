@@ -1,0 +1,47 @@
+#!/usr/bin/env run_uitest
+# Cut, Copy and Paste typed as Cmd-X, Cmd-C and Cmd-V must reach the focused
+# text field of an application running with the Eau theme.  `press key` sends
+# real key events; plain `press "Cmd+C"` would only perform the menu item and
+# never exercise the key-equivalent path.
+#
+# Each step types a marker that exists nowhere else, so a stale pasteboard
+# from an earlier run or from the Edit menu test cannot make a step pass.
+#
+# Run with: run_uitest Tests/cut_copy_paste_keys.uitest
+# (build + install the EauTest fixture first: make -C Test && make -C Test install)
+launch application "EauTest"
+wait until window "EauTest" timeout 30s
+# No `activate application`: it clicks the window center, which would move
+# the keyboard focus from the text field into the text view below it.
+wait until menu bar "EauTest" timeout 10s
+
+# --- Copy + Paste ---
+type "keycopy"
+wait until textfield "keycopy" timeout 5s
+press key "Cmd+A"
+press key "Cmd+C"
+# Edit/Delete has no key equivalent; `clear` empties the field instead.
+clear textfield "keycopy"
+wait until not exists textfield "keycopy" timeout 5s
+press key "Cmd+V"
+wait until textfield "keycopy" timeout 5s
+press key "Cmd+V"
+wait until textfield "keycopykeycopy" timeout 5s
+
+# --- Cut + Paste: cut empties the field, paste brings the text back ---
+clear textfield "keycopy"
+wait until not exists textfield "keycopy" timeout 5s
+type "keycut"
+wait until textfield "keycut" timeout 5s
+press key "Cmd+A"
+press key "Cmd+X"
+wait until not exists textfield "keycut" timeout 5s
+press key "Cmd+V"
+wait until textfield "keycut" timeout 5s
+press key "Cmd+V"
+wait until textfield "keycutkeycut" timeout 5s
+
+# Leave the computer as it was found.
+press key "Cmd+Q"
+wait until not exists application "EauTest" timeout 10s
+log "cut, copy and paste work with Cmd-X, Cmd-C and Cmd-V"

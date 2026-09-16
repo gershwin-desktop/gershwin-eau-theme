@@ -1,0 +1,47 @@
+#!/usr/bin/env run_uitest
+# Cut, Copy and Paste chosen from the global Edit menu must reach the focused
+# text field of an application running with the Eau theme.
+#
+# Each step types a marker that exists nowhere else, so a stale pasteboard
+# from an earlier run or from the Cmd-key test cannot make a step pass.
+#
+# Run with: run_uitest Tests/cut_copy_paste_menu.uitest
+# (build + install the EauTest fixture first: make -C Test && make -C Test install)
+launch application "EauTest"
+wait until window "EauTest" timeout 30s
+# No `activate application`: it clicks the window center, which would move
+# the keyboard focus from the text field into the text view below it.
+wait until menu bar "EauTest" timeout 10s
+
+# --- Copy + Paste ---
+type "menucopy"
+wait until textfield "menucopy" timeout 5s
+select global menu "Edit/Select All"
+select global menu "Edit/Copy"
+# Menu.app performs an action shortly after the command returns, so keys or
+# clicks sent right away can overtake it.  Only menu actions follow each other
+# in order: the field emptying through Edit/Delete proves Copy already ran.
+select global menu "Edit/Delete"
+wait until not exists textfield "menucopy" timeout 5s
+select global menu "Edit/Paste"
+wait until textfield "menucopy" timeout 5s
+select global menu "Edit/Paste"
+wait until textfield "menucopymenucopy" timeout 5s
+
+# --- Cut + Paste: cut empties the field, paste brings the text back ---
+clear textfield "menucopy"
+wait until not exists textfield "menucopy" timeout 5s
+type "menucut"
+wait until textfield "menucut" timeout 5s
+select global menu "Edit/Select All"
+select global menu "Edit/Cut"
+wait until not exists textfield "menucut" timeout 5s
+select global menu "Edit/Paste"
+wait until textfield "menucut" timeout 5s
+select global menu "Edit/Paste"
+wait until textfield "menucutmenucut" timeout 5s
+
+# Leave the computer as it was found.
+select global menu "EauTest/Quit EauTest"
+wait until not exists application "EauTest" timeout 10s
+log "cut, copy and paste work from the Edit menu"

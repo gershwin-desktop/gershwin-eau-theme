@@ -7,11 +7,18 @@ GNUSTEP_INSTALLATION_DOMAIN = SYSTEM
 # `launch application "alerttest"`: the runner only starts apps found in the
 # standard .app locations.  CoreServices/Applications is where Gershwin keeps
 # system-level utility apps, so the harness finds it like any other tool.
-APP_NAME = alerttest buttontest
+APP_NAME = alerttest buttontest EauTest
 alerttest_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/CoreServices/Applications
 alerttest_OBJC_FILES = alerttest.m
 buttontest_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/CoreServices/Applications
 buttontest_OBJC_FILES = buttontest.m
+# EauTest is the shared fixture for theme UI tests (Tests/*.uitest): one window
+# with many Eau-drawn controls and a standard main menu.
+EauTest_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/CoreServices/Applications
+EauTest_OBJC_FILES = EauTest_main.m EauTestMenuBuilder.m EauTestWindowController.m \
+	EauTestFormBuilder.m EauTestListDataSource.m
+EauTest_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions
+EauTest_INCLUDE_DIRS += -I..
 
 # dialogtest is a bare manual-only tool, run by hand from obj/ and never
 # installed.  It is only built on request because gnustep-make chains
