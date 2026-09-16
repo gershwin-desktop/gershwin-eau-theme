@@ -597,6 +597,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 // TS: forward dec
 @interface NSWindow(EauTheme)
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell;
+- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell;
 @end
 
 @implementation Eau(NSWindow)
@@ -704,6 +705,31 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 @implementation NSWindow(EauTheme)
 
 static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonControllerKey;
+static const void *kEAUDefaultButtonInstallingKey = &kEAUDefaultButtonInstallingKey;
+
+/* NSWindow keeps its delegate as a plain unretained reference, so the animation
+ * controller has to be unhooked from the window *before* the association drops
+ * the last reference to it.  Releasing it first leaves -delegate handing out a
+ * freed object, which ARC then tries to retain. */
+static void EAUReleaseDefaultButtonController(NSWindow *window)
+{
+  id controller = objc_getAssociatedObject(window, kEAUDefaultButtonControllerKey);
+
+  if (controller == nil)
+    {
+      return;
+    }
+
+  if ([window delegate] == controller)
+    {
+      [window setDelegate: nil];
+    }
+
+  objc_setAssociatedObject(window,
+                           kEAUDefaultButtonControllerKey,
+                           nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
 
 /* EAUsetDefaultButtonCell:
  * 
@@ -744,22 +770,44 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell
 {
   NSDebugLog(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p for window %p", aCell, self);
-  
-  _defaultButtonCell = aCell;
-  
-  // Clear any existing animation controller first
-  id oldController = objc_getAssociatedObject(self, kEAUDefaultButtonControllerKey);
-  if (oldController) {
-    if ([self delegate] == oldController) {
-      [self setDelegate: nil];
+
+  /* -setKeyEquivalent: below travels through GSTheme into the button and
+   * button cell categories, which may hand this very cell to this window
+   * again.  Letting that re-entry run would install a second controller for
+   * the same cell and tear the first one down again as soon as the outer call
+   * resumed. */
+  if (aCell != nil
+      && objc_getAssociatedObject(self, kEAUDefaultButtonInstallingKey) == aCell)
+    {
+      NSDebugLog(@"NSWindow+Eau: Ignoring re-entrant setDefaultButtonCell: for cell %p", aCell);
+      return;
     }
-    objc_setAssociatedObject(self, kEAUDefaultButtonControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  }
+
+  _defaultButtonCell = aCell;
+
+  EAUReleaseDefaultButtonController(self);
 
   if (aCell == nil) {
     return;
   }
 
+  objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, aCell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+  @try
+    {
+      [self EAUinstallDefaultButtonCell: aCell];
+    }
+  @finally
+    {
+      objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+/* Everything that actually wires the cell up as the window's default button.
+ * Split out so the re-entrancy marker set by -EAUsetDefaultButtonCell: is
+ * cleared again even if any of this raises. */
+- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell
+{
   [self enableKeyEquivalentForDefaultButtonCell];
 
   [aCell setKeyEquivalent: @"\r"];
