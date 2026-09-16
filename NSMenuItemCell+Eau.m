@@ -12,6 +12,7 @@
 - (void)eau_drawImageWithFrame:(NSRect)cellFrame inView:(NSView*)controlView;
 - (CGFloat)eau_imageWidth;
 - (NSRect)eau_imageRectForBounds:(NSRect)cellFrame;
+- (CGFloat)eau_keyEquivalentWidth;
 @end
 
 /* Centering an image in a cell whose frame is fractional (menu bar items are
@@ -139,6 +140,29 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
         }
     }
   [self eau_drawImageWithFrame: cellFrame inView: controlView];
+}
+
+/* GNUstep sizes the key equivalent column from its own rendering, which drops
+   function keys entirely and spells modifiers differently from the symbols we
+   draw.  Reserve room for what is actually drawn, never less than before. */
+- (CGFloat)eau_keyEquivalentWidth
+{
+  CGFloat width = [self eau_keyEquivalentWidth];
+  NSMenuItem *menuItem = [self menuItem];
+
+  if (menuItem != nil && ![menuItem hasSubmenu])
+    {
+      NSString *display = [self EAUconvertKeyEquivalentToMacStyle: [menuItem keyEquivalent]
+                                                    withModifiers: [menuItem keyEquivalentModifierMask]];
+      if ([display length] > 0)
+        {
+          NSDictionary *attributes = @{ NSFontAttributeName: [NSFont menuFontOfSize: 0] };
+          CGFloat drawnWidth = [display sizeWithAttributes: attributes].width + 8.0;
+          width = MAX(width, drawnWidth);
+        }
+    }
+
+  return width;
 }
 
 /* Cap the image column width so a large app/prefPane icon does not widen the
@@ -278,6 +302,21 @@ static void initMenuItemCellSwizzling(void) {
       originalImageWidthMethod, swizzledImageWidthMethod);
   }
 
+  // Swizzle keyEquivalentWidth - reserves room for the symbols we draw
+  SEL keyEquivalentWidthSelector = sel_registerName("keyEquivalentWidth");
+  Method originalKeyEquivalentWidthMethod = class_getInstanceMethod(menuItemCellClass, keyEquivalentWidthSelector);
+  Method swizzledKeyEquivalentWidthMethod = class_getInstanceMethod(menuItemCellClass, @selector(eau_keyEquivalentWidth));
+  if (originalKeyEquivalentWidthMethod && swizzledKeyEquivalentWidthMethod) {
+    IMP originalIMP = method_getImplementation(originalKeyEquivalentWidthMethod);
+    IMP swizzledIMP = method_getImplementation(swizzledKeyEquivalentWidthMethod);
+    if (originalIMP != swizzledIMP) {
+      method_exchangeImplementations(originalKeyEquivalentWidthMethod, swizzledKeyEquivalentWidthMethod);
+    }
+  } else {
+    NSLog(@"NSMenuItemCell+Eau: WARNING - Could not swizzle keyEquivalentWidth (orig=%p swiz=%p)",
+      originalKeyEquivalentWidthMethod, swizzledKeyEquivalentWidthMethod);
+  }
+
   // Swizzle imageRectForBounds: - caps the image draw rect to icon size
   SEL imageRectSelector = sel_registerName("imageRectForBounds:");
   Method originalImageRectMethod = class_getInstanceMethod(menuItemCellClass, imageRectSelector);
@@ -355,122 +394,99 @@ static void initMenuItemCellSwizzling(void) {
   
   // For non-submenu items, handle key equivalents
   if (menuItem != nil) {
-    NSString *originalKeyEquivalent = [menuItem keyEquivalent];
-    NSUInteger modifierMask = [menuItem keyEquivalentModifierMask];
-    
-    NSDebugLog(@"NSMenuItemCell+Eau: Drawing key equivalent for '%@': '%@', modifiers: %lu", 
-           [menuItem title], originalKeyEquivalent, (unsigned long)modifierMask);
-    
-    // Convert the key equivalent to Mac style if needed
-    if (originalKeyEquivalent && [originalKeyEquivalent length] > 0) {
-      NSString *macStyleKeyEquivalent = [self EAUconvertKeyEquivalentToMacStyle:originalKeyEquivalent withModifiers:modifierMask];
-      
-      if (![macStyleKeyEquivalent isEqualToString:originalKeyEquivalent]) {
-        NSDebugLog(@"NSMenuItemCell+Eau: Drawing Mac style key equivalent '%@' instead of '%@'", macStyleKeyEquivalent, originalKeyEquivalent);
-        
-        // Draw the Mac-style key equivalent manually
-        NSFont *font = [NSFont menuFontOfSize:0];
-        NSColor *textColor = [self textColor];
-        
-        NSDictionary *attributes = @{
-          NSFontAttributeName: font,
-          NSForegroundColorAttributeName: textColor
-        };
-        
-        // Calculate the size and position for right-aligned text
-        NSSize textSize = [macStyleKeyEquivalent sizeWithAttributes:attributes];
-        NSRect textRect = keyEquivRect;
-        textRect.origin.x = NSMaxX(keyEquivRect) - textSize.width - 4; // 4 pixel margin from right
-        textRect.origin.y = keyEquivRect.origin.y + (keyEquivRect.size.height - textSize.height) / 2;
-        textRect.size = textSize;
-        
-        [macStyleKeyEquivalent drawInRect:textRect withAttributes:attributes];
-        
-        NSDebugLog(@"NSMenuItemCell+Eau: Drew Mac style key equivalent at rect: {{%.1f, %.1f}, {%.1f, %.1f}}", 
-               textRect.origin.x, textRect.origin.y, textRect.size.width, textRect.size.height);
-        return;
-      }
+    NSString *display = [self EAUconvertKeyEquivalentToMacStyle: [menuItem keyEquivalent]
+                                                 withModifiers: [menuItem keyEquivalentModifierMask]];
+
+    /* This method replaces NSMenuItemCell's own drawKeyEquivalentWithFrame:,
+       so whatever is not drawn here is not drawn at all - including the
+       function keys and modifier-less equivalents GNUstep itself refuses to
+       render. */
+    if ([display length] > 0) {
+      NSDictionary *attributes = @{
+        NSFontAttributeName: [NSFont menuFontOfSize: 0],
+        NSForegroundColorAttributeName: [self textColor]
+      };
+
+      NSSize textSize = [display sizeWithAttributes: attributes];
+      NSRect textRect = keyEquivRect;
+      textRect.origin.x = NSMaxX(keyEquivRect) - textSize.width - 4; // 4 pixel margin from right
+      textRect.origin.y = keyEquivRect.origin.y + (keyEquivRect.size.height - textSize.height) / 2;
+      textRect.size = textSize;
+
+      [display drawInRect: textRect withAttributes: attributes];
+
+      NSDebugLog(@"NSMenuItemCell+Eau: Drew key equivalent '%@' at rect: {{%.1f, %.1f}, {%.1f, %.1f}}",
+             display, textRect.origin.x, textRect.origin.y, textRect.size.width, textRect.size.height);
     }
   }
-  
-  // If no conversion needed, do nothing - let the normal drawing process handle it
-  NSDebugLog(@"NSMenuItemCell+Eau: No conversion needed, skipping custom drawing");
+}
+
+/* The symbol a key equivalent is shown with.  Foreign menus arrive as X11
+   keysym names ("Up", "Page_Up", "F5") because that is what the toolkits and
+   the global key grab speak; nothing else in the system can turn them into
+   something a user recognises. */
++ (NSString*) EAUsymbolForKeyEquivalent: (NSString*)keyEquivalent
+{
+  if ([keyEquivalent length] == 1)
+    {
+      unichar ch = [keyEquivalent characterAtIndex: 0];
+
+      if (ch >= 'a' && ch <= 'z') { return [keyEquivalent uppercaseString]; }
+      if (ch == 8)   { return @"⌫"; }   // Backspace
+      if (ch == 127) { return @"⌫"; }
+      if (ch == 27)  { return @"⎋"; }   // Escape
+      if (ch == 9)   { return @"⇥"; }   // Tab
+      if (ch == 13)  { return @"↵"; }   // Return
+      if (ch == 32)  { return @"␣"; }   // Space
+      return keyEquivalent;
+    }
+
+  NSString *lower = [keyEquivalent lowercaseString];
+  if ([lower isEqualToString: @"left"])      { return @"←"; }
+  if ([lower isEqualToString: @"right"])     { return @"→"; }
+  if ([lower isEqualToString: @"up"])        { return @"↑"; }
+  if ([lower isEqualToString: @"down"])      { return @"↓"; }
+  if ([lower isEqualToString: @"page_up"])   { return @"⇞"; }
+  if ([lower isEqualToString: @"page_down"]) { return @"⇟"; }
+  if ([lower isEqualToString: @"home"])      { return @"↖"; }
+  if ([lower isEqualToString: @"end"])       { return @"↘"; }
+  if ([lower isEqualToString: @"insert"])    { return @"Ins"; }
+  if ([lower isEqualToString: @"delete"])    { return @"⌦"; }
+  if ([lower isEqualToString: @"escape"])    { return @"⎋"; }
+  if ([lower isEqualToString: @"return"])    { return @"↵"; }
+  if ([lower isEqualToString: @"tab"])       { return @"⇥"; }
+  if ([lower isEqualToString: @"space"])     { return @"␣"; }
+  if ([lower isEqualToString: @"backspace"]) { return @"⌫"; }
+
+  return keyEquivalent;
 }
 
 - (NSString*) EAUconvertKeyEquivalentToMacStyle: (NSString*)keyEquivalent withModifiers: (NSUInteger)modifierMask
 {
-  NSDebugLog(@"NSMenuItemCell+Eau: Converting key equivalent '%@' with modifiers %lu", keyEquivalent, (unsigned long)modifierMask);
-  
-  if (!keyEquivalent || [keyEquivalent length] == 0) {
-    return keyEquivalent;
-  }
-  
-  // Handle the old "#key" format first (this is what you're seeing)
-  if ([keyEquivalent hasPrefix:@"#"] && [keyEquivalent length] > 1) {
-    NSString *key = [keyEquivalent substringFromIndex:1];
-    NSString *result = [NSString stringWithFormat:@"⌘%@", [key uppercaseString]];
-    
-    NSDebugLog(@"NSMenuItemCell+Eau: Converted old format '%@' to Mac style: '%@'", keyEquivalent, result);
-    return result;
-  }
-  
-  // Check if command modifier is present
-  if (modifierMask & NSCommandKeyMask) {
-    NSMutableString *result = [NSMutableString string];
-    
-    // Add modifier symbols in the correct order (following Mac conventions)
-    if (modifierMask & NSControlKeyMask) {
-      [result appendString:@"⌃"]; // Control symbol
+  if ([keyEquivalent length] == 0)
+    {
+      return keyEquivalent;
     }
-    if (modifierMask & NSAlternateKeyMask) {
-      [result appendString:@"⌥"]; // Option/Alt symbol  
+
+  // Handle the old "#key" format, in which the modifier is part of the string
+  if ([keyEquivalent hasPrefix: @"#"] && [keyEquivalent length] > 1)
+    {
+      NSString *key = [keyEquivalent substringFromIndex: 1];
+      return [NSString stringWithFormat: @"⌘%@", [key uppercaseString]];
     }
-    if (modifierMask & NSCommandKeyMask) {
-      [result appendString:@"⌘"]; // Command symbol
-    }
-    if (modifierMask & NSShiftKeyMask) {
-      [result appendString:@"⇧"]; // Shift symbol (after Command)
-    }
-    
-    // Convert key equivalent to uppercase if it's a letter, or to symbol for special keys
-    NSString *keyToAdd = keyEquivalent;
-    if ([keyEquivalent length] == 1) {
-      unichar ch = [keyEquivalent characterAtIndex:0];
-      if (ch >= 'a' && ch <= 'z') {
-        keyToAdd = [keyEquivalent uppercaseString];
-      } else if (ch == 8 || ch == 127) { // Backspace or Delete
-        keyToAdd = @"⌫";
-      } else if (ch == 27) { // Escape
-        keyToAdd = @"⎋";
-      } else if (ch == 9) { // Tab
-        keyToAdd = @"⇥";
-      } else if (ch == 13) { // Return/Enter
-        keyToAdd = @"↵";
-      } else if (ch == 32) { // Space
-        keyToAdd = @"␣";
-      }
-    } else if ([keyEquivalent length] > 1) {
-      // Handle arrow keys and other multi-character key names
-      NSString *lower = [keyEquivalent lowercaseString];
-      if ([lower isEqualToString:@"left"]) {
-        keyToAdd = @"←";
-      } else if ([lower isEqualToString:@"right"]) {
-        keyToAdd = @"→";
-      } else if ([lower isEqualToString:@"up"]) {
-        keyToAdd = @"↑";
-      } else if ([lower isEqualToString:@"down"]) {
-        keyToAdd = @"↓";
-      }
-    }
-    
-    [result appendString:keyToAdd];
-    
-    NSDebugLog(@"NSMenuItemCell+Eau: Converted to Mac style: '%@'", result);
-    return result;
-  }
-  
-  NSDebugLog(@"NSMenuItemCell+Eau: No conversion needed for '%@'", keyEquivalent);
-  return keyEquivalent;
+
+  // Modifier symbols in Mac order: Control, Option, Command, Shift
+  NSMutableString *result = [NSMutableString string];
+  if (modifierMask & NSControlKeyMask)   { [result appendString: @"⌃"]; }
+  if (modifierMask & NSAlternateKeyMask) { [result appendString: @"⌥"]; }
+  if (modifierMask & NSCommandKeyMask)   { [result appendString: @"⌘"]; }
+  if (modifierMask & NSShiftKeyMask)     { [result appendString: @"⇧"]; }
+
+  [result appendString: [NSMenuItemCell EAUsymbolForKeyEquivalent: keyEquivalent]];
+
+  NSDebugLog(@"NSMenuItemCell+Eau: Key equivalent '%@' with modifiers %lu shows as '%@'",
+         keyEquivalent, (unsigned long)modifierMask, result);
+  return result;
 }
 
 @end
