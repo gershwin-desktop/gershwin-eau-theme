@@ -27,92 +27,58 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
-// Weak proxy to break the retain cycle between NSTimer and NSButtonCell.
-// NSTimer retains its target, preventing dealloc. This proxy holds a weak
-// reference to the cell, so the cell can be deallocated normally when the
-// window is closed. If the cell is gone, the timer is invalidated.
-@interface EauPulseProxy : NSObject
-@property (nonatomic, weak) NSButtonCell *cell;
-@end
-@implementation EauPulseProxy
-- (void) pulseTick: (NSTimer *)timer
-{
-  NSButtonCell *cell = self.cell;
-  if (!cell) { [timer invalidate]; return; }
-  [cell EauPulseTick: timer];
-}
-@end
-
-// Stops the pulse timer when the owning NSButton is deallocated.
-// NSTimer stays scheduled in the run loop even when released, and reading a
-// weak cell after the button (and its cell) is gone can crash, so we tie the
-// timer's life to the button: the invalidator is associated with the button
-// and its dealloc runs when the button deallocates.
-@interface EauPulseTimerInvalidator : NSObject
-@property (nonatomic, strong) NSTimer *timer;
-@end
-@implementation EauPulseTimerInvalidator
-- (void) dealloc
-{
-  [_timer invalidate];
-}
-@end
-
 @implementation NSButton (EauKeyboardHandling)
 
 + (void) load
 {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class cls = [NSButton class];
+  Class cls = [NSButton class];
 
-    // keyDown: swizzle
-    {
-      SEL origSelector = @selector(keyDown:);
-      SEL swizSelector = @selector(eau_keyDown:);
-      Method origMethod = class_getInstanceMethod(cls, origSelector);
-      Method swizMethod = class_getInstanceMethod(cls, swizSelector);
-      BOOL didAddMethod = class_addMethod(cls, origSelector,
-                                          method_getImplementation(swizMethod),
-                                          method_getTypeEncoding(swizMethod));
-      if (didAddMethod)
-        class_replaceMethod(cls, swizSelector,
-                            method_getImplementation(origMethod),
-                            method_getTypeEncoding(origMethod));
-      else
-        method_exchangeImplementations(origMethod, swizMethod);
-    }
+  // keyDown: swizzle
+  {
+    SEL origSelector = @selector(keyDown:);
+    SEL swizSelector = @selector(eau_keyDown:);
+    Method origMethod = class_getInstanceMethod(cls, origSelector);
+    Method swizMethod = class_getInstanceMethod(cls, swizSelector);
+    BOOL didAddMethod = class_addMethod(cls, origSelector,
+                                        method_getImplementation(swizMethod),
+                                        method_getTypeEncoding(swizMethod));
+    if (didAddMethod)
+      class_replaceMethod(cls, swizSelector,
+                          method_getImplementation(origMethod),
+                          method_getTypeEncoding(origMethod));
+    else
+      method_exchangeImplementations(origMethod, swizMethod);
+  }
 
-    // setKeyEquivalent: swizzle - when @"\r", start pulse on the cell
-    {
-      SEL orig = @selector(setKeyEquivalent:);
-      SEL swiz = @selector(eau_setKeyEquivalent:);
-      Method origM = class_getInstanceMethod(cls, orig);
-      Method swizM = class_getInstanceMethod(cls, swiz);
-      if (origM && swizM)
-        method_exchangeImplementations(origM, swizM);
-    }
+  // setKeyEquivalent: swizzle - when @"\r", start pulse on the cell
+  {
+    SEL orig = @selector(setKeyEquivalent:);
+    SEL swiz = @selector(eau_setKeyEquivalent:);
+    Method origM = class_getInstanceMethod(cls, orig);
+    Method swizM = class_getInstanceMethod(cls, swiz);
+    if (origM && swizM)
+      method_exchangeImplementations(origM, swizM);
+  }
 
-    // viewDidMoveToWindow swizzle - a button that already carries the Return
-    // key equivalent only learns its window here.  NSButton inherits this from
-    // NSView, so add-then-replace instead of exchanging, which would swap the
-    // implementation for every view in the application.
-    {
-      SEL origSelector = @selector(viewDidMoveToWindow);
-      SEL swizSelector = @selector(eau_viewDidMoveToWindow);
-      Method origMethod = class_getInstanceMethod(cls, origSelector);
-      Method swizMethod = class_getInstanceMethod(cls, swizSelector);
-      BOOL didAddMethod = class_addMethod(cls, origSelector,
-                                          method_getImplementation(swizMethod),
-                                          method_getTypeEncoding(swizMethod));
-      if (didAddMethod)
-        class_replaceMethod(cls, swizSelector,
-                            method_getImplementation(origMethod),
-                            method_getTypeEncoding(origMethod));
-      else
-        method_exchangeImplementations(origMethod, swizMethod);
-    }
-  });
+  // viewDidMoveToWindow swizzle - a button that already carries the Return
+  // key equivalent only learns its window here.  NSButton inherits this from
+  // NSView, so add-then-replace instead of exchanging, which would swap the
+  // implementation for every view in the application.
+  {
+    SEL origSelector = @selector(viewDidMoveToWindow);
+    SEL swizSelector = @selector(eau_viewDidMoveToWindow);
+    Method origMethod = class_getInstanceMethod(cls, origSelector);
+    Method swizMethod = class_getInstanceMethod(cls, swizSelector);
+    BOOL didAddMethod = class_addMethod(cls, origSelector,
+                                        method_getImplementation(swizMethod),
+                                        method_getTypeEncoding(swizMethod));
+    if (didAddMethod)
+      class_replaceMethod(cls, swizSelector,
+                          method_getImplementation(origMethod),
+                          method_getTypeEncoding(origMethod));
+    else
+      method_exchangeImplementations(origMethod, swizMethod);
+  }
 }
 
 /* Hand this button's cell to its window as the default button cell.
@@ -161,31 +127,11 @@
   [self eau_setKeyEquivalent: key];
   if ([key isEqualToString: @"\r"])
     {
-      NSButtonCell *cell = [self cell];
-      if (cell)
-        {
-          [cell setIsDefaultButton: @YES];
-          // Use a weak proxy as timer target to avoid retain cycle.
-          // The invalidator is stored on self (NSButton); its dealloc runs
-          // when the button deallocates and invalidates the timer.
-          EauPulseTimerInvalidator *oldInv =
-            objc_getAssociatedObject(self, @selector(eau_setKeyEquivalent:));
-          [oldInv.timer invalidate];
-          EauPulseProxy *proxy = [[EauPulseProxy alloc] init];
-          proxy.cell = cell;
-          NSTimer *t = [NSTimer timerWithTimeInterval: 1.0/30.0
-                                               target: proxy
-                                             selector: @selector(pulseTick:)
-                                             userInfo: nil
-                                              repeats: YES];
-          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSDefaultRunLoopMode];
-          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSModalPanelRunLoopMode];
-          [[NSRunLoop currentRunLoop] addTimer: t forMode: NSEventTrackingRunLoopMode];
-          EauPulseTimerInvalidator *inv = [[EauPulseTimerInvalidator alloc] init];
-          inv.timer = t;
-          objc_setAssociatedObject(self, @selector(eau_setKeyEquivalent:), inv,
-                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        }
+      /* The redraw ticker that makes the pulse visible belongs to the window
+       * (see DefaultButtonAnimationController in NSWindow+Eau.m), so it can
+       * pause while the window is not key and stop when the default button
+       * changes. */
+      [(NSButtonCell *)[self cell] setIsDefaultButton: @YES];
       [self eauBecomeWindowDefaultButton];
     }
 }

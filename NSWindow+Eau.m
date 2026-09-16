@@ -4,23 +4,11 @@
 #include "Eau+TitleBarButtons.h"
 #include "EauGrowBoxView.h"
 #include "AppearanceMetrics.h"
-#include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSImage.h>
 #import <AppKit/NSAlert.h>
 #import "GNUstepGUI/GSTheme.h"
 #import <objc/runtime.h>
-
-@interface DefaultButtonAnimation: NSAnimation
-{
-  __weak NSButtonCell * defaultbuttoncell;
-  BOOL reverse;
-}
-
-@property (nonatomic, assign) BOOL reverse;
-@property (nonatomic, weak) NSButtonCell * defaultbuttoncell;
-
-@end
 
 // Dialog logging helpers (used by NSWindow presentation hooks).
 static BOOL EAUIsDialogWindow(NSWindow *window)
@@ -217,75 +205,45 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 
 @end
 
-@implementation DefaultButtonAnimation
-
-@synthesize reverse;
-@synthesize defaultbuttoncell;
-
-- (void)setCurrentProgress:(NSAnimationProgress)progress
-{
-  [super setCurrentProgress: progress];
-  if(defaultbuttoncell)
-    {
-        // Check if the button cell is enabled before updating pulse progress
-        BOOL isEnabled = YES;
-        @try {
-            if ([defaultbuttoncell respondsToSelector:@selector(isEnabled)]) {
-              isEnabled = [defaultbuttoncell isEnabled];
-            }
-            
-            if (isEnabled) {
-              if(reverse)
-              {
-                defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 1.0 - progress];
-              }else{
-                defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: progress];
-              }
-              NSView *cv = [defaultbuttoncell controlView];
-              if (cv) {
-                  [cv setNeedsDisplay: YES];
-              }
-            } else {
-              // Button is disabled, stop the animation and reset pulse progress
-              NSDebugLog(@"DefaultButtonAnimation: Button cell is disabled, stopping animation");
-              defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
-              NSView *cv = [defaultbuttoncell controlView];
-              if (cv) {
-                  [cv setNeedsDisplay: YES];
-              }
-              [self stopAnimation];
-              return;
-            }
-        } @catch (NSException *e) {
-            [self stopAnimation];
-            return;
-        }
-    }
-  if (defaultbuttoncell && progress >= 1.0)
-  {
-    reverse = !reverse;
-    NSDebugLog(@"DefaultButtonAnimation: Reversing direction and restarting animation");
-    if ([self isAnimating]) {
-        [self startAnimation];
-    }
-  }
-}
-@end
-
 @interface DefaultButtonAnimationController : NSObject <NSWindowDelegate>
 
 {
-  DefaultButtonAnimation * animation;
+  NSTimer * pulseTimer;
   __weak NSButtonCell * buttoncell;
 }
 
 @property (nonatomic, weak) NSButtonCell * buttoncell;
-@property (nonatomic, strong) NSAnimation * animation;
+
+- (void) startPulse;
+- (void) stopPulse;
+- (void) pulseTick;
 
 @end
+
+/* NSTimer retains its target.  The controller lives exactly as long as the
+ * window's association keeps it, so the timer must not keep it alive as well:
+ * this proxy holds the controller weakly and retires the timer once it is gone. */
+@interface EauPulseTicker : NSObject
+@property (nonatomic, weak) DefaultButtonAnimationController *controller;
+@end
+
+@implementation EauPulseTicker
+@synthesize controller;
+- (void) tick: (NSTimer *)timer
+{
+  DefaultButtonAnimationController *c = controller;
+
+  if (c == nil)
+    {
+      [timer invalidate];
+      return;
+    }
+  [c pulseTick];
+}
+@end
+
 @implementation DefaultButtonAnimationController
 @synthesize buttoncell;
-@synthesize animation;
 - (id) initWithButtonCell: (NSButtonCell*) cell
 {
   NSDebugLog(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
@@ -371,12 +329,8 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   NSDebugLog(@"DefaultButtonAnimationController: dealloc called");
   
   @try {
-    // Stop animation and remove all notifications
-    if (animation) {
-      [animation setDelegate: nil];
-      [animation stopAnimation];
-      animation = nil;
-    }
+    // Stop the pulse and remove all notifications
+    [self stopPulse];
     
     // Use a local copy of buttoncell to avoid issues if it becomes nil during dealloc
     NSButtonCell *cell = buttoncell;
@@ -399,7 +353,6 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
       }
       
       @try {
-        [cell setPulseProgress: [NSNumber numberWithFloat: 0.0]];
         [cell setIsDefaultButton: [NSNumber numberWithBool: NO]];
       } @catch (id ex) {}
     }
@@ -410,50 +363,70 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   buttoncell = nil;
 }
 
+/* The pulse colour is derived from the wall clock when the cell is drawn
+ * (-[Eau pulseColorInCell:]), so pulsing only needs the button to be redrawn
+ * regularly.  A plain repeating timer does that; it is also scheduled in the
+ * modal and event-tracking modes so the pulse keeps going inside alert panels
+ * and while the user holds the mouse down elsewhere. */
 - (void) startPulse
 {
   NSDebugLog(@"DefaultButtonAnimationController: startPulse called for cell %p", buttoncell);
-  [self startPulse: NO];
-}
-- (void) startPulse: (BOOL) reverse
-{
-  NSDebugLog(@"DefaultButtonAnimationController: startPulse:reverse called with reverse=%d for cell %p", reverse, buttoncell);
-  
+
+  if (pulseTimer != nil)
+    {
+      return;
+    }
+
   // Check if the button cell is enabled before starting animation
   BOOL isEnabled = YES;
   if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
     isEnabled = [buttoncell isEnabled];
   }
-  
+
   if (!isEnabled) {
     NSDebugLog(@"DefaultButtonAnimationController: Button cell is disabled, not starting animation");
     return;
   }
-  
-  animation = [[DefaultButtonAnimation alloc] initWithDuration:METRICS_PULSE_DURATION
-                                animationCurve:NSAnimationEaseInOut];
-  animation.reverse = reverse;
-  [animation addProgressMark: 1.0];
-  [animation setDelegate: self];
-  [animation setFrameRate:30.0];
-  [animation setAnimationBlockingMode:NSAnimationNonblocking];
-  animation.defaultbuttoncell = buttoncell;
-  
-  NSDebugLog(@"DefaultButtonAnimationController: Starting animation %p for cell %p", animation, buttoncell);
-  [animation startAnimation];
-  NSDebugLog(@"DefaultButtonAnimationController: Animation started for cell %p", buttoncell);
+
+  EauPulseTicker *ticker = [[EauPulseTicker alloc] init];
+  ticker.controller = self;
+  pulseTimer = [NSTimer timerWithTimeInterval: 1.0 / METRICS_PULSE_FRAME_RATE
+                                       target: ticker
+                                     selector: @selector(tick:)
+                                     userInfo: nil
+                                      repeats: YES];
+
+  NSRunLoop *loop = [NSRunLoop currentRunLoop];
+  [loop addTimer: pulseTimer forMode: NSDefaultRunLoopMode];
+  [loop addTimer: pulseTimer forMode: NSModalPanelRunLoopMode];
+  [loop addTimer: pulseTimer forMode: NSEventTrackingRunLoopMode];
 }
-- (void)animation:(NSAnimation *)a
-            didReachProgressMark:(NSAnimationProgress)progress
+
+- (void) stopPulse
 {
-  //[animation stopAnimation];
-  //[self startPulse: !animation.reverse];
+  [pulseTimer invalidate];
+  pulseTimer = nil;
+}
+
+- (void) pulseTick
+{
+  NSButtonCell *cell = buttoncell;
+
+  if (cell == nil)
+    {
+      [self stopPulse];
+      return;
+    }
+
+  /* -controlView stays nil until the cell's first draw; the first regular
+   * window display fills it in and the pulse picks up from there. */
+  [[cell controlView] setNeedsDisplay: YES];
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
       NSDebugLog(@"DefaultButtonAnimationController: Window resigned key, stopping animation");
-      [animation stopAnimation];
+      [self stopPulse];
 }
 
 // TS: added this method
@@ -469,7 +442,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
         {
           if ([self shouldAnimationBeRunning]) {
               NSDebugLog(@"DefaultButtonAnimationController: Button's window became key and button is enabled, starting animation");
-              [animation startAnimation];
+              [self startPulse];
           } else {
               NSDebugLog(@"DefaultButtonAnimationController: Button's window became key but button is disabled, not starting animation");
           }
@@ -492,9 +465,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     
     if (closingWindow == buttonWindow || closingWindow == nil) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window is closing, stopping animation");
-        if (animation) {
-            [animation stopAnimation];
-        }
+        [self stopPulse];
     }
 }
 
@@ -505,7 +476,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     
     if (miniaturizedWindow == buttonWindow) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window was miniaturized, stopping animation");
-        [animation stopAnimation];
+        [self stopPulse];
     }
 }
 
@@ -516,21 +487,21 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     
     if (deminiaturizedWindow == buttonWindow && [self shouldAnimationBeRunning]) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window was deminiaturized and button is enabled, starting animation");
-        [animation startAnimation];
+        [self startPulse];
     }
 }
 
 - (void)applicationDidHide:(NSNotification *)notification
 {
     NSDebugLog(@"DefaultButtonAnimationController: Application was hidden, stopping animation");
-    [animation stopAnimation];
+    [self stopPulse];
 }
 
 - (void)applicationDidUnhide:(NSNotification *)notification
 {
     if ([self shouldAnimationBeRunning]) {
         NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden and button is enabled and visible, starting animation");
-        [animation startAnimation];
+        [self startPulse];
     } else {
         NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden but button is disabled or window not visible, not starting animation");
     }
@@ -572,22 +543,21 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     if ([keyPath isEqualToString:@"enabled"]) {
         NSDebugLog(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
         
-        // Immediately reset pulse progress if button becomes disabled
+        // Redraw once so a freshly disabled button drops the pulse colour
         if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
-            NSDebugLog(@"DefaultButtonAnimationController: Button disabled - immediately resetting pulse progress");
-            buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
+            NSDebugLog(@"DefaultButtonAnimationController: Button disabled - redrawing without pulse");
             [[buttoncell controlView] setNeedsDisplay: YES];
         }
         
         if ([self shouldAnimationBeRunning]) {
-            if (![animation isAnimating]) {
+            if (pulseTimer == nil) {
                 NSDebugLog(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
                 [self startPulse];
             }
         } else {
-            if ([animation isAnimating]) {
+            if (pulseTimer != nil) {
                 NSDebugLog(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
-                [animation stopAnimation];
+                [self stopPulse];
             }
         }
     }

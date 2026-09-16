@@ -20,6 +20,8 @@ static const float METRICS_WIN_MAX_HEIGHT = 350.0;
 
 // Default button pulse cycle duration in seconds
 static const float METRICS_PULSE_DURATION = 3.0; /* like breathing at rest */
+// Redraws per second while a default button pulses
+static const float METRICS_PULSE_FRAME_RATE = 30.0;
 
 // Icon size for dialogs and alerts shall be 64x64px
 static const float METRICS_ICON_SIDE = 64.0;

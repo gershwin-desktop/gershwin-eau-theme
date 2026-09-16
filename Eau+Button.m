@@ -4,7 +4,6 @@
 
 
 NSString * const kEauIsDefaultButton = @"kEauIsDefaultButton";
-NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 
 @implementation NSButtonCell(EauDefaultButtonAnimation)
 - (void)setIsDefaultButton:(NSNumber*) val
@@ -19,15 +18,6 @@ NSString * const kEauPulseProgressKey = @"kEauPulseProgressKey";
 - (BOOL)defaultButton
 {
 	return [[self isDefaultButton] boolValue];
-}
-- (void)setPulseProgress:(NSNumber *)pulseProgress
-{
-  objc_setAssociatedObject(self, (__bridge const void *)(kEauPulseProgressKey), pulseProgress, OBJC_ASSOCIATION_COPY);
-}
-
-- (NSNumber*)pulseProgress
-{
-  return objc_getAssociatedObject(self, (__bridge const void *)(kEauPulseProgressKey));
 }
 @end
 
