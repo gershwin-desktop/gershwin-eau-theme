@@ -1049,6 +1049,11 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
       return;
     }
 
+  /* The enabled flag is only as fresh as the last validation, which AppKit
+     runs after X events.  An action that arrived over DO (e.g. Select All from
+     Menu.app) changes the state without such an event, so a Copy chosen right
+     after it would be dropped as disabled. */
+  [[menuItem menu] update];
   if (![menuItem isEnabled])
     {
       NSLog(@"Eau: dropping menu action '%@': item is disabled", [menuItem title]);
