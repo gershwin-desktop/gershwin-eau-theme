@@ -1,0 +1,11 @@
+ADDITIONAL_INCLUDE_DIRS += -I..
+
+# The unit under test is the theme's alert panel implementation (compiled
+# into the theme bundle with ARC, so the tool must use it too).
+t_AlertPanelScrolling_OBJC_FILES += ../NSAlert+Eau.m
+t_AlertPanelScrolling_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
+
+t_EauMenuWindowFilter_OBJC_FILES += ../EauMenuWindowFilter.m
+t_EauMenuWindowFilter_TOOL_LIBS += -lX11
+
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated

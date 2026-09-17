@@ -4,23 +4,11 @@
 #include "Eau+TitleBarButtons.h"
 #include "EauGrowBoxView.h"
 #include "AppearanceMetrics.h"
-#include <AppKit/NSAnimation.h>
 #import <AppKit/NSWindow.h>
 #import <AppKit/NSImage.h>
 #import <AppKit/NSAlert.h>
 #import "GNUstepGUI/GSTheme.h"
 #import <objc/runtime.h>
-
-@interface DefaultButtonAnimation: NSAnimation
-{
-  __weak NSButtonCell * defaultbuttoncell;
-  BOOL reverse;
-}
-
-@property (nonatomic, assign) BOOL reverse;
-@property (nonatomic, weak) NSButtonCell * defaultbuttoncell;
-
-@end
 
 // Dialog logging helpers (used by NSWindow presentation hooks).
 static BOOL EAUIsDialogWindow(NSWindow *window)
@@ -125,60 +113,6 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
     }
 }
 
-// Forward declaration so static helper functions below can call
-// NSWindow(EauTheme) methods before their formal @implementation.
-@interface NSWindow (EAUAutoPlacement)
-- (void) EAUcenter;
-@end
-
-/* Returns YES for windows that should be auto-positioned as dialogs:
- * classic dialog types (NSPanel, modal-level, utility) plus small
- * titled non-resizable windows (the pattern used by GWDialog,
- * RunExternalController, and similar custom dialogs). */
-static BOOL EAUShouldPositionDialog(NSWindow *window)
-{
-  if (window == nil) return NO;
-  if (EAUIsDialogWindow(window)) return YES;
-
-  NSUInteger mask = [window styleMask];
-  if ((mask & NSTitledWindowMask) && !(mask & NSResizableWindowMask))
-    {
-      NSRect wf = [window frame];
-      if (wf.size.width < 600 && wf.size.height < 400)
-        {
-          return YES;
-        }
-    }
-  return NO;
-}
-
-/* Position a dialog window using the golden ratio (vertical placement
- * ~38% from the top), centered horizontally.  Called from the orderFront: /
- * orderFrontRegardless / makeKeyAndOrderFront: swizzles so that
- * non-positioned dialog-style windows appear at a consistent, visually
- * pleasing location.
- *
- * Only positions windows that are not yet visible AND whose frame is at
- * the default (0,0) origin — meaning the creating code did not explicitly
- * set a position.  Windows that were positioned by their creator (e.g.,
- * EauAlertPanel's -init which centers itself, or any code that calls
- * -setFrame: before ordering in) are left untouched. */
-static void EAUPlaceDialogWindow(NSWindow *window)
-{
-  if (window == nil || [window isVisible])
-    {
-      return;
-    }
-  /* If the window's origin is not at (0,0), the creating code already
-   * positioned it explicitly — leave it alone. */
-  NSRect wf = [window frame];
-  if (wf.origin.x != 0 || wf.origin.y != 0)
-    {
-      return;
-    }
-  [window EAUcenter];
-}
-
 @implementation NSWindow (EauLogging)
 
 + (void) load
@@ -231,10 +165,6 @@ static void EAUPlaceDialogWindow(NSWindow *window)
 
 - (void) eau_orderFront: (id)sender
 {
-  if (EAUShouldPositionDialog(self))
-    {
-      EAUPlaceDialogWindow(self);
-    }
   EAUWindowLog(@"orderFront", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_orderFront: sender];
@@ -242,10 +172,6 @@ static void EAUPlaceDialogWindow(NSWindow *window)
 
 - (void) eau_orderFrontRegardless
 {
-  if (EAUShouldPositionDialog(self))
-    {
-      EAUPlaceDialogWindow(self);
-    }
   EAUWindowLog(@"orderFrontRegardless", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_orderFrontRegardless];
@@ -253,10 +179,6 @@ static void EAUPlaceDialogWindow(NSWindow *window)
 
 - (void) eau_makeKeyAndOrderFront: (id)sender
 {
-  if (EAUShouldPositionDialog(self))
-    {
-      EAUPlaceDialogWindow(self);
-    }
   EAUWindowLog(@"makeKeyAndOrderFront", self);
   [EauGrowBoxView addToWindow:self];
   [self eau_makeKeyAndOrderFront: sender];
@@ -283,75 +205,45 @@ static void EAUPlaceDialogWindow(NSWindow *window)
 
 @end
 
-@implementation DefaultButtonAnimation
-
-@synthesize reverse;
-@synthesize defaultbuttoncell;
-
-- (void)setCurrentProgress:(NSAnimationProgress)progress
-{
-  [super setCurrentProgress: progress];
-  if(defaultbuttoncell)
-    {
-        // Check if the button cell is enabled before updating pulse progress
-        BOOL isEnabled = YES;
-        @try {
-            if ([defaultbuttoncell respondsToSelector:@selector(isEnabled)]) {
-              isEnabled = [defaultbuttoncell isEnabled];
-            }
-            
-            if (isEnabled) {
-              if(reverse)
-              {
-                defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 1.0 - progress];
-              }else{
-                defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: progress];
-              }
-              NSView *cv = [defaultbuttoncell controlView];
-              if (cv) {
-                  [cv setNeedsDisplay: YES];
-              }
-            } else {
-              // Button is disabled, stop the animation and reset pulse progress
-              NSDebugLog(@"DefaultButtonAnimation: Button cell is disabled, stopping animation");
-              defaultbuttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
-              NSView *cv = [defaultbuttoncell controlView];
-              if (cv) {
-                  [cv setNeedsDisplay: YES];
-              }
-              [self stopAnimation];
-              return;
-            }
-        } @catch (NSException *e) {
-            [self stopAnimation];
-            return;
-        }
-    }
-  if (defaultbuttoncell && progress >= 1.0)
-  {
-    reverse = !reverse;
-    NSDebugLog(@"DefaultButtonAnimation: Reversing direction and restarting animation");
-    if ([self isAnimating]) {
-        [self startAnimation];
-    }
-  }
-}
-@end
-
 @interface DefaultButtonAnimationController : NSObject <NSWindowDelegate>
 
 {
-  DefaultButtonAnimation * animation;
+  NSTimer * pulseTimer;
   __weak NSButtonCell * buttoncell;
 }
 
 @property (nonatomic, weak) NSButtonCell * buttoncell;
-@property (nonatomic, strong) NSAnimation * animation;
+
+- (void) startPulse;
+- (void) stopPulse;
+- (void) pulseTick;
 
 @end
+
+/* NSTimer retains its target.  The controller lives exactly as long as the
+ * window's association keeps it, so the timer must not keep it alive as well:
+ * this proxy holds the controller weakly and retires the timer once it is gone. */
+@interface EauPulseTicker : NSObject
+@property (nonatomic, weak) DefaultButtonAnimationController *controller;
+@end
+
+@implementation EauPulseTicker
+@synthesize controller;
+- (void) tick: (NSTimer *)timer
+{
+  DefaultButtonAnimationController *c = controller;
+
+  if (c == nil)
+    {
+      [timer invalidate];
+      return;
+    }
+  [c pulseTick];
+}
+@end
+
 @implementation DefaultButtonAnimationController
 @synthesize buttoncell;
-@synthesize animation;
 - (id) initWithButtonCell: (NSButtonCell*) cell
 {
   NSDebugLog(@"DefaultButtonAnimationController: initWithButtonCell called with cell %p", cell);
@@ -437,12 +329,8 @@ static void EAUPlaceDialogWindow(NSWindow *window)
   NSDebugLog(@"DefaultButtonAnimationController: dealloc called");
   
   @try {
-    // Stop animation and remove all notifications
-    if (animation) {
-      [animation setDelegate: nil];
-      [animation stopAnimation];
-      animation = nil;
-    }
+    // Stop the pulse and remove all notifications
+    [self stopPulse];
     
     // Use a local copy of buttoncell to avoid issues if it becomes nil during dealloc
     NSButtonCell *cell = buttoncell;
@@ -465,7 +353,6 @@ static void EAUPlaceDialogWindow(NSWindow *window)
       }
       
       @try {
-        [cell setPulseProgress: [NSNumber numberWithFloat: 0.0]];
         [cell setIsDefaultButton: [NSNumber numberWithBool: NO]];
       } @catch (id ex) {}
     }
@@ -476,50 +363,70 @@ static void EAUPlaceDialogWindow(NSWindow *window)
   buttoncell = nil;
 }
 
+/* The pulse colour is derived from the wall clock when the cell is drawn
+ * (-[Eau pulseColorInCell:]), so pulsing only needs the button to be redrawn
+ * regularly.  A plain repeating timer does that; it is also scheduled in the
+ * modal and event-tracking modes so the pulse keeps going inside alert panels
+ * and while the user holds the mouse down elsewhere. */
 - (void) startPulse
 {
   NSDebugLog(@"DefaultButtonAnimationController: startPulse called for cell %p", buttoncell);
-  [self startPulse: NO];
-}
-- (void) startPulse: (BOOL) reverse
-{
-  NSDebugLog(@"DefaultButtonAnimationController: startPulse:reverse called with reverse=%d for cell %p", reverse, buttoncell);
-  
+
+  if (pulseTimer != nil)
+    {
+      return;
+    }
+
   // Check if the button cell is enabled before starting animation
   BOOL isEnabled = YES;
   if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
     isEnabled = [buttoncell isEnabled];
   }
-  
+
   if (!isEnabled) {
     NSDebugLog(@"DefaultButtonAnimationController: Button cell is disabled, not starting animation");
     return;
   }
-  
-  animation = [[DefaultButtonAnimation alloc] initWithDuration:METRICS_PULSE_DURATION
-                                animationCurve:NSAnimationEaseInOut];
-  animation.reverse = reverse;
-  [animation addProgressMark: 1.0];
-  [animation setDelegate: self];
-  [animation setFrameRate:30.0];
-  [animation setAnimationBlockingMode:NSAnimationNonblocking];
-  animation.defaultbuttoncell = buttoncell;
-  
-  NSDebugLog(@"DefaultButtonAnimationController: Starting animation %p for cell %p", animation, buttoncell);
-  [animation startAnimation];
-  NSDebugLog(@"DefaultButtonAnimationController: Animation started for cell %p", buttoncell);
+
+  EauPulseTicker *ticker = [[EauPulseTicker alloc] init];
+  ticker.controller = self;
+  pulseTimer = [NSTimer timerWithTimeInterval: 1.0 / METRICS_PULSE_FRAME_RATE
+                                       target: ticker
+                                     selector: @selector(tick:)
+                                     userInfo: nil
+                                      repeats: YES];
+
+  NSRunLoop *loop = [NSRunLoop currentRunLoop];
+  [loop addTimer: pulseTimer forMode: NSDefaultRunLoopMode];
+  [loop addTimer: pulseTimer forMode: NSModalPanelRunLoopMode];
+  [loop addTimer: pulseTimer forMode: NSEventTrackingRunLoopMode];
 }
-- (void)animation:(NSAnimation *)a
-            didReachProgressMark:(NSAnimationProgress)progress
+
+- (void) stopPulse
 {
-  //[animation stopAnimation];
-  //[self startPulse: !animation.reverse];
+  [pulseTimer invalidate];
+  pulseTimer = nil;
+}
+
+- (void) pulseTick
+{
+  NSButtonCell *cell = buttoncell;
+
+  if (cell == nil)
+    {
+      [self stopPulse];
+      return;
+    }
+
+  /* -controlView stays nil until the cell's first draw; the first regular
+   * window display fills it in and the pulse picks up from there. */
+  [[cell controlView] setNeedsDisplay: YES];
 }
 
 - (void)windowDidResignKey:(NSNotification *)notification
 {
       NSDebugLog(@"DefaultButtonAnimationController: Window resigned key, stopping animation");
-      [animation stopAnimation];
+      [self stopPulse];
 }
 
 // TS: added this method
@@ -535,7 +442,7 @@ static void EAUPlaceDialogWindow(NSWindow *window)
         {
           if ([self shouldAnimationBeRunning]) {
               NSDebugLog(@"DefaultButtonAnimationController: Button's window became key and button is enabled, starting animation");
-              [animation startAnimation];
+              [self startPulse];
           } else {
               NSDebugLog(@"DefaultButtonAnimationController: Button's window became key but button is disabled, not starting animation");
           }
@@ -558,9 +465,7 @@ static void EAUPlaceDialogWindow(NSWindow *window)
     
     if (closingWindow == buttonWindow || closingWindow == nil) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window is closing, stopping animation");
-        if (animation) {
-            [animation stopAnimation];
-        }
+        [self stopPulse];
     }
 }
 
@@ -571,7 +476,7 @@ static void EAUPlaceDialogWindow(NSWindow *window)
     
     if (miniaturizedWindow == buttonWindow) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window was miniaturized, stopping animation");
-        [animation stopAnimation];
+        [self stopPulse];
     }
 }
 
@@ -582,21 +487,21 @@ static void EAUPlaceDialogWindow(NSWindow *window)
     
     if (deminiaturizedWindow == buttonWindow && [self shouldAnimationBeRunning]) {
         NSDebugLog(@"DefaultButtonAnimationController: Button's window was deminiaturized and button is enabled, starting animation");
-        [animation startAnimation];
+        [self startPulse];
     }
 }
 
 - (void)applicationDidHide:(NSNotification *)notification
 {
     NSDebugLog(@"DefaultButtonAnimationController: Application was hidden, stopping animation");
-    [animation stopAnimation];
+    [self stopPulse];
 }
 
 - (void)applicationDidUnhide:(NSNotification *)notification
 {
     if ([self shouldAnimationBeRunning]) {
         NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden and button is enabled and visible, starting animation");
-        [animation startAnimation];
+        [self startPulse];
     } else {
         NSDebugLog(@"DefaultButtonAnimationController: Application was unhidden but button is disabled or window not visible, not starting animation");
     }
@@ -638,22 +543,21 @@ static void EAUPlaceDialogWindow(NSWindow *window)
     if ([keyPath isEqualToString:@"enabled"]) {
         NSDebugLog(@"DefaultButtonAnimationController: Button enabled state changed, checking animation state");
         
-        // Immediately reset pulse progress if button becomes disabled
+        // Redraw once so a freshly disabled button drops the pulse colour
         if ([buttoncell respondsToSelector:@selector(isEnabled)] && ![buttoncell isEnabled]) {
-            NSDebugLog(@"DefaultButtonAnimationController: Button disabled - immediately resetting pulse progress");
-            buttoncell.pulseProgress = [NSNumber numberWithFloat: 0.0];
+            NSDebugLog(@"DefaultButtonAnimationController: Button disabled - redrawing without pulse");
             [[buttoncell controlView] setNeedsDisplay: YES];
         }
         
         if ([self shouldAnimationBeRunning]) {
-            if (![animation isAnimating]) {
+            if (pulseTimer == nil) {
                 NSDebugLog(@"DefaultButtonAnimationController: Button became enabled and visible, starting animation");
                 [self startPulse];
             }
         } else {
-            if ([animation isAnimating]) {
+            if (pulseTimer != nil) {
                 NSDebugLog(@"DefaultButtonAnimationController: Button became disabled or invisible, stopping animation");
-                [animation stopAnimation];
+                [self stopPulse];
             }
         }
     }
@@ -663,7 +567,7 @@ static void EAUPlaceDialogWindow(NSWindow *window)
 // TS: forward dec
 @interface NSWindow(EauTheme)
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell;
-- (void) EAUcenter;
+- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell;
 @end
 
 @implementation Eau(NSWindow)
@@ -766,18 +670,36 @@ static void EAUPlaceDialogWindow(NSWindow *window)
   [xself EAUsetDefaultButtonCell:aCell];
 }
 
-// Override the center method to position windows using golden ratio
-- (void) _overrideNSWindowMethod_center {
-  NSDebugLog(@"_overrideNSWindowMethod_center: Positioning window with golden ratio");
-  NSWindow *xself = (NSWindow*)self;
-  [xself EAUcenter];
-}
-
 @end
 
 @implementation NSWindow(EauTheme)
 
 static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonControllerKey;
+static const void *kEAUDefaultButtonInstallingKey = &kEAUDefaultButtonInstallingKey;
+
+/* NSWindow keeps its delegate as a plain unretained reference, so the animation
+ * controller has to be unhooked from the window *before* the association drops
+ * the last reference to it.  Releasing it first leaves -delegate handing out a
+ * freed object, which ARC then tries to retain. */
+static void EAUReleaseDefaultButtonController(NSWindow *window)
+{
+  id controller = objc_getAssociatedObject(window, kEAUDefaultButtonControllerKey);
+
+  if (controller == nil)
+    {
+      return;
+    }
+
+  if ([window delegate] == controller)
+    {
+      [window setDelegate: nil];
+    }
+
+  objc_setAssociatedObject(window,
+                           kEAUDefaultButtonControllerKey,
+                           nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
 
 /* EAUsetDefaultButtonCell:
  * 
@@ -818,22 +740,44 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 - (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell
 {
   NSDebugLog(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p for window %p", aCell, self);
-  
-  _defaultButtonCell = aCell;
-  
-  // Clear any existing animation controller first
-  id oldController = objc_getAssociatedObject(self, kEAUDefaultButtonControllerKey);
-  if (oldController) {
-    if ([self delegate] == oldController) {
-      [self setDelegate: nil];
+
+  /* -setKeyEquivalent: below travels through GSTheme into the button and
+   * button cell categories, which may hand this very cell to this window
+   * again.  Letting that re-entry run would install a second controller for
+   * the same cell and tear the first one down again as soon as the outer call
+   * resumed. */
+  if (aCell != nil
+      && objc_getAssociatedObject(self, kEAUDefaultButtonInstallingKey) == aCell)
+    {
+      NSDebugLog(@"NSWindow+Eau: Ignoring re-entrant setDefaultButtonCell: for cell %p", aCell);
+      return;
     }
-    objc_setAssociatedObject(self, kEAUDefaultButtonControllerKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-  }
+
+  _defaultButtonCell = aCell;
+
+  EAUReleaseDefaultButtonController(self);
 
   if (aCell == nil) {
     return;
   }
 
+  objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, aCell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+
+  @try
+    {
+      [self EAUinstallDefaultButtonCell: aCell];
+    }
+  @finally
+    {
+      objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+}
+
+/* Everything that actually wires the cell up as the window's default button.
+ * Split out so the re-entrancy marker set by -EAUsetDefaultButtonCell: is
+ * cleared again even if any of this raises. */
+- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell
+{
   [self enableKeyEquivalentForDefaultButtonCell];
 
   [aCell setKeyEquivalent: @"\r"];
@@ -895,62 +839,6 @@ static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonController
 
 - (void) animateDefaultButton: (id)sender
 {
-}
-
-// Golden ratio positioning method
-- (void) EAUcenter
-{
-  NSDebugLog(@"NSWindow+Eau: EAUcenter called - applying golden ratio positioning");
-  
-  NSScreen *screen = [self screen];
-  if (!screen) {
-    screen = [NSScreen mainScreen];
-  }
-  
-  if (!screen) {
-    NSDebugLog(@"NSWindow+Eau: No screen available, using standard center");
-    [self center];
-    return;
-  }
-  
-  NSRect screenFrame = [screen visibleFrame];
-  NSRect windowFrame = [self frame];
-  
-  NSDebugLog(@"NSWindow+Eau: Screen frame: %@", NSStringFromRect(screenFrame));
-  NSDebugLog(@"NSWindow+Eau: Window frame: %@", NSStringFromRect(windowFrame));
-  
-  // Golden ratio ≈ 1.618, inverse ≈ 0.618
-  // Position the window vertically at the golden ratio point
-  const CGFloat goldenRatio = 1.618033988749;
-  const CGFloat goldenRatioInverse = 1.0 / goldenRatio; // ≈ 0.618
-  
-  // Calculate horizontal center (keep this centered)
-  CGFloat x = screenFrame.origin.x + (screenFrame.size.width - windowFrame.size.width) / 2.0;
-  
-  // Calculate vertical position using golden ratio
-  // Position the window so that the ratio of space above to space below follows golden ratio
-  // This places the window slightly above center, which is more visually pleasing
-  CGFloat availableHeight = screenFrame.size.height - windowFrame.size.height;
-  CGFloat y = screenFrame.origin.y + availableHeight * goldenRatioInverse;
-  
-  // Ensure the window stays within screen bounds
-  if (x < screenFrame.origin.x) {
-    x = screenFrame.origin.x;
-  } else if (x + windowFrame.size.width > screenFrame.origin.x + screenFrame.size.width) {
-    x = screenFrame.origin.x + screenFrame.size.width - windowFrame.size.width;
-  }
-  
-  if (y < screenFrame.origin.y) {
-    y = screenFrame.origin.y;
-  } else if (y + windowFrame.size.height > screenFrame.origin.y + screenFrame.size.height) {
-    y = screenFrame.origin.y + screenFrame.size.height - windowFrame.size.height;
-  }
-  
-  NSRect newFrame = NSMakeRect(x, y, windowFrame.size.width, windowFrame.size.height);
-  
-  NSDebugLog(@"NSWindow+Eau: New window frame with golden ratio: %@", NSStringFromRect(newFrame));
-  
-  [self setFrame:newFrame display:YES];
 }
 
 @end

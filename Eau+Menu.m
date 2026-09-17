@@ -1,6 +1,19 @@
 #import "Eau.h"
 #include <AppKit/AppKit.h>
 #import <Foundation/NSUserDefaults.h>
+#import "AppearanceMetrics.h"
+
+/* A menu row has to cover a whole number of device pixels.  At a fractional
+   scale factor a row of 22 points starts between pixels, so neighbouring
+   items leave a seam between them and their edges blur. */
+static CGFloat EauWholeDevicePixels(CGFloat points)
+{
+  CGFloat scale = GSWScaleFactor();
+
+  if (scale <= 0.0)
+    return points;
+  return floor(points * scale + 0.5) / scale;
+}
 @interface Eau(EauMenu)
 
 @end
@@ -32,16 +45,20 @@
 }
 - (CGFloat) menuBarHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return EauWholeDevicePixels(22); // Menus and menu items shall be 22px high
 }
 
 - (CGFloat) menuItemHeight
 {
-  return 22; // Menus and menu items shall be 22px high
+  return EauWholeDevicePixels(22); // Menus and menu items shall be 22px high
 }
+
+/* Maximum size for the icon shown in front of a menu item (the image column,
+   used for application and preference-pane icons).  Icons are scaled down to
+   fit this box, never up, so a large app bundle icon renders small. */
 - (CGFloat) menuSeparatorHeight
 {
-  return 1.0;
+  return EauWholeDevicePixels(1.0);
 }
 
 - (BOOL) menuShouldShowIcon
@@ -67,6 +84,42 @@
 - (CGFloat) menuItemRightBorderOffset
 {
   return EAU_MENU_ITEM_PADDING / 2.0;
+}
+
+// Draw title for menu item cell. When the menu item has an image and
+// an empty title, draws the image centered in the title rect.
+- (void) drawTitleForMenuItemCell: (NSMenuItemCell *)cell
+                        withFrame: (NSRect)cellFrame
+                           inView: (NSView *)controlView
+                            state: (GSThemeControlState)state
+                     isHorizontal: (BOOL)isHorizontal
+{
+  NSMenuItem *item = [cell menuItem];
+  NSImage *image = [item image];
+  NSString *title = [item title];
+  if (image && (!title || [title length] == 0))
+    {
+      NSRect titleRect = [cell titleRectForBounds: cellFrame];
+      NSSize imgSize = [image size];
+      CGFloat scale = MIN(titleRect.size.width / imgSize.width,
+                          titleRect.size.height / imgSize.height);
+      if (scale > 1.0) scale = 1.0;
+      NSSize drawSize = NSMakeSize(imgSize.width * scale,
+                                   imgSize.height * scale);
+      NSPoint drawPoint = NSMakePoint(NSMidX(titleRect) - drawSize.width / 2,
+                                      NSMidY(titleRect) - drawSize.height / 2);
+      [image drawInRect: NSMakeRect(drawPoint.x, drawPoint.y,
+                                    drawSize.width, drawSize.height)
+               fromRect: NSZeroRect
+              operation: NSCompositeSourceOver
+               fraction: 1.0];
+      return;
+    }
+  [super drawTitleForMenuItemCell: cell
+                       withFrame: cellFrame
+                          inView: controlView
+                           state: state
+                    isHorizontal: isHorizontal];
 }
 
 - (void) drawMenuRect: (NSRect)rect
@@ -203,13 +256,16 @@
   // Draw a thin 1px separator line in light grey
   NSColor *separatorColor = [NSColor colorWithCalibratedRed: 0.8 green: 0.8 blue: 0.8 alpha: 1.0];
   [separatorColor set];
-  
-  // Draw a single pixel line in the middle of the cell frame
-  CGFloat y = cellFrame.origin.y + cellFrame.size.height / 2.0;
-  NSBezierPath *path = [NSBezierPath bezierPath];
-  [path setLineWidth: 1.0];
-  [path moveToPoint: NSMakePoint(cellFrame.origin.x + [self menuSeparatorInset], y)];
-  [path lineToPoint: NSMakePoint(cellFrame.origin.x + cellFrame.size.width - [self menuSeparatorInset], y)];
-  [path stroke];
+
+  /* Fill exactly one device pixel on the pixel grid.  A stroked line of one
+     point covers a fractional number of pixels at scale factors above 1 and
+     lands between them, so separators came out looking differently thick. */
+  CGFloat scale = GSWScaleFactor();
+  CGFloat onePixel = 1.0 / scale;
+  CGFloat inset = [self menuSeparatorInset];
+  CGFloat y = floor(NSMidY(cellFrame) * scale) / scale;
+
+  NSRectFill(NSMakeRect(cellFrame.origin.x + inset, y,
+                        cellFrame.size.width - 2.0 * inset, onePixel));
 }
 @end

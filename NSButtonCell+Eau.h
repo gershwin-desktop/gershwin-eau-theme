@@ -12,5 +12,4 @@
 - (BOOL) isProcessingReturnButton;
 - (void) setIsProcessingReturnButton:(BOOL)processing;
 - (void) safelyMakeButtonSelectedAndHighlighted;
-- (void) EauPulseTick:(NSTimer *)timer;
 @end

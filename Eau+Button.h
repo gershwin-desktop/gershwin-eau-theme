@@ -1,5 +1,4 @@
 #import "Eau.h"
-#include <AppKit/NSAnimation.h>
 
 @interface Eau(EauButton)
 {
@@ -10,5 +9,4 @@
 
 @interface NSButtonCell(EauDefaultButtonAnimation)
   @property (nonatomic, copy) NSNumber* isDefaultButton;
-  @property (nonatomic, copy) NSNumber* pulseProgress;
 @end
