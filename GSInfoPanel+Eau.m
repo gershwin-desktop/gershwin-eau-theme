@@ -712,10 +712,10 @@ static char kEauAppNameKey;
                  + gap + themeH
                  + margin;
 
-  // Resize the window
-  NSRect wf = [result frame];
-  [result setFrame: NSMakeRect(wf.origin.x, wf.origin.y, totalW, totalH)
-           display: NO];
+  /* The layout is in points; the window frame is in device pixels and
+   * includes the decorations, so size via the content rect to stay correct
+   * at GSScaleFactor != 1. */
+  [result setContentSize: NSMakeSize(totalW, totalH)];
 
   // ---- 4. Layout views centered vertically ----
   CGFloat cx = totalW / 2.0;
@@ -830,14 +830,14 @@ static char kEauAppNameKey;
     [cv addSubview: themeLabel];
   }
 
-  // GitHub ribbon, 1:1 and flush into the left edge below the in-window
-  // titlebar (Eau draws its decorations inside the content view); added
-  // last so it draws over the icon and name rather than being clipped.
+  // GitHub ribbon, flush into the top-left corner of the content view (the
+  // titlebar lies outside it); added last so it draws over the icon and
+  // name rather than being clipped.
   if (ribbonButton)
     {
       NSRect f = [ribbonButton frame];
       f.origin.x = 0.0;
-      f.origin.y = totalH - NSHeight(f) - METRICS_TITLEBAR_HEIGHT;
+      f.origin.y = totalH - NSHeight(f);
       [ribbonButton setFrame: f];
       [cv addSubview: ribbonButton];
     }
