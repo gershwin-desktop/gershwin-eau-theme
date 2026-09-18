@@ -12,19 +12,25 @@
 
 + (void) load
 {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class searchCls = [NSSearchField class];
-    SEL keySel = @selector(keyDown:);
-    Method km = class_getInstanceMethod(searchCls, keySel);
-    if (km)
-      {
-        SEL swizSel = @selector(eau_keyDown:);
-        Method swizm = class_getInstanceMethod(searchCls, swizSel);
-        if (swizm)
-          method_exchangeImplementations(km, swizm);
-      }
-  });
+  Class searchCls = [NSSearchField class];
+  SEL keySel = @selector(keyDown:);
+  Method swizm = class_getInstanceMethod(searchCls, @selector(eau_keyDown:));
+  Method km = class_getInstanceMethod(searchCls, keySel);
+
+  if (km == NULL || swizm == NULL)
+    return;
+  /* NSSearchField inherits keyDown: from NSResponder.  Exchanging that
+     inherited method would patch NSResponder for every class: a subclass that
+     calls [super keyDown:] (NSButton does) lands in eau_keyDown:, whose
+     [self eau_keyDown:] then dispatches to that subclass's own eau_keyDown:
+     and recurses until the stack overflows.  Give NSSearchField its own
+     keyDown: so only search fields are affected. */
+  if (class_addMethod(searchCls, keySel, method_getImplementation(swizm),
+                      method_getTypeEncoding(swizm)))
+    class_replaceMethod(searchCls, @selector(eau_keyDown:),
+                        method_getImplementation(km), method_getTypeEncoding(km));
+  else
+    method_exchangeImplementations(km, swizm);
 }
 
 - (void) eau_clearSearch
