@@ -30,6 +30,15 @@
                          inView: (NSView*)controlView;
 @end
 
+/* Implemented in libs-gui's NSCell.m */
+@interface NSCell (EauTruncation)
+- (BOOL) _shouldShortenStringForRect: (NSRect)titleRect
+                                size: (NSSize)titleSize
+                              length: (NSUInteger)length;
+- (NSAttributedString*) _resizeAttributedString: (NSAttributedString*)attrstring
+                                         forRect: (NSRect)titleRect;
+@end
+
 @implementation Eau(NSTextFieldCell)
 - (void) _overrideNSTextFieldCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
   NSDebugLog(@"_overrideNSTextFieldCellMethod_drawInteriorWithFrame:inView:");
@@ -123,7 +132,17 @@
          well).*/ 
       _cell.type = NSTextCellType;
       titleRect = [self titleRectForBounds: cellFrame];
-      [[self _drawAttributedString] drawInRect: titleRect];
+      NSAttributedString *text = [self _drawAttributedString];
+      /* Honour the truncating line break modes like NSCell does: text too
+       * long for the field is shortened with an ellipsis at the head, in
+       * the middle or at the tail, instead of being clipped. */
+      if ([self _shouldShortenStringForRect: titleRect
+                                       size: [text size]
+                                     length: [text length]])
+        {
+          text = [self _resizeAttributedString: text forRect: titleRect];
+        }
+      [text drawInRect: titleRect];
 
     }
 /*_cell.type = NSTextCellType;
