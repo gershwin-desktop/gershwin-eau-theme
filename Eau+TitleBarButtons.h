@@ -10,6 +10,15 @@ BOOL EauTitleBarButtonStyleIsOrb(void);
 
 @interface Eau (TitleBarButtons)
 
+// The contract the window manager asks a theme by (see THEMING.md in
+// gershwin-windowmanager): Eau lays out and draws its own titlebar buttons
+// when it is set to the orb style, and leaves them to the window manager
+// otherwise.
+- (BOOL)drawsTitlebarButtons;
+- (NSRect)titlebarButtonRectForButton:(NSInteger)button
+                        titlebarWidth:(CGFloat)width
+                            styleMask:(NSUInteger)styleMask;
+
 // Geometry queries for window manager
 - (CGFloat)titlebarHeight;
 - (NSRect)closeButtonRectForTitlebarWidth:(CGFloat)width;
