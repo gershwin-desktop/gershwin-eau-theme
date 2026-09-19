@@ -8,27 +8,6 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 
 @implementation EauGrowBoxView
 
-// Bottom-right corner of the content view, raised above a window edge that
-// does not reach the corner
-+ (NSRect)frameForSize:(CGFloat)size inContentView:(NSView *)contentView
-{
-  NSRect contentBounds = [contentView bounds];
-  NSWindow *window = [contentView window];
-  CGFloat inset = 0;
-
-  if ([window respondsToSelector:@selector(resizeIndicatorBottomInset)])
-    {
-      inset = [window resizeIndicatorBottomInset];
-    }
-
-  // Non-flipped: y=0 is bottom; flipped: y=0 is top
-  CGFloat yPos = [contentView isFlipped]
-    ? contentBounds.size.height - size - inset
-    : inset;
-
-  return NSMakeRect(contentBounds.size.width - size, yPos, size, size);
-}
-
 - (instancetype)initWithFrame:(NSRect)frameRect
 {
   self = [super initWithFrame:frameRect];
@@ -85,9 +64,27 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
   if (changedView == [self superview])
     {
       NSView *contentView = [self superview];
+      NSRect contentBounds = [contentView bounds];
       CGFloat size = [self frame].size.width;
 
-      [self setFrame:[EauGrowBoxView frameForSize:size inContentView:contentView]];
+      CGFloat yPos;
+      if ([contentView isFlipped])
+        {
+          yPos = contentBounds.size.height - size;
+        }
+      else
+        {
+          yPos = 0;
+        }
+
+      NSRect newFrame = NSMakeRect(
+        contentBounds.size.width - size,
+        yPos,
+        size,
+        size
+      );
+
+      [self setFrame:newFrame];
       [self setNeedsDisplay:YES];
     }
 }
@@ -153,7 +150,28 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
   // (NSScroller scrollerWidth queries theme, causing issues during GSThemeDidActivateNotification)
   CGFloat size = METRICS_GROW_BOX_SIZE;
 
-  NSRect growBoxFrame = [EauGrowBoxView frameForSize:size inContentView:contentView];
+  // Calculate position in bottom-right corner
+  // Handle both flipped and non-flipped content views
+  NSRect contentBounds = [contentView bounds];
+  CGFloat yPos;
+
+  if ([contentView isFlipped])
+    {
+      // Flipped: y=0 is top, so bottom is at height - size
+      yPos = contentBounds.size.height - size;
+    }
+  else
+    {
+      // Non-flipped: y=0 is bottom
+      yPos = 0;
+    }
+
+  NSRect growBoxFrame = NSMakeRect(
+    contentBounds.size.width - size,
+    yPos,
+    size,
+    size
+  );
 
   EauGrowBoxView *growBox = [[EauGrowBoxView alloc] initWithFrame:growBoxFrame];
 
