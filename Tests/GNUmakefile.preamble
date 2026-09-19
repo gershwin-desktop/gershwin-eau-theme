@@ -15,3 +15,6 @@ t_EauFontSubstitution_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
 
 t_ButtonSpaceKey_TOOL_LIBS += -lgnustep-gui -lgnustep-base
+
+# The theme under test is loaded at run time with -GSTheme.
+t_ProgressStripes_TOOL_LIBS += -lgnustep-gui -lgnustep-base

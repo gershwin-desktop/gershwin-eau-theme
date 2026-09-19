@@ -111,10 +111,52 @@ static NSImage *spinningImages[MaxCount];
     }
 }
 
+/* The indeterminate images are one stripe pattern, each shifted this many
+ * pixels further left than the previous one. */
+#define EAU_INDETERMINATE_STRIPE_STEP 8.0
+
 - (void) drawProgressIndicator: (NSProgressIndicator*)progress
                     withBounds: (NSRect)bounds
                       withClip: (NSRect)rect
                        atCount: (int)count
+                      forValue: (double)val
+{
+  if (fillColour == nil)
+    {
+      [self initProgressIndicatorDrawing];
+    }
+  /* Callers that only have a frame count step through the images as
+   * before. */
+  CGFloat offset = indeterminateMaxCount != 0
+    ? (count % indeterminateMaxCount) * EAU_INDETERMINATE_STRIPE_STEP
+    : 0.0;
+  [self drawProgressIndicator: progress
+                   withBounds: bounds
+                     withClip: rect
+                      atCount: count
+                 stripeOffset: offset
+                     forValue: val];
+}
+
+/* Six images give only six stripe positions per 48 px, so a bar redrawn at
+ * a steady frame rate still visibly jumps.  Sliding the first image by a
+ * continuous offset keeps the look and moves the stripes smoothly. */
+- (void) drawIndeterminateStripesInRect: (NSRect)r offset: (CGFloat)offset
+{
+  NSGraphicsContext *ctxt = [NSGraphicsContext currentContext];
+  NSPoint oldPhase = [ctxt patternPhase];
+
+  [ctxt setPatternPhase: NSMakePoint(-offset, 0.0)];
+  [indeterminateColors[0] set];
+  NSRectFill(r);
+  [ctxt setPatternPhase: oldPhase];
+}
+
+- (void) drawProgressIndicator: (NSProgressIndicator*)progress
+                    withBounds: (NSRect)bounds
+                      withClip: (NSRect)rect
+                       atCount: (int)count
+                  stripeOffset: (CGFloat)stripeOffset
                       forValue: (double)val
 {
   NSRect r;
@@ -154,9 +196,7 @@ static NSImage *spinningImages[MaxCount];
          {
 	   if (indeterminateMaxCount != 0)
 	     {
-	       count = count % indeterminateMaxCount;
-	       [indeterminateColors[count] set];
-	       NSRectFill(r);
+	       [self drawIndeterminateStripesInRect: r offset: stripeOffset];
 	     }
          }
        else
