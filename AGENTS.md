@@ -22,13 +22,14 @@ Eau: default Aqua-style theme bundle for the Gershwin Desktop. It is a GNUstep t
 - Menu bar is served by a separate Menu.app over Distributed Objects: Eau registers a menu client (`NSConnection`, name `MenuClient.<pid>`) and connects to `org.gnustep.Gershwin.MenuServer`. When Menu.app is available the in-app menu bar is hidden (`modifyRect:forMenu:isHorizontal:` returns `NSZeroRect`). Menu code must assume this split; `EauMenuRelaunchManager.m` / `EauMenuScrollManager.m` support it.
 - Default cell behaviors are set by swizzling `init`/`initWithCoder:` (e.g. `NSTextFieldCell` forces `bezeled:NO`). When changing a default, keep the same per-instance pattern.
 - Sizing/spacing constants for ASD controls live in `AppearanceMetrics.h` (spacing, orbs, margins, etc.) - reuse these rather than hardcoding.
+- `EauAlertPanel` (`NSAlert+Eau.m`) handles Return, Escape and Cmd-C itself in `-sendEvent:` and `-performKeyEquivalent:`, which run before the focused control sees the key. Never add keys there that belong to the focused control (Space once went to the default button that way); let them reach the first responder, and let the panel's `-keyDown:` handle only what no control consumed.
 
 ## Conventions
 - Sources are not ASCII-only: Unicode menu-key symbols (`⌃⌥⌘⇧`) in `Eau.m` are intentional. Use a plain hyphen `-`, never an em dash, in new code and comments. Put WHY in comments, not WHAT.
 - Format per `.clang-format` (2-space indent, Stroustrup braces, 100 columns).
 
 ## Verification
-- No test framework. Only manual tools under `Test/` (`alerttest`, `dialogtest`, `guiDrawing` GORM sample) linking `-lgnustep-gui`. Real verification is running the installed theme against system apps (e.g. `/System/Applications/LoginWindow.app`), not hand-written smoke tests.
+- ObjectTesting tools under `Tests/` (`gmake` there, run `./obj/t_*`; `t_ButtonSpaceKey` needs an X display and `-GSTheme <abs path>/Eau.theme`). Manual tools under `Test/` (`alerttest`, `dialogtest`, `guiDrawing` GORM sample) linking `-lgnustep-gui`. Real verification is running the installed theme against system apps (e.g. `/System/Applications/LoginWindow.app`), not hand-written smoke tests.
 - Before finishing: clean build with no warnings, then review `git diff`.
 
 ## Git
