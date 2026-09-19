@@ -324,6 +324,41 @@ static void eauAlertSetStopping(id panel, BOOL val)
     return button;
 }
 
+/* Scrolling copies the visible text by the scroll distance, and only a text
+ * area whose edges sit on whole device pixels gets a whole-pixel copy; at a
+ * fractional edge cairo resamples the text on every scroll step and it
+ * blurs a little more each time.  Whole points are not enough: at a scale
+ * factor such as 1.1 a point is not a whole number of pixels.  So the text
+ * area is moved inward onto device pixels by shifting the scroll view. */
+static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
+                                           NSView *content)
+{
+    NSRect frame = [scroll frame];
+
+    /* Where the text area really lands: the border and the scroller are
+       laid out by the scroll view itself. */
+    NSClipView *clip = [scroll contentView];
+    NSRect device = [clip convertRect: [clip bounds] toView: nil];
+    NSRect snapped;
+    snapped.origin.x = ceil(device.origin.x);
+    snapped.origin.y = ceil(device.origin.y);
+    snapped.size.width = floor(NSMaxX(device)) - snapped.origin.x;
+    snapped.size.height = floor(NSMaxY(device)) - snapped.origin.y;
+
+    /* Device pixels per point; convertSize: would drop the sign of a
+       shrink, so the differences are divided by it instead. */
+    NSSize scale = [content convertSize: NSMakeSize(1.0, 1.0) toView: nil];
+    NSSize move = NSMakeSize((snapped.origin.x - device.origin.x) / scale.width,
+                             (snapped.origin.y - device.origin.y) / scale.height);
+    NSSize grow = NSMakeSize((snapped.size.width - device.size.width) / scale.width,
+                             (snapped.size.height - device.size.height) / scale.height);
+    frame.origin.x += move.width;
+    frame.origin.y += move.height;
+    frame.size.width += grow.width;
+    frame.size.height += grow.height;
+    [scroll setFrame: frame];
+}
+
 - (void) sizePanelToFit
 {
     // NSLog(@"Eau: sizePanelToFit called");
@@ -518,12 +553,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
             NSRect srect;
             float width;
             
-            /* The title height is measured text, so snap the text area's
-               edges to whole pixels as well (see the window size above). */
             srect.origin.x = METRICS_TEXT_LEFT;
-            srect.origin.y = ceil(buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN);
+            srect.origin.y = buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN;
             srect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-            srect.size.height = floor(currentY - METRICS_TITLE_MESSAGE_GAP) - srect.origin.y;
+            srect.size.height = currentY - METRICS_TITLE_MESSAGE_GAP - srect.origin.y;
             [scroll setFrame: srect];
             
             if (!useControl(scroll))
@@ -551,6 +584,9 @@ static void eauAlertSetStopping(id panel, BOOL val)
                  options: NSStringDrawingUsesLineFragmentOrigin].size.height;
             [messageField setFrame: mrect];
             [scroll setDocumentView: messageField];
+            /* After the document is in: attaching it lays the scroll view
+               out again. */
+            eauSnapScrollTextToDevicePixels(scroll, content);
         }
         else
         {
@@ -779,28 +815,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
         return;
     }
     
-    // Handle Spacebar to activate focused button
+    // A focused button clicks itself on Space before the event gets here, so
+    // Space only reaches the panel when no button has the keyboard focus.
     if (keyChar == ' ')
     {
-        NSView *current = (NSView *)[self firstResponder];
-        if (current == defButton && useControl(defButton))
+        if (useControl(defButton))
         {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-        }
-        else if (current == altButton && useControl(altButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking alternate button");
-            [self buttonAction: altButton];
-        }
-        else if (current == othButton && useControl(othButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking other button");
-            [self buttonAction: othButton];
-        }
-        else if (useControl(defButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
             [self buttonAction: defButton];
         }
         return;
@@ -985,14 +1005,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             return YES;
         }
 
-        // Handle Spacebar for default button
-        if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
-        {
-            // NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-            return YES;
-        }
-
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
@@ -1035,14 +1047,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             if (keyChar == '\r' && useControl(defButton))
             {
                 // NSLog(@"Eau: sendEvent Enter pressed, clicking default button");
-                [self buttonAction: defButton];
-                return;  // Don't call super - we handled it
-            }
-            
-            // Handle Spacebar for default button
-            if (keyChar == ' ' && useControl(defButton))
-            {
-                // NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
                 [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
