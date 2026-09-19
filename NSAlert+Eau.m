@@ -779,28 +779,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
         return;
     }
     
-    // Handle Spacebar to activate focused button
+    // A focused button clicks itself on Space before the event gets here, so
+    // Space only reaches the panel when no button has the keyboard focus.
     if (keyChar == ' ')
     {
-        NSView *current = (NSView *)[self firstResponder];
-        if (current == defButton && useControl(defButton))
+        if (useControl(defButton))
         {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-        }
-        else if (current == altButton && useControl(altButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking alternate button");
-            [self buttonAction: altButton];
-        }
-        else if (current == othButton && useControl(othButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking other button");
-            [self buttonAction: othButton];
-        }
-        else if (useControl(defButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
             [self buttonAction: defButton];
         }
         return;
@@ -985,14 +969,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             return YES;
         }
 
-        // Handle Spacebar for default button
-        if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
-        {
-            // NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-            return YES;
-        }
-
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
@@ -1035,14 +1011,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             if (keyChar == '\r' && useControl(defButton))
             {
                 // NSLog(@"Eau: sendEvent Enter pressed, clicking default button");
-                [self buttonAction: defButton];
-                return;  // Don't call super - we handled it
-            }
-            
-            // Handle Spacebar for default button
-            if (keyChar == ' ' && useControl(defButton))
-            {
-                // NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
                 [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }

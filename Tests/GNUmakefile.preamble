@@ -9,3 +9,5 @@ t_EauMenuWindowFilter_OBJC_FILES += ../EauMenuWindowFilter.m
 t_EauMenuWindowFilter_TOOL_LIBS += -lX11
 
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+
+t_ButtonSpaceKey_TOOL_LIBS += -lgnustep-gui -lgnustep-base
