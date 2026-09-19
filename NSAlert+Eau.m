@@ -377,6 +377,7 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     BOOL couldNeedScroll;
     NSUInteger mask = [self styleMask];
     float textAreaWidth;
+    float buttonRowWidth;
     float titleHeight = 0.0;
     float messageHeight = 0.0;
     
@@ -389,23 +390,6 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     ssize = bounds.size;
     ssize.width = METRICS_SIZE_SCALE * ssize.width;
     ssize.height = METRICS_SIZE_SCALE_HEIGHT * ssize.height;
-    
-    // Start with minimum width
-    wsize.width = METRICS_WIN_MIN_WIDTH;
-    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-    
-    // Calculate title size
-    if (useControl(titleField))
-    {
-        NSRect rect = [titleField frame];
-        // Constrain title to available width and let it wrap if needed
-        NSSize titleSize = [[titleField attributedStringValue]
-                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
-                            options: NSStringDrawingUsesLineFragmentOrigin].size;
-        titleHeight = titleSize.height;
-        rect.size = titleSize;
-        [titleField setFrame: rect];
-    }
     
     // Count buttons and calculate button area size
     bsize.width = METRICS_BUTTON_MIN_WIDTH;
@@ -426,6 +410,38 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
                 bsize.height = rect.size.height;
             numberOfButtons++;
         }
+    }
+    
+    /* Every button is drawn as wide as the widest one, so the row only fits if
+       the panel is at least as wide as the whole row plus its side margins.
+       Measure it before the text, so the text wraps to the final width. */
+    buttonRowWidth = 0.0;
+    if (numberOfButtons > 0)
+    {
+        /* Rounded up: the panel width is floored to whole pixels further
+           down, and half a pixel less already clips the leftmost button. */
+        buttonRowWidth = ceil(2 * METRICS_CONTENT_SIDE_MARGIN
+            + numberOfButtons * bsize.width
+            + (numberOfButtons - 1) * METRICS_BUTTON_VERT_INTERSPACE);
+    }
+
+    // Start with minimum width, widened to whatever the buttons need
+    wsize.width = METRICS_WIN_MIN_WIDTH;
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
+    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
+    
+    // Calculate title size
+    if (useControl(titleField))
+    {
+        NSRect rect = [titleField frame];
+        // Constrain title to available width and let it wrap if needed
+        NSSize titleSize = [[titleField attributedStringValue]
+                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
+                            options: NSStringDrawingUsesLineFragmentOrigin].size;
+        titleHeight = titleSize.height;
+        rect.size = titleSize;
+        [titleField setFrame: rect];
     }
     
     // Message field sizing with word wrap
@@ -482,8 +498,11 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     
     if (ssize.width < wsize.width)
         wsize.width = ssize.width;
-    else if (wsize.width < METRICS_WIN_MIN_WIDTH)
+    if (wsize.width < METRICS_WIN_MIN_WIDTH)
         wsize.width = METRICS_WIN_MIN_WIDTH;
+    /* The share-of-screen cap must never cut a button off. */
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
 
     /* Whole pixels only (the height cap is a fraction of the screen):
        scrolling copies the visible text, and at a fractional offset cairo
@@ -1626,6 +1645,16 @@ static void setKeyEquivalent(NSButton *button)
         // CRITICAL: Make the alert window key so it receives keyboard input immediately.
         // Without this, the alert appears but doesn't have focus - user must click it.
         NSDebugLog(@"NSAlert+Eau: Activating app and making alert window key for immediate input");
+        /* Lay the panel out and place it BEFORE it is first shown.  Resizing
+           or moving a panel that is already on screen leaves its pre-layout
+           picture behind on the composited screen (a ghost in the corner with
+           title and message on top of each other), because the area it
+           vacates is never damaged. */
+        if ([window isKindOfClass: [EauAlertPanel class]])
+        {
+            [(EauAlertPanel *)window sizePanelToFit];
+            [window center];
+        }
         [NSApp activateIgnoringOtherApps: YES];
         [window makeKeyAndOrderFront: nil];
         NSDebugLog(@"NSAlert+Eau: Alert window is now key: %d", [window isKeyWindow]);
