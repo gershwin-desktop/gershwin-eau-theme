@@ -22,3 +22,8 @@ t_MenuOverflowScale_OBJC_FILES += ../EauMenuScrollManager.m
 t_MenuOverflowScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 # Like the theme, the scroll manager is built with ARC
 ../EauMenuScrollManager.m_FILE_FLAGS += -fobjc-arc
+t_GrowBoxInset_OBJC_FILES += ../EauGrowBoxView.m ../EauGrowBoxCell.m
+t_GrowBoxInset_TOOL_LIBS += -lgnustep-gui -lgnustep-base
+# Like the theme, the grow box is built with ARC
+../EauGrowBoxView.m_FILE_FLAGS += -fobjc-arc
+../EauGrowBoxCell.m_FILE_FLAGS += -fobjc-arc
