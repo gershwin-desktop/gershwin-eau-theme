@@ -229,9 +229,14 @@ static NSFont *EauFallbackFont(void)
   if (base == nil)
     {
       // The requested font name does not resolve to anything on this system;
-      // use the fallback sans-serif font so callers never receive nil.
+      // use the fallback sans-serif font so callers never receive nil.  The
+      // fallback is built once at a fixed size, so it is rebuilt at the size
+      // that was asked for: callers such as font panels or video titles
+      // would otherwise get 13 pt text whatever size they chose.
       NSFont *usable = EauAvailableFamily() ? EauFallbackFont() : nil;
-      return usable ?: base;
+      if (usable == nil)
+        return nil;
+      return [NSFont fontWithDescriptor: [usable fontDescriptor] size: size];
     }
   return base;
 }
