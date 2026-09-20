@@ -538,6 +538,26 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   [self _startMenuIntegration];
 
   [super activate];
+
+  /* The application's own menu bar may be on the screen from the theme that
+     was in charge until now; -[NSMenu setMain:] leaves a menu that is already
+     showing where it is, and what [GSTheme activate] has just re-established
+     is not put on the screen again but not taken off it either. */
+  [self _hideInApplicationMenuBarIfServedExternally];
+}
+
+/* The application's own menu bar has no business being on the screen while
+   Menu.app shows the menu; -proposedVisibility:forMenu: says which of the two
+   is in charge. */
+- (void) _hideInApplicationMenuBarIfServedExternally
+{
+  NSMenu *mainMenu = [NSApp mainMenu];
+
+  if (mainMenu == nil || [self proposedVisibility: YES forMenu: mainMenu])
+    {
+      return;
+    }
+  [mainMenu close];
 }
 
 - (void) deactivate
