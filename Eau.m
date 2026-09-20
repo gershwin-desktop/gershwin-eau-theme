@@ -24,6 +24,18 @@ CGFloat GSWScaleFactorValue = 0;
 - (void)invalidateTitleTextAttributes;
 @end
 
+/* Only one Eau instance is the active theme at a time.  GSTheme creates a
+ * fresh instance on every +setTheme:, and the old one can outlive the switch
+ * (its DO connection keeps it alive), so the flag is tied to the instance
+ * that last activated rather than to "an Eau exists". */
+static __unsafe_unretained Eau *gActiveEauTheme = nil;
+static BOOL gEauActive = NO;
+
+BOOL EauThemeIsActive(void)
+{
+  return gEauActive;
+}
+
 static BOOL gForceExternalMenuByEnv = NO;
 static BOOL gPendingMenuUpdate = NO;
 static NSWindow *gPendingMenuWindow = nil;
@@ -455,6 +467,11 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 - (id)initWithBundle:(NSBundle *)bundle
 {
   NSDebugLog(@"Eau: >>> initWithBundle ENTRY (before super init)");
+
+  /* Before GSTheme looks at this class' override methods for the first time,
+     so that what it replaces is on record. */
+  EauRecordOriginalOverriddenMethods();
+
   if ((self = [super initWithBundle:bundle]) != nil)
     {
       NSDebugLog(@"Eau: >>> initWithBundle after super init, self=%p", self);
@@ -463,64 +480,12 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
       menuByWindowId = [[NSMutableDictionary alloc] init];
       menuServerAvailable = NO;
       menuServerConnected = NO;
+      menuIntegrationRunning = NO;
 
-      // Snapshot the current Menu process launch details so restarts can match.
-      [[EauMenuRelaunchManager sharedManager] captureMenuProcessSnapshotIfAvailable];
-
-      // Register as a GNUstep menu client so Menu.app can call back for actions
-      [self _ensureMenuClientRegistered];
-
-      // Keep the MenuClient registration alive across name-server restarts
-      // (a gdnc restart wipes the names registry while the connection stays
-      // "valid", so without this the app's menu silently disappears).
-      [self performSelector: @selector(scheduleMenuClientVerification)
-                 withObject: nil
-                 afterDelay: 5.0];
-
-      // Try to connect to Menu.app's GNUstep menu server (may not be running yet)
-      [self _ensureMenuServerConnection];
-
-      // Observe menu changes so Menu.app can stay in sync
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(macintoshMenuDidChange:)
-               name:@"NSMacintoshMenuDidChangeNotification"
-             object:nil];
-
-      // Observe window activation so Menu.app gets menus for newly active windows
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(windowDidBecomeKey:)
-               name:@"NSWindowDidBecomeKeyNotification"
-             object:nil];
-
-      // Observe app activation so a windowless app re-pushes its
-      // application-level menu when it becomes the active application
-      // (e.g. via Alt-Tab or the app launcher).
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(applicationDidBecomeActive:)
-               name:NSApplicationDidBecomeActiveNotification
-             object:nil];
-
-      // On termination, unregister the application-level menu.
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(applicationWillTerminate:)
-               name:NSApplicationWillTerminateNotification
-             object:nil];
-
-      // After any menu selection finishes, push updated enabled/state values
-      // to Menu.app so items like Copy/Paste reflect the new app state without
-      // requiring the user to open a submenu first.
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(menuDidEndTracking:)
-               name:NSMenuDidEndTrackingNotification
-             object:nil];
-
-      NSDebugLog(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
-             menuServerAvailable ? @"available" : @"unavailable");
+      /* The menu IPC is deliberately not started here: GSTheme instantiates a
+         theme to inspect it (and on every switch) without necessarily making
+         it current, and a second registered MenuClient would fight the active
+         one.  -activate starts it, -deactivate stops it again. */
 
       // Ensure alternating row background color is visible in Eau theme
       // Note: System color list may be read-only, so we wrap in try-catch
@@ -550,23 +515,242 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
         {
           NSDebugLog(@"Eau: Could not set alternating row color: %@", [exception reason]);
         }
-      // After ANY action is sent through a menu item (including keyboard
-      // shortcuts matched to menu items), push updated enabled/state values
-      // to Menu.app.  This is more efficient than a timer — we only push
-      // when something might have changed.
-      [[NSNotificationCenter defaultCenter]
-        addObserver:self
-           selector:@selector(menuDidSendAction:)
-               name:NSMenuDidSendActionNotification
-             object:nil];
-
       NSDebugLog(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
 }    
 
+#pragma mark - Theme activation
+
+/* Everything Eau does beyond drawing - the swizzles in the category files and
+   the Menu.app IPC - is switched on here and off in -deactivate, so another
+   theme can take over in a running application. */
+- (void) activate
+{
+  gActiveEauTheme = self;
+  gEauActive = YES;
+
+  /* Before [GSTheme activate], which re-establishes the main menu and asks
+     -proposedVisibility:forMenu: whether the application's own menu bar
+     belongs on the screen.  The answer is "no" only once Menu.app has been
+     reached, so connecting afterwards would leave that bar mapped on top of
+     the global one for the rest of the session. */
+  [self _startMenuIntegration];
+
+  [super activate];
+}
+
+- (void) deactivate
+{
+  /* Stop the IPC while the flag is still set: unregistering our windows needs
+     the menu client name, and Menu.app must drop us before the in-application
+     menu bar comes back. */
+  [self _stopMenuIntegration];
+
+  if (gActiveEauTheme == self)
+    {
+      gActiveEauTheme = nil;
+      gEauActive = NO;
+    }
+
+  [super deactivate];
+
+  /* GSTheme restores whatever it believed the previous implementations were;
+     that belief is wrong whenever this instance was built while another Eau
+     instance was already active, so put the real originals back.  What Eau
+     put into live windows - the title bar buttons, the resize grip - is taken
+     out by EauThemeSwitchWatcher when the incoming theme activates, which is
+     the only moment replacements for them can be asked for. */
+  EauRestoreOverriddenMethods();
+
+  /* Hand the menu bar back to the application.  While Eau was active its own
+     bar was never put on the screen (see -activate), and -[NSMenu setMain:],
+     which the incoming theme runs, re-establishes the bar from whatever state
+     it finds - so it has to be told that the menu is the main one again now
+     that nothing serves it from outside. */
+  [[NSApp mainMenu] setMain: YES];
+}
+
+/* Start talking to Menu.app.  Idempotent - a theme may be activated twice
+   (GSTheme does that itself when a theme updates its own resources). */
+- (void) _startMenuIntegration
+{
+  if (menuIntegrationRunning)
+    {
+      return;
+    }
+  menuIntegrationRunning = YES;
+
+  // Snapshot the current Menu process launch details so restarts can match.
+  [[EauMenuRelaunchManager sharedManager] captureMenuProcessSnapshotIfAvailable];
+
+  // Register as a GNUstep menu client so Menu.app can call back for actions
+  [self _ensureMenuClientRegistered];
+
+  // Keep the MenuClient registration alive across name-server restarts
+  // (a gdnc restart wipes the names registry while the connection stays
+  // "valid", so without this the app's menu silently disappears).
+  [self performSelector: @selector(scheduleMenuClientVerification)
+             withObject: nil
+             afterDelay: 5.0];
+
+  // Try to connect to Menu.app's GNUstep menu server (may not be running yet)
+  [self _ensureMenuServerConnection];
+
+  // Observe menu changes so Menu.app can stay in sync
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(macintoshMenuDidChange:)
+           name:@"NSMacintoshMenuDidChangeNotification"
+         object:nil];
+
+  // Observe window activation so Menu.app gets menus for newly active windows
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(windowDidBecomeKey:)
+           name:@"NSWindowDidBecomeKeyNotification"
+         object:nil];
+
+  // Observe app activation so a windowless app re-pushes its
+  // application-level menu when it becomes the active application
+  // (e.g. via Alt-Tab or the app launcher).
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(applicationDidBecomeActive:)
+           name:NSApplicationDidBecomeActiveNotification
+         object:nil];
+
+  // On termination, unregister the application-level menu.
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(applicationWillTerminate:)
+           name:NSApplicationWillTerminateNotification
+         object:nil];
+
+  // After any menu selection finishes, push updated enabled/state values
+  // to Menu.app so items like Copy/Paste reflect the new app state without
+  // requiring the user to open a submenu first.
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(menuDidEndTracking:)
+           name:NSMenuDidEndTrackingNotification
+         object:nil];
+
+  // After ANY action is sent through a menu item (including keyboard
+  // shortcuts matched to menu items), push updated enabled/state values
+  // to Menu.app.  This is more efficient than a timer - we only push
+  // when something might have changed.
+  [[NSNotificationCenter defaultCenter]
+    addObserver:self
+       selector:@selector(menuDidSendAction:)
+           name:NSMenuDidSendActionNotification
+         object:nil];
+
+  /* An application that is already running when the theme is switched on has
+     its menu and key window in place already; nothing will notify us about
+     them, so push once now. */
+  [self _pushApplicationMenu];
+  {
+    NSWindow *keyWindow = [NSApp keyWindow];
+    NSMenu *mainMenu = [NSApp mainMenu];
+    if (keyWindow != nil && mainMenu != nil && [mainMenu numberOfItems] > 0)
+      {
+        [self setMenu: mainMenu forWindow: keyWindow];
+      }
+  }
+
+  NSDebugLog(@"Eau: GNUstep menu IPC initialized (Menu.app %@)",
+         menuServerAvailable ? @"available" : @"unavailable");
+}
+
+/* Hand the menu bar back.  Menu.app keeps an entry per client name, so we have
+   to withdraw every window and the application entry explicitly - otherwise
+   the global bar would keep showing a menu for an application that has gone
+   back to drawing its own. */
+- (void) _stopMenuIntegration
+{
+  if (!menuIntegrationRunning)
+    {
+      return;
+    }
+  menuIntegrationRunning = NO;
+
+  [NSObject cancelPreviousPerformRequestsWithTarget: self];
+  gPendingMenuUpdate = NO;
+  gPendingMenuWindow = nil;
+  gPendingApplicationMenuPush = NO;
+
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: @"NSMacintoshMenuDidChangeNotification"
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: @"NSWindowDidBecomeKeyNotification"
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSApplicationDidBecomeActiveNotification
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSApplicationWillTerminateNotification
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSMenuDidEndTrackingNotification
+                                                object: nil];
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSMenuDidSendActionNotification
+                                                object: nil];
+
+  if (menuServerProxy != nil)
+    {
+      NSString *clientName = [self _menuClientName];
+      NSArray *windowIds = [menuByWindowId allKeys];
+      NSEnumerator *e = [windowIds objectEnumerator];
+      NSNumber *windowId;
+
+      while ((windowId = [e nextObject]) != nil)
+        {
+          @try
+            {
+              [(id<GSGNUstepMenuServer>)menuServerProxy unregisterWindow: windowId
+                                                              clientName: clientName];
+            }
+          @catch (NSException *exception)
+            {
+              NSDebugLog(@"Eau: Exception unregistering window %@ on deactivate: %@",
+                         windowId, exception);
+            }
+        }
+
+      @try
+        {
+          [(id<GSGNUstepMenuServer>)menuServerProxy unregisterApplication: clientName];
+        }
+      @catch (NSException *exception)
+        {
+          NSDebugLog(@"Eau: Exception unregistering application on deactivate: %@", exception);
+        }
+    }
+
+  [menuByWindowId removeAllObjects];
+
+  [[NSNotificationCenter defaultCenter] removeObserver: self
+                                                  name: NSConnectionDidDieNotification
+                                                object: menuServerConnection];
+  menuServerConnection = nil;
+  menuServerProxy = nil;
+  menuServerConnected = NO;
+  menuServerAvailable = NO;
+
+  /* The registered name has to go as well, or the Eau instance that a later
+     switch back creates cannot claim MenuClient.<pid> and would be invisible
+     to Menu.app. */
+  [self _teardownMenuClientConnection];
+
+  NSDebugLog(@"Eau: GNUstep menu IPC stopped");
+}
+
 - (void) dealloc
 {
+  [self _stopMenuIntegration];
   [[NSNotificationCenter defaultCenter] removeObserver: self];
   if (menuClientReceivePort != nil)
     {

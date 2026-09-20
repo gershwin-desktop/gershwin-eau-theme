@@ -1,4 +1,5 @@
 #import "NSTableHeaderCell+Eau.h"
+#import "Eau.h"
 #import <objc/runtime.h>
 #import <GNUstepGUI/GSTheme.h>
 
@@ -31,7 +32,10 @@
   // Call the original initialization (which is now the swizzled one)
   self = [self eau_initTextCell: aString];
   
-  if (self)
+  /* tableHeaderFontOfSize: and tableHeaderCellTextAlignment exist on Eau
+     only, so asking for them under another theme would be an unrecognised
+     selector. */
+  if (self && EauThemeIsActive())
     {
       // Override the font with the theme's table header font
       NSFont *headerFont = [[GSTheme theme] tableHeaderFontOfSize: 0];

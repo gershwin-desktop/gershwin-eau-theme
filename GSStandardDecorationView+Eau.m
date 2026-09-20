@@ -13,15 +13,7 @@ static char hasZoomButtonKey;
 static char zoomButtonKey;
 static char zoomButtonRectKey;
 static char originalFrameKey;  // Store original frame before zoom
-@interface GSStandardWindowDecorationView(EauTheme)
-- (void) EAUupdateRects;
-- (BOOL) hasZoomButton;
-- (void) setHasZoomButton:(BOOL)flag;
-- (NSButton *) zoomButton;
-- (void) setZoomButton:(NSButton *)button;
-- (NSRect) zoomButtonRect;
-- (void) EAUzoomButtonClicked:(id)sender;
-@end
+#import "GSStandardDecorationView+Eau.h"
 
 @implementation Eau(GSStandardWindowDecorationView)
 - (void) _overrideGSStandardWindowDecorationViewMethod_updateRects {
@@ -205,6 +197,39 @@ static char originalFrameKey;  // Store original frame before zoom
 
 }
 
+/* A window keeps the buttons the theme handed out when it was created, so a
+ * theme switch has to replace them by hand.  The zoom button is Eau's own
+ * addition and goes away completely while another theme is in charge. */
+- (void) EAUrebuildTitleBarButtons
+{
+  NSUInteger styleMask = [[self window] styleMask];
+
+  if (hasCloseButton)
+    {
+      [closeButton removeFromSuperview];
+      closeButton = [NSWindow standardWindowButton: NSWindowCloseButton
+                                      forStyleMask: styleMask];
+      [closeButton setTarget: [self window]];
+      [self addSubview: closeButton];
+    }
+
+  if (hasMiniaturizeButton)
+    {
+      [miniaturizeButton removeFromSuperview];
+      miniaturizeButton = [NSWindow standardWindowButton: NSWindowMiniaturizeButton
+                                            forStyleMask: styleMask];
+      [miniaturizeButton setTarget: [self window]];
+      [self addSubview: miniaturizeButton];
+    }
+
+  [[self zoomButton] removeFromSuperview];
+  [self setZoomButton: nil];
+  [self setHasZoomButton: NO];
+
+  [self updateRects];
+  [self setNeedsDisplay: YES];
+}
+
 // Zoom button property implementations
 - (BOOL) hasZoomButton
 {
@@ -338,7 +363,10 @@ static IMP _originalNSWindowSetTitle = NULL;
 // Swizzled setTitle: implementation
 static void EAU_newNSWindowSetTitle(id self, SEL _cmd, NSString *title)
 {
-  if (title != nil && [title length] > 0)
+  /* The middle ellipsis is measured against Eau's titlebar metrics and its
+   * button layout; another theme lays the titlebar out differently and
+   * shortens the title itself. */
+  if (EauThemeIsActive() && title != nil && [title length] > 0)
     {
       NSRect frame = [self frame];
       NSUInteger styleMask = [self styleMask];

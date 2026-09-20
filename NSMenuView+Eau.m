@@ -40,7 +40,7 @@ static NSRect s_eau_rectOfItemAtIndex(id self, SEL _cmd, NSInteger index)
   NSRect r = s_orig_rectOfItemAtIndex(self, _cmd, index);
 
   NSMenuView *menuView = (NSMenuView *)self;
-  if (![menuView isHorizontal])
+  if (EauThemeIsActive() && ![menuView isHorizontal])
     {
       EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
       if (mgr && [mgr isScrolling])
@@ -57,12 +57,13 @@ static void (*s_orig_sizeToFit)(id, SEL) = NULL;
 
 static void s_eau_sizeToFit(id self, SEL _cmd)
 {
+  NSMenuView *menuView = (NSMenuView *)self;
+
   s_orig_sizeToFit(self, _cmd);
 
   // After sizing, if we're in overflow mode, clamp the view height
   // back to the visible viewport so items don't extend past the window.
-  NSMenuView *menuView = (NSMenuView *)self;
-  if ([menuView isHorizontal]) return;
+  if (!EauThemeIsActive() || [menuView isHorizontal]) return;
 
   EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
   if (mgr && [mgr isScrolling])
@@ -152,7 +153,15 @@ static void s_eau_switchToAdjacentMenu(NSMenuView *menuView, NSInteger dir)
 
 static void s_eau_keyDown(id self, SEL _cmd, NSEvent *event)
 {
-  NSString *chars = [event characters];
+  NSString *chars;
+
+  if (!EauThemeIsActive())
+    {
+      s_orig_keyDown(self, _cmd, event);
+      return;
+    }
+
+  chars = [event characters];
   NSUInteger mods = [event modifierFlags] & NSDeviceIndependentModifierFlagsMask;
   // Only reject if one of the standard modifier keys is pressed.
   // GNUstep may set additional bits (e.g. 0x800000) even when no
@@ -390,6 +399,8 @@ static void s_eau_setHighlightedItemIndex(id self, SEL _cmd, NSInteger index)
 {
   s_orig_setHighlightedItemIndex(self, _cmd, index);
 
+  if (!EauThemeIsActive()) return;
+
   // Scroll the newly-highlighted item into view so the user can reach
   // items beyond the viewport by moving the mouse near the edge.
   // We guard against edge scrolling: during active edge scrolling the
@@ -414,7 +425,7 @@ static void s_eau_drawRect(id self, SEL _cmd, NSRect dirtyRect)
 
   // Overlay scroll-direction arrows on overflowing menus.
   NSMenuView *menuView = (NSMenuView *)self;
-  if ([menuView isHorizontal]) return;
+  if (!EauThemeIsActive() || [menuView isHorizontal]) return;
 
   EauMenuScrollManager *mgr = [EauMenuScrollManager scrollManagerForMenuView: menuView];
   if (mgr && [mgr isScrolling])
@@ -430,6 +441,11 @@ static void s_eau_drawRect(id self, SEL _cmd, NSRect dirtyRect)
 - (NSPoint)eau_locationForSubmenu:(NSMenu *)aSubmenu
 {
   NSDebugLog(@"NSMenuView+Eau: eau_locationForSubmenu: called for submenu %@", aSubmenu);
+
+  if (!EauThemeIsActive())
+    {
+      return [self eau_locationForSubmenu: aSubmenu];
+    }
 
   NSMenuView *menuView = (NSMenuView *)self;
   NSWindow *window = [menuView window];

@@ -272,7 +272,7 @@ titleRect.size.height += 2;
 - (id)initEauWithFrame:(NSRect)frameRect
 {
   self = [self initEauWithFrame:frameRect];
-  if (self != nil)
+  if (self != nil && EauThemeIsActive())
     {
       [self setBezeled: NO];
     }
@@ -282,7 +282,7 @@ titleRect.size.height += 2;
 - (id)initEauWithCoder:(NSCoder *)aDecoder
 {
   self = [self initEauWithCoder:aDecoder];
-  if (self != nil)
+  if (self != nil && EauThemeIsActive())
     {
       [self setBezeled: NO];
     }

@@ -9,6 +9,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import "Eau.h"
 
 /* ESC in a search field (field editor) clears the search.
  * When the user presses ESC, the field editor receives keyDown:.
@@ -37,7 +38,7 @@ static void (*s_orig_keyDown)(id, SEL, NSEvent *) = NULL;
 
 static void s_eau_textView_keyDown(id self, SEL _cmd, NSEvent *event)
 {
-  if ([event type] == NSKeyDown)
+  if (EauThemeIsActive() && [event type] == NSKeyDown)
     {
       /* A field editor is the NSTextView used to edit a single-line control
        * (NSTextField, NSSearchField, ...).  In such controls Tab must move
@@ -120,7 +121,7 @@ static void (*s_orig_mouseDown)(id, SEL, NSEvent *) = NULL;
 
 static void s_eau_textView_mouseDown(id self, SEL _cmd, NSEvent *event)
 {
-  if ([self isFieldEditor])
+  if (EauThemeIsActive() && [self isFieldEditor])
     {
       id delegate = [self delegate];
       if ([delegate isKindOfClass: objc_getClass("NSSearchField")])

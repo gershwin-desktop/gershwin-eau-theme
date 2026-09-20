@@ -202,6 +202,14 @@ static void eauAlertSetStopping(id panel, BOOL val)
 // (eauAlertIsStopping / eauAlertSetStopping) so the instance sizes match.
 - (id) eau_initWithoutGModelHelper
 {
+    /* This method is swizzled onto GSAlertPanel as -_initWithoutGModel, so
+       under another theme it has to hand the panel back to GNUstep's own
+       builder, which the swizzle parked under -eau_initWithoutGModel. */
+    if (!EauThemeIsActive())
+    {
+        return [self eau_initWithoutGModel];
+    }
+
     // Do NOT call the original GSAlertPanel _initWithoutGModel — we're building
     // an EauAlertPanel from scratch instead.
 
@@ -1552,6 +1560,11 @@ static void setKeyEquivalent(NSButton *button)
 // - Avoids KVC retain/release side effects on _window
 - (NSInteger) eau_runModal
 {
+    if (!EauThemeIsActive())
+    {
+        return [self eau_runModal];
+    }
+
     NSLog(@"Eau: NSAlert eau_runModal — messageText=\"%@\" informativeText=\"%@\"",
           [self messageText], [self informativeText]);
     NSLog(@"Eau: NSAlert caller stack: %@", [NSThread callStackSymbols]);
@@ -1769,9 +1782,16 @@ static void setKeyEquivalent(NSButton *button)
 - (void) eau_setupPanel
 {
     // NSLog(@"Eau: eau_setupPanel called for NSAlert");
-    
+
     EauAlertPanel *panel;
     NSString *title;
+
+    /* Under another theme the alert is GNUstep's own GSAlertPanel again. */
+    if (!EauThemeIsActive())
+    {
+        [self eau_setupPanel];
+        return;
+    }
     
     @try {
     // NSLog(@"Eau: Creating EauAlertPanel");

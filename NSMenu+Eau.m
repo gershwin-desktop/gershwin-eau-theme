@@ -181,14 +181,16 @@ static void s_eau_menuWindowSetFrameOrigin(id self, SEL _cmd, NSPoint aPoint)
 {
   if (s_orig_menuWindowSetFrameOrigin)
     s_orig_menuWindowSetFrameOrigin(self, _cmd, aPoint);
-  _eau_clampMenuWindowToScreenBounds(self);
+  if (EauThemeIsActive())
+    _eau_clampMenuWindowToScreenBounds(self);
 }
 
 static void s_eau_menuWindowSetFrameDisplay(id self, SEL _cmd, NSRect frameRect, BOOL flag)
 {
   if (s_orig_menuWindowSetFrameDisplay)
     s_orig_menuWindowSetFrameDisplay(self, _cmd, frameRect, flag);
-  _eau_clampMenuWindowToScreenBounds(self);
+  if (EauThemeIsActive())
+    _eau_clampMenuWindowToScreenBounds(self);
 }
 
 /* NSMenuPanel inherits both frame setters from NSWindow, so patching the
@@ -444,7 +446,7 @@ static void (*s_orig_menuPanelOrderFrontRegardless)(id, SEL) = NULL;
 
 static void s_eau_menuPanelOrderFrontRegardless(id self, SEL _cmd)
 {
-  NSMenu *menu = [(id)self _menu];
+  NSMenu *menu = EauThemeIsActive() ? [(id)self _menu] : nil;
   if (menu != nil)
     _eau_closeStaleMenuPanelsForMenu(menu);
   if (s_orig_menuPanelOrderFrontRegardless)
@@ -457,6 +459,11 @@ static BOOL (*s_orig_trackWithEvent)(id, SEL, id) = NULL;
 
 static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
 {
+  if (!EauThemeIsActive())
+    {
+      return s_orig_trackWithEvent ? s_orig_trackWithEvent(self, _cmd, event) : NO;
+    }
+
   _eau_activeTrackingCount++;
   _eau_trackedMenuView = (NSMenuView *)self;
   BOOL result = NO;
@@ -533,6 +540,11 @@ static EauMenuScrollManager *_eau_activeScrollManager(void)
 
 static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, NSDate *date, NSString *mode, BOOL dequeue)
 {
+  if (!EauThemeIsActive())
+    {
+      return s_orig_nextEventMatchingMask(self, _cmd, mask, date, mode, dequeue);
+    }
+
   // During menu tracking, add scroll wheel and keyboard events to the mask
   // so we can process them in the tracking loop.
   if (_eau_activeTrackingCount > 0)
@@ -715,7 +727,8 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
   // Same close-ahead as eau_display/orderFrontRegardless: transient
   // panels are shown via _bWindow orderFront:, which bypasses the
   // NSMenuPanel orderFrontRegardless swizzle, so enforce here too.
-  _eau_closeStaleMenuPanelsForMenu(self);
+  if (EauThemeIsActive())
+    _eau_closeStaleMenuPanelsForMenu(self);
   [self eau_displayTransient];
 }
 
@@ -749,7 +762,7 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
   [self eau_performActionForItemAtIndex:index];
 
   // Blink only while a menu is actively being tracked on screen.
-  if (_eau_activeTrackingCount <= 0) return;
+  if (!EauThemeIsActive() || _eau_activeTrackingCount <= 0) return;
 
   // Blink only when the triggered item itself carries an action.  An item
   // that merely has a submenu (and nothing else) uses the no-op

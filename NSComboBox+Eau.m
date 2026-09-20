@@ -13,6 +13,8 @@
 #import <AppKit/NSComboBox.h>
 #import <objc/runtime.h>
 
+#import "Eau.h"
+
 @interface NSComboBox (EauSingleItem)
 
 - (id) eau_initWithCoder: (NSCoder *)aDecoder __attribute__((objc_method_family(init)));
@@ -130,6 +132,11 @@ static void EauSwizzle(Class cls, SEL original, SEL swizzled)
 // the field empty. This runs after any change to the item list.
 - (void) eau_selectOnlyItemIfPresent
 {
+  /* Filling the field by itself is behaviour this theme adds; under another
+   * theme a combo box is left exactly as the application set it up. */
+  if (!EauThemeIsActive())
+    return;
+
   if ([self numberOfItems] != 1)
     return;
 

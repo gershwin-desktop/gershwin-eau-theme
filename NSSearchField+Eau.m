@@ -56,7 +56,8 @@
 - (void) eau_keyDown: (NSEvent*)theEvent
 {
   NSString *chars = [theEvent charactersIgnoringModifiers];
-  if ([chars length] == 1 && [chars characterAtIndex: 0] == 0x1B)
+  if (EauThemeIsActive()
+      && [chars length] == 1 && [chars characterAtIndex: 0] == 0x1B)
     {
       if ([[[self cell] stringValue] length] > 0)
         {

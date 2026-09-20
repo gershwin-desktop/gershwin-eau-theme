@@ -290,7 +290,7 @@ static void EAULayoutGWDialog(GWDialog *dialog)
   
   // Call the original implementation (which is now named eau_initWithTitle due to swizzling)
   id dialog = [self eau_initWithTitle: title editText: eText switchTitle: swTitle];
-  if (dialog != nil)
+  if (dialog != nil && EauThemeIsActive())
     {
       NSDebugLog(@"EauDialog: Original init completed, applying Eau layout and focus setup");
       EAULayoutGWDialog((GWDialog *)dialog);
@@ -379,6 +379,11 @@ static void EAULayoutGWDialog(GWDialog *dialog)
 
 - (void)eau_drawRect:(NSRect)rect
 {
+  if (!EauThemeIsActive())
+    {
+      [self eau_drawRect: rect];
+      return;
+    }
   [[NSColor windowBackgroundColor] setFill];
   NSRectFill(rect);
 }

@@ -116,7 +116,7 @@
 {
   [self eau_viewDidMoveToWindow];
 
-  if ([[self keyEquivalent] isEqualToString: @"\r"])
+  if (EauThemeIsActive() && [[self keyEquivalent] isEqualToString: @"\r"])
     {
       [self eauBecomeWindowDefaultButton];
     }
@@ -125,7 +125,7 @@
 - (void) eau_setKeyEquivalent: (NSString *)key
 {
   [self eau_setKeyEquivalent: key];
-  if ([key isEqualToString: @"\r"])
+  if (EauThemeIsActive() && [key isEqualToString: @"\r"])
     {
       /* The redraw ticker that makes the pulse visible belongs to the window
        * (see DefaultButtonAnimationController in NSWindow+Eau.m), so it can
@@ -142,8 +142,8 @@
 - (void) eau_keyDown: (NSEvent*)theEvent
 {
   NSString *characters = [theEvent characters];
-  
-  if ([self isEnabled] && [characters length] > 0)
+
+  if (EauThemeIsActive() && [self isEnabled] && [characters length] > 0)
     {
       unichar keyChar = [characters characterAtIndex: 0];
       

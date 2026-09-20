@@ -10,6 +10,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import "Eau.h"
 
 @implementation NSApplication (EauApplication)
 
@@ -30,6 +31,15 @@
 // Swizzled implementation that terminates by default when last window closes
 - (void)eau_lastWindowClosed
 {
+  /* Quitting on the last window and hiding the application icon window are
+   * Gershwin conventions carried by this theme; under another theme the
+   * application keeps GNUstep's behaviour. */
+  if (!EauThemeIsActive())
+    {
+      [self eau_lastWindowClosed];
+      return;
+    }
+
   NSString *appName = [[NSProcessInfo processInfo] processName];
   NSString *bundleName = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleExecutable"];
   NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
@@ -74,6 +84,10 @@
 - (void)eau_appIconInit
 {
   // Do nothing to prevent creation of app icon window
+  if (!EauThemeIsActive())
+    {
+      [self eau_appIconInit];
+    }
 }
 
 @end

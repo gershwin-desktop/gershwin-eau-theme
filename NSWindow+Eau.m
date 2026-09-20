@@ -166,21 +166,21 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 - (void) eau_orderFront: (id)sender
 {
   EAUWindowLog(@"orderFront", self);
-  [EauGrowBoxView addToWindow:self];
+  if (EauThemeIsActive()) [EauGrowBoxView addToWindow:self];
   [self eau_orderFront: sender];
 }
 
 - (void) eau_orderFrontRegardless
 {
   EAUWindowLog(@"orderFrontRegardless", self);
-  [EauGrowBoxView addToWindow:self];
+  if (EauThemeIsActive()) [EauGrowBoxView addToWindow:self];
   [self eau_orderFrontRegardless];
 }
 
 - (void) eau_makeKeyAndOrderFront: (id)sender
 {
   EAUWindowLog(@"makeKeyAndOrderFront", self);
-  [EauGrowBoxView addToWindow:self];
+  if (EauThemeIsActive()) [EauGrowBoxView addToWindow:self];
   [self eau_makeKeyAndOrderFront: sender];
 }
 
@@ -377,6 +377,14 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
       return;
     }
 
+  /* The pulse is Eau's own default-button treatment; under another theme it
+   * would only burn a timer per dialog and redraw a button that does not
+   * pulse. */
+  if (!EauThemeIsActive())
+    {
+      return;
+    }
+
   // Check if the button cell is enabled before starting animation
   BOOL isEnabled = YES;
   if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
@@ -412,7 +420,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 {
   NSButtonCell *cell = buttoncell;
 
-  if (cell == nil)
+  if (cell == nil || !EauThemeIsActive())
     {
       [self stopPulse];
       return;

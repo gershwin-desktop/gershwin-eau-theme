@@ -47,7 +47,12 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 
   // After swizzling, this message sends the original titleWidth implementation
   CGFloat originalWidth = [self eau_titleWidth];
-  CGFloat paddedWidth = originalWidth + EAU_MENU_ITEM_PADDING;
+  CGFloat paddedWidth;
+
+  if (!EauThemeIsActive())
+    return originalWidth;
+
+  paddedWidth = originalWidth + EAU_MENU_ITEM_PADDING;
 
   NSDebugLog(@"NSMenuItemCell+Eau: eau_titleWidth originalWidth=%f paddedWidth=%f", originalWidth, paddedWidth);
 
@@ -62,6 +67,9 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 
   // After swizzling, this message sends the original titleRectForBounds: implementation
   NSRect originalRect = [self eau_titleRectForBounds:cellFrame];
+
+  if (!EauThemeIsActive())
+    return originalRect;
 
   // GNUstep's original offsets the title by the RAW image width (_imageWidth),
   // which is the full icon size (e.g. 128px).  The image column is capped to
@@ -95,7 +103,7 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 
 // Swizzled implementation for textColor - returns lighter grey for disabled menu items
 - (NSColor *)eau_textColor {
-  if (![self isEnabled]) {
+  if (EauThemeIsActive() && ![self isEnabled]) {
     return [NSColor colorWithCalibratedWhite: 0.65 alpha: 1.0];
   }
   return [self eau_textColor];
@@ -110,7 +118,7 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
   NSMenuItem *item = [self menuItem];
   NSImage *image = [item image];
   NSString *title = [item title];
-  if (image)
+  if (image && EauThemeIsActive())
     {
       NSSize imgSize = [image size];
       if (!title || [title length] == 0)
@@ -164,7 +172,7 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
   CGFloat width = [self eau_keyEquivalentWidth];
   NSMenuItem *menuItem = [self menuItem];
 
-  if (menuItem != nil && ![menuItem hasSubmenu])
+  if (EauThemeIsActive() && menuItem != nil && ![menuItem hasSubmenu])
     {
       NSString *display = [self EAUconvertKeyEquivalentToMacStyle: [menuItem keyEquivalent]
                                                     withModifiers: [menuItem keyEquivalentModifierMask]];
@@ -185,7 +193,12 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 - (CGFloat)eau_imageWidth
 {
   CGFloat width = [self eau_imageWidth];
-  CGFloat iconSize = [(Eau *)[GSTheme theme] menuItemIconSize];
+  CGFloat iconSize;
+
+  if (!EauThemeIsActive())
+    return width;
+
+  iconSize = [(Eau *)[GSTheme theme] menuItemIconSize];
   if (width > iconSize)
     return iconSize;
   return width;
@@ -197,7 +210,12 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 - (NSRect)eau_imageRectForBounds:(NSRect)cellFrame
 {
   NSRect rect = [self eau_imageRectForBounds: cellFrame];
-  CGFloat iconSize = [(Eau *)[GSTheme theme] menuItemIconSize];
+  CGFloat iconSize;
+
+  if (!EauThemeIsActive())
+    return rect;
+
+  iconSize = [(Eau *)[GSTheme theme] menuItemIconSize];
   if (rect.size.width > iconSize)
     rect.size.width = iconSize;
   return rect;

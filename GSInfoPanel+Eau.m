@@ -379,6 +379,10 @@ static char kEauAppNameKey;
   id result = [self eau_initWithDictionary:dictionary];
   if (!result) return nil;
 
+  /* The rebuilt single-column layout is Eau's; another theme keeps the
+     side-by-side panel GNUstep just built. */
+  if (!EauThemeIsActive()) return result;
+
   @try
     {
   // ---- 2. Collect references to every view the original created ----
@@ -869,8 +873,9 @@ static char kEauAppNameKey;
   NSString *frameworkInfo = [guiBundle localizedStringForKey: @"Info"
                                                        value: @"Info"
                                                        table: nil];
-  if ([title isEqualToString: frameworkInfo]
-      || [title isEqualToString: @"Info"])
+  if (EauThemeIsActive()
+      && ([title isEqualToString: frameworkInfo]
+          || [title isEqualToString: @"Info"]))
     {
       NSString *appName = [[NSProcessInfo processInfo] processName];
       title = [NSString stringWithFormat: _(@"About %@"), appName];
