@@ -51,6 +51,7 @@
     BOOL menuServerAvailable;
     BOOL menuServerConnected;
     BOOL menuIntegrationRunning;
+    NSColorList *editableSystemColors;
 }
 + (NSColor *) controlStrokeColor;
 - (void) invalidateScaleFactorCache;

@@ -571,6 +571,36 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   [[NSApp mainMenu] setMain: YES];
 }
 
+/* -[NSColor themeDidActivate:] completes a theme's system colour list with the
+   defaults the theme does not define, and raises
+   NSColorListNotEditableException when the list came straight out of a
+   read-only bundle - which cuts that method short, before it announces
+   NSSystemColorsDidChangeNotification, on every single activation.  Hand out a
+   copy that can take those additions. */
+- (NSColorList *) colors
+{
+  NSColorList *list = [super colors];
+  NSEnumerator *enumerator;
+  NSString *key;
+
+  if (list == nil || [list isEditable])
+    {
+      return list;
+    }
+
+  if (editableSystemColors == nil)
+    {
+      editableSystemColors = [[NSColorList alloc] initWithName: [list name]];
+      enumerator = [[list allKeys] objectEnumerator];
+      while ((key = [enumerator nextObject]) != nil)
+        {
+          [editableSystemColors setColor: [list colorWithKey: key]
+                                  forKey: key];
+        }
+    }
+  return editableSystemColors;
+}
+
 /* Start talking to Menu.app.  Idempotent - a theme may be activated twice
    (GSTheme does that itself when a theme updates its own resources). */
 - (void) _startMenuIntegration
