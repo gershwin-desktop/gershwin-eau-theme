@@ -12,6 +12,7 @@ Eau_PRINCIPAL_CLASS = Eau
 
 Eau_OBJC_FILES = \
 		Eau.m\
+		EauActivation.m\
 		EauThemeSwitch.m\
 		EauMenuRelaunchManager.m\
 		EauMenuScrollManager.m\

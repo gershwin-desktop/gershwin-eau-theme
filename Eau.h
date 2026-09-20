@@ -75,6 +75,10 @@ NSColor *EauSafeCalibratedRGB(NSColor *c);
  * into it.  Set by -[Eau activate], cleared by -[Eau deactivate]. */
 BOOL EauThemeIsActive(void);
 
+/* Set by -[Eau activate] and -[Eau deactivate]; nothing else has any business
+ * calling it. */
+void EauSetThemeActive(BOOL flag);
+
 /* Put the implementations GSTheme's -_override<Class>Method_<selector>
  * mechanism replaced back as they were before any theme ran.  See
  * EauThemeSwitch.m for why GSTheme's own bookkeeping is not enough. */

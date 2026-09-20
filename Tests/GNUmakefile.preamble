@@ -2,17 +2,20 @@ ADDITIONAL_INCLUDE_DIRS += -I..
 
 # The unit under test is the theme's alert panel implementation (compiled
 # into the theme bundle with ARC, so the tool must use it too).
-t_AlertPanelScrolling_OBJC_FILES += ../NSAlert+Eau.m
+# Every category file asks EauThemeIsActive() before it does anything
+# Eau-specific; it lives in EauActivation.m so a tool can link one category
+# without the theme class.
+t_AlertPanelScrolling_OBJC_FILES += ../NSAlert+Eau.m ../EauActivation.m
 t_AlertPanelScrolling_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 
-t_AlertPanelButtonRow_OBJC_FILES += ../NSAlert+Eau.m
+t_AlertPanelButtonRow_OBJC_FILES += ../NSAlert+Eau.m ../EauActivation.m
 t_AlertPanelButtonRow_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 
 t_EauMenuWindowFilter_OBJC_FILES += ../EauMenuWindowFilter.m
 t_EauMenuWindowFilter_TOOL_LIBS += -lX11
 
 # The unit under test is the theme's NSFont category, which swizzles on load.
-t_EauFontSubstitution_OBJC_FILES += ../NSFont+Eau.m
+t_EauFontSubstitution_OBJC_FILES += ../NSFont+Eau.m ../EauActivation.m
 t_EauFontSubstitution_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated

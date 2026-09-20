@@ -29,12 +29,6 @@ CGFloat GSWScaleFactorValue = 0;
  * (its DO connection keeps it alive), so the flag is tied to the instance
  * that last activated rather than to "an Eau exists". */
 static __unsafe_unretained Eau *gActiveEauTheme = nil;
-static BOOL gEauActive = NO;
-
-BOOL EauThemeIsActive(void)
-{
-  return gEauActive;
-}
 
 static BOOL gForceExternalMenuByEnv = NO;
 static BOOL gPendingMenuUpdate = NO;
@@ -528,7 +522,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 - (void) activate
 {
   gActiveEauTheme = self;
-  gEauActive = YES;
+  EauSetThemeActive(YES);
 
   /* Before [GSTheme activate], which re-establishes the main menu and asks
      -proposedVisibility:forMenu: whether the application's own menu bar
@@ -570,7 +564,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
   if (gActiveEauTheme == self)
     {
       gActiveEauTheme = nil;
-      gEauActive = NO;
+      EauSetThemeActive(NO);
     }
 
   [super deactivate];
