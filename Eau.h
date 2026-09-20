@@ -51,6 +51,7 @@
     BOOL menuServerAvailable;
     BOOL menuServerConnected;
     BOOL menuIntegrationRunning;
+    NSTimer *menuClientVerifyTimer;
     NSColorList *editableSystemColors;
 }
 + (NSColor *) controlStrokeColor;

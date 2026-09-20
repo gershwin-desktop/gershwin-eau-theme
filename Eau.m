@@ -215,13 +215,30 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
    name-server restart (gdnc) wipes the names registry but the NSConnection
    stays "valid", so _ensureMenuClientRegistered would normally return early.
    The self-resolve check catches the loss and re-registers. */
+/* One repeating timer, not a fresh delayed perform every half minute.  A
+   delayed perform adds a timer to every mode it is given, and the run loop
+   only drops a fired timer from a mode when that mode next runs: the modal
+   panel mode hardly ever runs, so each round left one more dead timer in
+   its list, in every application that loads this theme, for as long as the
+   session lasted.  A repeating timer in the default mode is scheduled once
+   and keeps its place. */
 - (void)scheduleMenuClientVerification
 {
-  [self performSelector: @selector(verifyMenuClientRegistration)
-             withObject: nil
-             afterDelay: 30.0
-                inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode,
-                  NSModalPanelRunLoopMode, nil]];
+  if (menuClientVerifyTimer != nil)
+    return;
+
+  menuClientVerifyTimer =
+    [NSTimer scheduledTimerWithTimeInterval: 30.0
+                                     target: self
+                                   selector: @selector(verifyMenuClientRegistration)
+                                   userInfo: nil
+                                    repeats: YES];
+}
+
+- (void)stopMenuClientVerification
+{
+  [menuClientVerifyTimer invalidate];
+  menuClientVerifyTimer = nil;
 }
 
 - (void)verifyMenuClientRegistration
@@ -233,7 +250,6 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
      is Menu.app's only way to learn about such apps. */
   [self _ensureMenuServerConnection];
   [self _pushApplicationMenu];
-  [self scheduleMenuClientVerification];
 }
 
 - (BOOL)_ensureMenuServerConnection
@@ -719,6 +735,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
     }
   menuIntegrationRunning = NO;
 
+  [self stopMenuClientVerification];
   [NSObject cancelPreviousPerformRequestsWithTarget: self];
   gPendingMenuUpdate = NO;
   gPendingMenuWindow = nil;
