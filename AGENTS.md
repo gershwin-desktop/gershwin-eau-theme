@@ -18,6 +18,36 @@ Eau: default Aqua-style theme bundle for the Gershwin Desktop. It is a GNUstep t
 - GCD is limited to `dispatch_once` in `+load` (only `NSButton+Eau.m`, `GSDisplayServer+Eau.m`, `Eau+TitleBarButtons.m` use it; most files swizzle directly). Do not add GCD-based async paths.
 - The theme engine also has hooks: some methods are overridden directly on `Eau` (e.g. `keyForKeyEquivalent:`) or via `_overrideNSPopUpButtonMethod_mouseDown:` style selectors (`NSPopUpButton+Eau.m`).
 
+## Switching to another theme and back
+The bundle cannot be unloaded, so every swizzle stays installed for the life of the
+process and must be switched on and off with the theme itself:
+- **Any new swizzle starts with `if (!EauThemeIsActive())` and chains to the
+  implementation it replaced.** `EauThemeIsActive()` (`Eau.h`, set in `-[Eau activate]`,
+  cleared in `-deactivate`) is the one switch; without that guard the behaviour leaks
+  into whatever theme the user picks next. Theme methods on `Eau` itself
+  (`drawButton:...`, `standardWindowButton:...`) need no guard - they are only
+  called on the active theme - and neither do the `_override<Class>Method_<sel>`
+  methods, which GSTheme installs and removes with the activation.
+- Anything Eau *hands to* a live object (the resize grip, the title bar buttons, the
+  hosted `EauProgressView`, the focus overlay) survives the switch and has to be taken
+  out and put back by `EauThemeSwitchWatcher` in `EauThemeSwitch.m`, which runs on every
+  `GSThemeDidActivateNotification`, whichever theme activated.
+- `EauThemeSwitch.m` also snapshots the implementations GSTheme's override mechanism
+  replaces, because GSTheme records those while a theme instance is built and builds a
+  fresh instance on every switch - so an instance built while Eau was already active
+  (the Themes preference pane does that) would record Eau's own as the ones to restore.
+- The Menu.app IPC belongs to `-activate` / `-deactivate`, not to `-initWithBundle:`,
+  and it has to be connected *before* `[super activate]`: the main menu asks
+  `-proposedVisibility:forMenu:` while it is re-established, so the application's own
+  menu bar is mapped on top of the global one if Menu.app is not reachable yet.
+  `-deactivate` withdraws this application's windows from Menu.app and hands the menu
+  bar back with `-setMain:`.
+- Switching needs two fixes outside this repo, both committed on `dev` of their
+  repositories: `Library/Patches/libs-gui/theme-follows-default-change.patch` (an
+  application that started with the default theme never watched the GSTheme default) and
+  the Themes preference pane posting `GSThemePreferenceDidChangeNotification` so the
+  change is picked up at once instead of within half a minute.
+
 ## Architecture notes
 - Menu bar is served by a separate Menu.app over Distributed Objects: Eau registers a menu client (`NSConnection`, name `MenuClient.<pid>`) and connects to `org.gnustep.Gershwin.MenuServer`. When Menu.app is available the in-app menu bar is hidden (`modifyRect:forMenu:isHorizontal:` returns `NSZeroRect`). Menu code must assume this split; `EauMenuRelaunchManager.m` / `EauMenuScrollManager.m` support it.
 - Default cell behaviors are set by swizzling `init`/`initWithCoder:` (e.g. `NSTextFieldCell` forces `bezeled:NO`). When changing a default, keep the same per-instance pattern.
