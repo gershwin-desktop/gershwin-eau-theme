@@ -22,9 +22,11 @@ Eau: default Aqua-style theme bundle for the Gershwin Desktop. It is a GNUstep t
 The bundle cannot be unloaded, so every swizzle stays installed for the life of the
 process and must be switched on and off with the theme itself:
 - **Any new swizzle starts with `if (!EauThemeIsActive())` and chains to the
-  implementation it replaced.** `EauThemeIsActive()` (`Eau.h`, set in `-[Eau activate]`,
-  cleared in `-deactivate`) is the one switch; without that guard the behaviour leaks
-  into whatever theme the user picks next. Theme methods on `Eau` itself
+  implementation it replaced.** `EauThemeIsActive()` (declared in `Eau.h`, defined in
+  `EauActivation.m`, set in `-[Eau activate]` and cleared in `-deactivate`) is the one
+  switch; without that guard the behaviour leaks into whatever theme the user picks
+  next. A `Tests/` tool that links the guarded category must link `EauActivation.m`
+  with it, since the theme class is not in the tool. Theme methods on `Eau` itself
   (`drawButton:...`, `standardWindowButton:...`) need no guard - they are only
   called on the active theme - and neither do the `_override<Class>Method_<sel>`
   methods, which GSTheme installs and removes with the activation.
