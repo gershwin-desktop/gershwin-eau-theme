@@ -375,8 +375,17 @@ static const CGFloat EAU_SPINNER_DARK   = 0.80; /* 80% gray, darkest */
       return;
     }
   lastDockValue = value;
-  [proxy setProgressValue: value];
-  [proxy setProgressVisible: YES];
+  @try
+    {
+      [proxy setProgressValue: value];
+      [proxy setProgressVisible: YES];
+    }
+  @catch (NSException *e)
+    {
+      /* Proxy connection died; nil it so EauDockProgressProxy retries later */
+      dockProgressProxy = nil;
+      lastDockValue = -2.0;
+    }
   [self resetDockHideTimer];
 }
 
@@ -409,7 +418,14 @@ static const CGFloat EAU_SPINNER_DARK   = 0.80; /* 80% gray, darkest */
   id<EauDockService> proxy = EauDockProgressProxy();
   if (proxy)
     {
-      [proxy setProgressVisible: NO];
+      @try
+        {
+          [proxy setProgressVisible: NO];
+        }
+      @catch (NSException *e)
+        {
+          dockProgressProxy = nil;
+        }
     }
 }
 

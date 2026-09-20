@@ -216,27 +216,24 @@ static void EAUEnsureWindowStates(Display *dpy,
 
 + (void) load
 {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class cls = NSClassFromString(@"XGServer");
-    if (!cls)
-      return;
+  Class cls = NSClassFromString(@"XGServer");
+  if (!cls)
+    return;
 
-    SEL origSel = @selector(setwindowlevel::);
-    SEL swizSel = @selector(eau_setwindowlevel::);
+  SEL origSel = @selector(setwindowlevel::);
+  SEL swizSel = @selector(eau_setwindowlevel::);
 
-    Method origMethod = class_getInstanceMethod(cls, origSel);
-    Method swizMethod = class_getInstanceMethod(self, swizSel);
-    if (!origMethod || !swizMethod)
-      return;
+  Method origMethod = class_getInstanceMethod(cls, origSel);
+  Method swizMethod = class_getInstanceMethod(self, swizSel);
+  if (!origMethod || !swizMethod)
+    return;
 
-    /* Add our method to XGServer, then exchange implementations */
-    class_addMethod(cls, swizSel,
-                    method_getImplementation(swizMethod),
-                    method_getTypeEncoding(swizMethod));
-    Method addedMethod = class_getInstanceMethod(cls, swizSel);
-    method_exchangeImplementations(origMethod, addedMethod);
-  });
+  /* Add our method to XGServer, then exchange implementations */
+  class_addMethod(cls, swizSel,
+                  method_getImplementation(swizMethod),
+                  method_getTypeEncoding(swizMethod));
+  Method addedMethod = class_getInstanceMethod(cls, swizSel);
+  method_exchangeImplementations(origMethod, addedMethod);
 }
 
 - (void) eau_setwindowlevel: (int)level : (int)win

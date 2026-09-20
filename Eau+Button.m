@@ -486,13 +486,70 @@ NSString * const kEauIsDefaultButton = @"kEauIsDefaultButton";
         }
         break;
       case NSDisclosureBezelStyle:
+        [self _eau_drawDisclosureArrow: frame
+                                  open: ([cell state] == NSOnState)
+                               rounded: NO
+                               flipped: [view isFlipped]];
+        break;
       case NSRoundedDisclosureBezelStyle:
+        [self _eau_drawRoundBezel: frame withColor: color radius: 4 view: view];
+        [self _eau_drawDisclosureArrow: frame
+                                  open: ([cell state] == NSOnState)
+                               rounded: YES
+                               flipped: [view isFlipped]];
+        break;
       case NSRecessedBezelStyle:
         [self _eau_drawRoundBezel: frame withColor: color radius: 4 view: view];
         break;
       default:
         [self _eau_drawRoundBezel: frame withColor: color radius: 4 view: view];
     }
+}
+
+/* Disclosure buttons carry no title or image; the arrow is the whole face.
+   The plain style is a triangle pointing right when closed and down when
+   open, the rounded style a chevron pointing down when closed and up when
+   open, as on the platforms these interfaces come from. */
+- (void) _eau_drawDisclosureArrow: (NSRect)frame
+                             open: (BOOL)open
+                          rounded: (BOOL)rounded
+                          flipped: (BOOL)flipped
+{
+  CGFloat side = floor(MIN(NSWidth(frame), NSHeight(frame)) * 0.4);
+  CGFloat midX = NSMidX(frame);
+  CGFloat midY = NSMidY(frame);
+  CGFloat half = side / 2.0;
+  // Offsets below are written for an unflipped view.
+  CGFloat up = flipped ? -1.0 : 1.0;
+  NSBezierPath *path = [NSBezierPath bezierPath];
+
+  if (rounded)
+    {
+      CGFloat rise = (open ? half / 2.0 : -half / 2.0) * up;
+
+      [path moveToPoint: NSMakePoint(midX - half, midY - rise)];
+      [path lineToPoint: NSMakePoint(midX, midY + rise)];
+      [path lineToPoint: NSMakePoint(midX + half, midY - rise)];
+      [path setLineWidth: 1.5];
+      [[NSColor controlTextColor] set];
+      [path stroke];
+      return;
+    }
+  if (open)
+    {
+      [path moveToPoint: NSMakePoint(midX - half, midY + up * half / 2.0)];
+      [path lineToPoint: NSMakePoint(midX + half, midY + up * half / 2.0)];
+      [path lineToPoint: NSMakePoint(midX, midY - up * half / 2.0)];
+    }
+  else
+    {
+      [path moveToPoint: NSMakePoint(midX - half / 2.0, midY - half)];
+      [path lineToPoint: NSMakePoint(midX - half / 2.0, midY + half)];
+      [path lineToPoint: NSMakePoint(midX + half / 2.0, midY)];
+    }
+  [path closePath];
+  [[NSColor controlTextColor] set];
+  [path fill];
 }
 
 // currently not used

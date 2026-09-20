@@ -191,6 +191,26 @@ static void s_eau_menuWindowSetFrameDisplay(id self, SEL _cmd, NSRect frameRect,
   _eau_clampMenuWindowToScreenBounds(self);
 }
 
+/* NSMenuPanel inherits both frame setters from NSWindow, so patching the
+ * Method that class_getInstanceMethod returns would clamp every window of the
+ * application.  Install the replacement on NSMenuPanel itself instead and
+ * return the implementation it overrides. */
+static IMP _eau_overrideMenuPanelMethod(Class menuPanelClass, SEL sel, IMP replacement)
+{
+  Method m = class_getInstanceMethod(menuPanelClass, sel);
+  if (m == NULL)
+    {
+      return NULL;
+    }
+
+  IMP original = method_getImplementation(m);
+  if (!class_addMethod(menuPanelClass, sel, replacement, method_getTypeEncoding(m)))
+    {
+      method_setImplementation(m, replacement);
+    }
+  return original;
+}
+
 static void _eau_swizzleMenuWindowFrameMethods(void)
 {
   Class menuPanelClass = objc_getClass("NSMenuPanel");
@@ -200,25 +220,14 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
       return;
     }
 
-  // Swizzle setFrameOrigin:
-  SEL selOrigin = sel_registerName("setFrameOrigin:");
-  Method mOrigin = class_getInstanceMethod(menuPanelClass, selOrigin);
-  if (mOrigin)
-    {
-      s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))method_getImplementation(mOrigin);
-      method_setImplementation(mOrigin, (IMP)s_eau_menuWindowSetFrameOrigin);
-      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
-    }
+  s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))
+    _eau_overrideMenuPanelMethod(menuPanelClass, @selector(setFrameOrigin:),
+                                 (IMP)s_eau_menuWindowSetFrameOrigin);
 
-  // Swizzle setFrame:display: (catches sizeToFit calls that bypass setFrameOrigin:)
-  SEL selFrameDisplay = sel_registerName("setFrame:display:");
-  Method mFrameDisplay = class_getInstanceMethod(menuPanelClass, selFrameDisplay);
-  if (mFrameDisplay)
-    {
-      s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))method_getImplementation(mFrameDisplay);
-      method_setImplementation(mFrameDisplay, (IMP)s_eau_menuWindowSetFrameDisplay);
-      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
-    }
+  // setFrame:display: catches sizeToFit calls that bypass setFrameOrigin:
+  s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))
+    _eau_overrideMenuPanelMethod(menuPanelClass, @selector(setFrame:display:),
+                                 (IMP)s_eau_menuWindowSetFrameDisplay);
 }
 
 /* ---- Tracked windows + active tracking counter ---- */

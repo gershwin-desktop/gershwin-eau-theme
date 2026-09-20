@@ -405,10 +405,10 @@ static void EAU_newNSWindowSetTitle(id self, SEL _cmd, NSString *title)
     }
 }
 
-// Original +offsets:forStyleMask: IMP saved before swizzling
+// Original +offsets::::forStyleMask: IMP saved before swizzling
 static IMP _originalGSStandardOffsets = NULL;
 
-// Swizzled +offsets:forStyleMask: implementation.
+// Swizzled +offsets::::forStyleMask: implementation.
 // GNUstep's stock GSStandardWindowDecorationView reports a 1px frame border
 // on every side for titled windows, but the Gershwin window manager frames
 // clients flush (clientBorder 0 in compositor mode, _NET_FRAME_EXTENTS is
@@ -436,9 +436,9 @@ static void EAU_newGSStandardOffsets(id self, SEL _cmd, float *l, float *r,
   if (swizzled) return;
   swizzled = YES;
 
-  // offsets:forStyleMask: is a CLASS method; swizzle the metaclass method.
+  // +offsets::::forStyleMask: is a CLASS method; swizzle the metaclass method.
   Method origMethod = class_getClassMethod([GSStandardWindowDecorationView class],
-                                           @selector(offsets:forStyleMask:));
+                                           @selector(offsets::::forStyleMask:));
   if (origMethod)
     {
       _originalGSStandardOffsets = method_getImplementation(origMethod);

@@ -18,7 +18,6 @@
 #import "AppearanceMetrics.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
-#import <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
 // Prevent the specific "return" images from ever being drawn by intercepting common draw methods.
@@ -37,10 +36,6 @@
 
     Class cls = [self class];
     Method orig, swiz;
-
-    orig = class_getInstanceMethod(cls, @selector(drawAtPoint:));
-    swiz = class_getInstanceMethod(cls, @selector(EAU_drawAtPoint:));
-    if (orig && swiz) method_exchangeImplementations(orig, swiz);
 
     orig = class_getInstanceMethod(cls, @selector(drawInRect:));
     swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:));
@@ -62,15 +57,6 @@
   if (!name) return NO;
   NSString *base = [name stringByDeletingPathExtension];
   return [base isEqualToString:@"common_ret"] || [base isEqualToString:@"common_retH"];
-}
-
-- (void)EAU_drawAtPoint:(NSPoint)point
-{
-  if ([self EAU_isReturnImage]) {
-    NSDebugLog(@"NSImage: Suppressing drawAtPoint for %@", [self name]);
-    return;
-  }
-  [self EAU_drawAtPoint:point];
 }
 
 - (void)EAU_drawInRect:(NSRect)rect
@@ -143,6 +129,13 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   orig = class_getInstanceMethod(cls, @selector(cellSize));
   swiz = class_getInstanceMethod(cls, @selector(EAU_cellSize));
   if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  // Swizzle -setImage: rather than overriding it in this category: a category
+  // method replaces -[NSButtonCell setImage:], whose image position update
+  // buttons created in code rely on to show their image at all.
+  orig = class_getInstanceMethod(cls, @selector(setImage:));
+  swiz = class_getInstanceMethod(cls, @selector(EAU_setImage:));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
 }
 
 // Helper methods to track processing state
@@ -202,7 +195,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 }
 
 // Intercept setImage to handle common_ret/common_retH images
-- (void) setImage:(NSImage *)image
+- (void) EAU_setImage:(NSImage *)image
 {
   if (image) {
     NSString *imageName = [image name];
@@ -231,7 +224,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
     }
   }
   
-  [super setImage:image];
+  [self EAU_setImage:image];
 }
 
 // Handle common_ret/common_retH alternate images
@@ -358,6 +351,12 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 - (void) EAU_drawInteriorWithFrame:(NSRect)cellFrame inView:(NSView*)controlView
 {
   BOOL shouldRemoveImagePosition = NO;
+
+  // The bezel draws the whole face of a disclosure button; interfaces still
+  // carry a placeholder title for them that must not show.
+  if ([self bezelStyle] == NSDisclosureBezelStyle
+    || [self bezelStyle] == NSRoundedDisclosureBezelStyle)
+    return;
 
   NSCellImagePosition oldPos = [self imagePosition];
 
