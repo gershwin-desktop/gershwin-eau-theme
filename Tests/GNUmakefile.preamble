@@ -28,3 +28,9 @@ t_MenuOverflowScale_OBJC_FILES += ../EauMenuScrollManager.m
 t_MenuOverflowScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 # Like the theme, the scroll manager is built with ARC
 ../EauMenuScrollManager.m_FILE_FLAGS += -fobjc-arc
+
+# Like the theme, the relaunch manager is built with ARC; it runs inside the
+# test's own autorelease pool, as it does at theme activation.
+t_MenuPIDScanMemory_OBJC_FILES += ../EauMenuRelaunchManager.m
+t_MenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
+../EauMenuRelaunchManager.m_FILE_FLAGS += -fobjc-arc
