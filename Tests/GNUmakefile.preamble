@@ -34,3 +34,6 @@ t_MenuOverflowScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 t_MenuPIDScanMemory_OBJC_FILES += ../EauMenuRelaunchManager.m
 t_MenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
 ../EauMenuRelaunchManager.m_FILE_FLAGS += -fobjc-arc
+
+# Runs against the theme bundle given with -GSTheme.
+t_SliderDisabled_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
