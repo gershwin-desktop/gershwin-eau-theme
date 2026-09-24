@@ -1702,20 +1702,12 @@ static void setKeyEquivalent(NSButton *button)
                 // NSLog(@"Eau: Exception during window cleanup: %@", e);
             }
 
-            // NSLog(@"Eau: Clearing _window ivar on NSAlert (keeping associated object to prevent premature dealloc)");
             object_setIvar(self, windowIvar, nil);
-            // IMPORTANT: Do NOT release the associated object here.  The _window ivar
-            // in GNUstep's NSAlert is __weak, so the associated object with
-            // OBJC_ASSOCIATION_RETAIN_NONATOMIC is the ONLY strong reference keeping
-            // the EauAlertPanel alive.  Releasing it here triggers -dealloc while the
-            // window system (DPS/X11 backend) may still have pending operations or
-            // references to the panel, causing a crash (segfault) after dealloc
-            // completes.  The associated object will be automatically released when
-            // NSAlert itself is deallocated, which is a safe time for the panel to die.
-            //
-            // The panel is fully inert at this point (no delegate, no animation, ordered
-            // out) so keeping it alive until NSAlert deallocates is safe and prevents
-            // the use-after-free crash.
+            {
+                // Releases the +1 the ivar held.
+                id consumed = (__bridge_transfer id)(__bridge void *)currentWindow;
+                (void)consumed;
+            }
         }
     }
     else
@@ -1867,8 +1859,8 @@ static void setKeyEquivalent(NSButton *button)
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
-            object_setIvar(self, windowIvar, panel);
-            objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // The ivar owns the panel at +1, as GNUstep's own -_setupPanel leaves it.
+            object_setIvar(self, windowIvar, (__bridge id)(__bridge_retained void *)panel);
             // NSLog(@"Eau: Successfully set _window via ivar");
         }
         else
