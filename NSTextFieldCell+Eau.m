@@ -281,12 +281,8 @@ titleRect.size.height += 2;
 
 - (id)initEauWithCoder:(NSCoder *)aDecoder
 {
-  self = [self initEauWithCoder:aDecoder];
-  if (self != nil && EauThemeIsActive())
-    {
-      [self setBezeled: NO];
-    }
-  return self;
+  /* Leave the bezel as the nib has it. */
+  return [self initEauWithCoder:aDecoder];
 }
 
 @end
