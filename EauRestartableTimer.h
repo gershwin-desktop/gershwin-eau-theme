@@ -8,7 +8,8 @@
 
 /* Sends an action once, a fixed delay after the most recent -restart, in
  * every run loop mode it was given.  Calling -restart again before the delay
- * is over pushes the action out.  The target is not retained. */
+ * is over pushes the action out.  The target is not retained.  The timer
+ * retains the receiver until -invalidate. */
 @interface EauRestartableTimer : NSObject
 
 - (instancetype)initWithDelay:(NSTimeInterval)delay

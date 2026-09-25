@@ -30,24 +30,34 @@
   return self;
 }
 
+/* One repeating timer, added to the modes once and then only moved in time.
+ * Invalidating a timer and scheduling a new one per restart would leave the
+ * old one in the list of every mode that does not run meanwhile (a modal
+ * panel mode in a process that never shows one), one dead timer per restart
+ * for the life of the process. */
 - (void)restart
 {
-  [_timer invalidate];
-  _timer = [NSTimer timerWithTimeInterval: _delay
-                                   target: self
-                                 selector: @selector(timerFired:)
-                                 userInfo: nil
-                                  repeats: NO];
-  NSRunLoop *rl = [NSRunLoop currentRunLoop];
-  for (NSString *mode in _modes)
+  if (_timer == nil)
     {
-      [rl addTimer: _timer forMode: mode];
+      _timer = [[NSTimer alloc] initWithFireDate: [NSDate distantFuture]
+                                        interval: _delay
+                                          target: self
+                                        selector: @selector(timerFired:)
+                                        userInfo: nil
+                                         repeats: YES];
+      NSRunLoop *rl = [NSRunLoop currentRunLoop];
+      for (NSString *mode in _modes)
+        {
+          [rl addTimer: _timer forMode: mode];
+        }
     }
+  [_timer setFireDate: [NSDate dateWithTimeIntervalSinceNow: _delay]];
 }
 
 - (void)timerFired:(NSTimer *)timer
 {
-  _timer = nil;
+  /* Parked rather than invalidated, for the reason given at -restart. */
+  [_timer setFireDate: [NSDate distantFuture]];
   id target = _target;
   if (target != nil)
     {

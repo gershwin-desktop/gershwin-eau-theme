@@ -109,6 +109,8 @@ int main(void)
   /* A process whose loop only ever runs the default mode, restarting the
      timer on every draw of a spinner. */
   r = [Recorder new];
+  /* The main thread's run loop makes a housekeeping timer of its own. */
+  [NSRunLoop currentRunLoop];
   before = liveTimers;
   t = NewTimer(r, 0.2);
   for (i = 0; i < 50; i++)
