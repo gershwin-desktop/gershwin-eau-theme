@@ -212,6 +212,59 @@ static void EAUEnsureWindowStates(Display *dpy,
     }
 }
 
+/*
+ * The window manager hangs a sheet from its parent's titlebar, moves it
+ * with the parent and slides it in and out, but only for windows marked
+ * with _GERSHWIN_SHEET: WM_TRANSIENT_FOR, all that libs-gui sets for a
+ * sheet, is also set for child windows and drawers.  The mark must be on
+ * the window before it is mapped, and a deferred sheet has no X window
+ * before it is first ordered in, so it is set on every order-in.
+ */
+static void EAUMarkSheet(GSDisplayServer *server, int win)
+{
+  static Atom sheetAtom = None;
+  NSWindow *window = GSWindowWithNumber(win);
+  Display *dpy = (Display *)[server serverDevice];
+  Window xwin = (Window)(uintptr_t)[server windowDevice: win];
+
+  if (window == nil || dpy == NULL || xwin == 0)
+    {
+      return;
+    }
+  if (sheetAtom == None)
+    {
+      sheetAtom = XInternAtom(dpy, "_GERSHWIN_SHEET", False);
+    }
+
+  if ([[window parentWindow] attachedSheet] == window)
+    {
+      long isSheet = 1;
+
+      XChangeProperty(dpy, xwin, sheetAtom, XA_CARDINAL, 32,
+                      PropModeReplace, (unsigned char *)&isSheet, 1);
+    }
+  else
+    {
+      /* The same panel may later be run as an ordinary dialog. */
+      XDeleteProperty(dpy, xwin, sheetAtom);
+    }
+}
+
+static void EAUSwizzle(Class serverClass, Class category, SEL origSel, SEL swizSel)
+{
+  Method origMethod = class_getInstanceMethod(serverClass, origSel);
+  Method swizMethod = class_getInstanceMethod(category, swizSel);
+  if (!origMethod || !swizMethod)
+    return;
+
+  /* Add our method to XGServer, then exchange implementations */
+  class_addMethod(serverClass, swizSel,
+                  method_getImplementation(swizMethod),
+                  method_getTypeEncoding(swizMethod));
+  Method addedMethod = class_getInstanceMethod(serverClass, swizSel);
+  method_exchangeImplementations(origMethod, addedMethod);
+}
+
 @implementation GSDisplayServer (EauPopupMenuFix)
 
 + (void) load
@@ -220,20 +273,18 @@ static void EAUEnsureWindowStates(Display *dpy,
   if (!cls)
     return;
 
-  SEL origSel = @selector(setwindowlevel::);
-  SEL swizSel = @selector(eau_setwindowlevel::);
+  EAUSwizzle(cls, self, @selector(setwindowlevel::), @selector(eau_setwindowlevel::));
+  EAUSwizzle(cls, self, @selector(orderwindow:::), @selector(eau_orderwindow:::));
+}
 
-  Method origMethod = class_getInstanceMethod(cls, origSel);
-  Method swizMethod = class_getInstanceMethod(self, swizSel);
-  if (!origMethod || !swizMethod)
-    return;
-
-  /* Add our method to XGServer, then exchange implementations */
-  class_addMethod(cls, swizSel,
-                  method_getImplementation(swizMethod),
-                  method_getTypeEncoding(swizMethod));
-  Method addedMethod = class_getInstanceMethod(cls, swizSel);
-  method_exchangeImplementations(origMethod, addedMethod);
+- (void) eau_orderwindow: (int)op : (int)otherWin : (int)winNum
+{
+  if (op != NSWindowOut)
+    {
+      EAUMarkSheet(self, winNum);
+    }
+  /* Call original (swizzled) */
+  [self eau_orderwindow: op : otherWin : winNum];
 }
 
 - (void) eau_setwindowlevel: (int)level : (int)win
