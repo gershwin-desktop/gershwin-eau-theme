@@ -37,3 +37,8 @@ t_MenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
 
 # Runs against the theme bundle given with -GSTheme.
 t_SliderDisabled_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
+
+# Like the theme, the Dock progress hide timer is built with ARC.
+t_RestartableTimer_OBJC_FILES += ../EauRestartableTimer.m
+t_RestartableTimer_TOOL_LIBS += -lgnustep-base -lobjc
+../EauRestartableTimer.m_FILE_FLAGS += -fobjc-arc
