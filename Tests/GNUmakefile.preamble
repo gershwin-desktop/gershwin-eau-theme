@@ -42,3 +42,8 @@ t_SliderDisabled_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
 t_RestartableTimer_OBJC_FILES += ../EauRestartableTimer.m
 t_RestartableTimer_TOOL_LIBS += -lgnustep-base -lobjc
 ../EauRestartableTimer.m_FILE_FLAGS += -fobjc-arc
+
+# Both units are Foundation-only pure geometry/data helpers for the EauTest
+# showcase; keep them headless (no gnustep-gui link needed).
+t_EauMetricsChecker_TOOL_LIBS += -lgnustep-base
+t_EauShowcaseSectionRegistry_TOOL_LIBS += -lgnustep-base
