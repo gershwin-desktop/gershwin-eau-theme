@@ -15,7 +15,7 @@
 #import "AppearanceMetrics.h"
 #import <objc/runtime.h>
 
-static const CGFloat EauShowcaseWindowWidth = 940.0;
+static const CGFloat EauShowcaseWindowWidth = 1040.0;
 static const CGFloat EauShowcaseWindowHeight = 640.0;
 static const CGFloat EauShowcaseSidebarWidth = 200.0;
 static const CGFloat EauShowcaseHeaderHeight = 24.0;
@@ -216,7 +216,7 @@ static NSView *NewPane(NSRect bounds)
                 backing: NSBackingStoreBuffered
                   defer: NO];
   [_window setTitle: @"EauTest Showcase"];
-  [_window setMinSize: NSMakeSize(700, 440)];
+  [_window setMinSize: NSMakeSize(800, 440)];
   [_window setReleasedWhenClosed: NO];
   [_window center];
 
@@ -336,9 +336,9 @@ static NSView *NewPane(NSRect bounds)
   NSRect bounds = NSMakeRect(0, 0, NSWidth([_headerView frame]), NSHeight([_headerView frame]));
   CGFloat buttonY = floor((NSHeight(bounds) - METRICS_BUTTON_SMALL_HEIGHT) / 2.0);
   CGFloat toggleY = floor((NSHeight(bounds) - METRICS_RADIO_BUTTON_SIZE) / 2.0);
-  CGFloat summaryWidth = 260;
-  CGFloat toggleWidth = 176;
-  CGFloat classicWidth = 110;
+  CGFloat summaryWidth = 190;
+  CGFloat toggleWidth = 172;
+  CGFloat classicWidth = 100;
 
   NSRect summaryFrame = NSMakeRect(NSMaxX(bounds) - summaryWidth, 3, summaryWidth, 17);
   [_violationSummaryLabel setFrame: summaryFrame];
@@ -536,22 +536,36 @@ static NSView *NewPane(NSRect bounds)
         }
     }
 
-  [rows sortUsingComparator: ^NSComparisonResult(id a, id b) {
-    CGFloat ya = NSMidY([(EauMetricsControl *)[(NSArray *)a objectAtIndex: 0] frame]);
-    CGFloat yb = NSMidY([(EauMetricsControl *)[(NSArray *)b objectAtIndex: 0] frame]);
+  /* The row's own gap to its neighbour has to be measured from the row's
+   * full bounding envelope, not from one member control - EauTestFormBuilder
+   * centers a row on its TALLEST control (e.g. a 21px bevel button), so a
+   * row whose leftmost control is a shorter 17px label would otherwise be
+   * measured against the wrong edge and report a gap that never existed. */
+  NSMutableArray *rowEnvelopes = [NSMutableArray array];
+  for (NSMutableArray *row in rows)
+    {
+      NSRect envelope = [[row objectAtIndex: 0] frame];
+      for (NSUInteger i = 1; i < [row count]; i++)
+        envelope = NSUnionRect(envelope, [[row objectAtIndex: i] frame]);
+      [rowEnvelopes addObject:
+        [EauMetricsControl controlWithName: @"row" frame: envelope requiredHeight: 0]];
+    }
+  [rowEnvelopes sortUsingComparator: ^NSComparisonResult(id a, id b) {
+    CGFloat ya = NSMidY([(EauMetricsControl *)a frame]);
+    CGFloat yb = NSMidY([(EauMetricsControl *)b frame]);
     if (ya > yb) return NSOrderedAscending;
     if (ya < yb) return NSOrderedDescending;
     return NSOrderedSame;
   }];
-  for (NSUInteger i = 1; i < [rows count]; i++)
+  for (NSUInteger i = 1; i < [rowEnvelopes count]; i++)
     {
-      EauMetricsControl *prevLead = [[rows objectAtIndex: i - 1] objectAtIndex: 0];
-      EauMetricsControl *curLead = [[rows objectAtIndex: i] objectAtIndex: 0];
+      EauMetricsControl *prevRow = [rowEnvelopes objectAtIndex: i - 1];
+      EauMetricsControl *curRow = [rowEnvelopes objectAtIndex: i];
       EauMetricsViolation *violation = [EauMetricsChecker
-        spacingViolationForControl: curLead neighbor: prevLead verticalLayout: YES];
+        spacingViolationForControl: curRow neighbor: prevRow verticalLayout: YES];
       if (violation != nil)
         [annotations addObject: [EauShowcaseMetricsAnnotation
-          annotationWithRect: NSUnionRect([prevLead frame], [curLead frame])
+          annotationWithRect: NSUnionRect([prevRow frame], [curRow frame])
                        label: [violation message] color: [NSColor redColor]]];
     }
 
@@ -641,12 +655,12 @@ static NSView *NewPane(NSRect bounds)
   NSView *pane = NewPane(bounds);
   EauTestFormBuilder *form = [[EauTestFormBuilder alloc] initWithView: pane];
 
-  [form addRowWithLabel: @"Push (Enabled):"
+  [form addRowWithLabel: @"Push:"
                 controls: @[ ShowcaseButton(@"Rounded", nil, NULL, NSRegularControlSize) ]];
 
   NSButton *defaultButton = ShowcaseButton(@"Default", nil, NULL, NSRegularControlSize);
   [defaultButton setKeyEquivalent: @"\r"];
-  [form addRowWithLabel: @"Push (Key/Default):" controls: @[ defaultButton ]];
+  [form addRowWithLabel: @"Default Push:" controls: @[ defaultButton ]];
   [_defaultButtonsByIdentifier setObject: defaultButton forKey: @"buttons"];
 
   NSButton *disabledButton = ShowcaseButton(@"Disabled", nil, NULL, NSRegularControlSize);
@@ -660,7 +674,7 @@ static NSView *NewPane(NSRect bounds)
 
   NSButton *disclosure = [EauTestControlFactory bezelButtonWithStyle: NSDisclosureBezelStyle side: 13];
   NSButton *help = [EauTestControlFactory bezelButtonWithStyle: NSHelpButtonBezelStyle side: 21];
-  [form addRowWithLabel: @"Bevel (Disclosure, Help):" controls: @[ disclosure, help ]];
+  [form addRowWithLabel: @"Bevel:" controls: @[ disclosure, help ]];
 
   return pane;
 }
@@ -670,16 +684,16 @@ static NSView *NewPane(NSRect bounds)
   NSView *pane = NewPane(bounds);
   EauTestFormBuilder *form = [[EauTestFormBuilder alloc] initWithView: pane];
 
-  [form addRowWithLabel: @"Checkbox (On/Off/Mixed):" controls: @[
+  [form addRowWithLabel: @"Checkbox:" controls: @[
     ShowcaseSwitch(@"On", NSOnState, YES, NSRegularControlSize),
     ShowcaseSwitch(@"Off", NSOffState, YES, NSRegularControlSize),
     ShowcaseSwitch(@"Mixed", NSMixedState, YES, NSRegularControlSize) ]];
 
-  [form addRowWithLabel: @"Checkbox (Disabled):" controls: @[
+  [form addRowWithLabel: @"Disabled Check:" controls: @[
     ShowcaseSwitch(@"On", NSOnState, NO, NSRegularControlSize),
     ShowcaseSwitch(@"Off", NSOffState, NO, NSRegularControlSize) ]];
 
-  [form addRowWithLabel: @"Checkbox (Small):" controls: @[
+  [form addRowWithLabel: @"Small Check:" controls: @[
     ShowcaseSwitch(@"On", NSOnState, YES, NSSmallControlSize),
     ShowcaseSwitch(@"Off", NSOffState, YES, NSSmallControlSize) ]];
 
@@ -697,7 +711,7 @@ static NSView *NewPane(NSRect bounds)
     [[radios cellAtRow: 0 column: (NSInteger)i] setTitle: [titles objectAtIndex: i]];
   [radios selectCellAtRow: 0 column: 0];
   EauShowcaseTag(radios, @"radio group", METRICS_RADIO_BUTTON_SIZE);
-  [form addRowWithLabel: @"Radio (Selected):" controls: @[ radios ]];
+  [form addRowWithLabel: @"Radio:" controls: @[ radios ]];
 
   NSMatrix *disabledRadios = [[NSMatrix alloc]
     initWithFrame: NSMakeRect(0, 0, 2 * 90, METRICS_RADIO_BUTTON_SIZE)
@@ -710,7 +724,7 @@ static NSView *NewPane(NSRect bounds)
   [[disabledRadios cellAtRow: 0 column: 1] setTitle: @"Second"];
   [disabledRadios setEnabled: NO];
   EauShowcaseTag(disabledRadios, @"disabled radio group", METRICS_RADIO_BUTTON_SIZE);
-  [form addRowWithLabel: @"Radio (Disabled):" controls: @[ disabledRadios ]];
+  [form addRowWithLabel: @"Disabled Radio:" controls: @[ disabledRadios ]];
 
   return pane;
 }
@@ -723,28 +737,28 @@ static NSView *NewPane(NSRect bounds)
   NSPopUpButton *popUp = [[NSPopUpButton alloc]
     initWithFrame: NSMakeRect(0, 0, 160, METRICS_TEXT_INPUT_FIELD_HEIGHT) pullsDown: NO];
   [popUp addItemsWithTitles: @[ @"Small", @"Medium", @"Large" ]];
-  [form addRowWithLabel: @"Pop-Up (Enabled):" controls: @[ popUp ]];
+  [form addRowWithLabel: @"Pop-Up:" controls: @[ popUp ]];
 
   NSPopUpButton *popUpDisabled = [[NSPopUpButton alloc]
     initWithFrame: NSMakeRect(0, 0, 160, METRICS_TEXT_INPUT_FIELD_HEIGHT) pullsDown: NO];
   [popUpDisabled addItemsWithTitles: @[ @"Small", @"Medium", @"Large" ]];
   [popUpDisabled setEnabled: NO];
-  [form addRowWithLabel: @"Pop-Up (Disabled):" controls: @[ popUpDisabled ]];
+  [form addRowWithLabel: @"Disabled Pop-Up:" controls: @[ popUpDisabled ]];
 
   NSPopUpButton *pullDown = [[NSPopUpButton alloc]
     initWithFrame: NSMakeRect(0, 0, 160, METRICS_TEXT_INPUT_FIELD_HEIGHT) pullsDown: YES];
   [pullDown addItemsWithTitles: @[ @"Actions", @"Rename", @"Duplicate" ]];
-  [form addRowWithLabel: @"Pull-Down (Enabled):" controls: @[ pullDown ]];
+  [form addRowWithLabel: @"Pull-Down:" controls: @[ pullDown ]];
 
-  NSComboBox *combo = [EauTestControlFactory inputFieldOfClass: [NSComboBox class] width: 160];
+  NSComboBox *combo = ShowcaseInputField([NSComboBox class], @"combo box", 160);
   [combo addItemsWithObjectValues: @[ @"Red", @"Green", @"Blue" ]];
   [combo selectItemAtIndex: 0];
   [combo setStringValue: @"Red"];
-  NSComboBox *comboDisabled = [EauTestControlFactory inputFieldOfClass: [NSComboBox class] width: 160];
+  NSComboBox *comboDisabled = ShowcaseInputField([NSComboBox class], @"disabled combo box", 160);
   [comboDisabled addItemsWithObjectValues: @[ @"Red", @"Green", @"Blue" ]];
   [comboDisabled setStringValue: @"Red"];
   [comboDisabled setEnabled: NO];
-  [form addRowWithLabel: @"Combo Box (Enabled/Disabled):" controls: @[ combo, comboDisabled ]];
+  [form addRowWithLabel: @"Combo Box:" controls: @[ combo, comboDisabled ]];
 
   return pane;
 }
@@ -756,12 +770,12 @@ static NSView *NewPane(NSRect bounds)
 
   NSTextField *field = ShowcaseInputField([NSTextField class], @"text field", EauShowcaseFieldWidth);
   [field setStringValue: @"Key / first responder"];
-  [form addRowWithLabel: @"Text Field (Key):" controls: @[ field ]];
+  [form addRowWithLabel: @"Text Field:" controls: @[ field ]];
 
   NSTextField *disabledField = ShowcaseInputField([NSTextField class], @"disabled field", EauShowcaseFieldWidth);
   [disabledField setStringValue: @"Disabled"];
   [disabledField setEnabled: NO];
-  [form addRowWithLabel: @"Text Field (Disabled):" controls: @[ disabledField ]];
+  [form addRowWithLabel: @"Disabled Field:" controls: @[ disabledField ]];
 
   NSSecureTextField *secure = ShowcaseInputField([NSSecureTextField class], @"secure field", EauShowcaseFieldWidth);
   [secure setStringValue: @"secret"];
@@ -797,14 +811,14 @@ static NSView *NewPane(NSRect bounds)
   [slider setMinValue: 0];
   [slider setMaxValue: 100];
   [slider setDoubleValue: 40];
-  [form addRowWithLabel: @"Slider (Enabled):" controls: @[ slider ]];
+  [form addRowWithLabel: @"Slider:" controls: @[ slider ]];
 
   NSSlider *disabledSlider = [[NSSlider alloc] initWithFrame: NSMakeRect(0, 0, EauShowcaseFieldWidth, 21)];
   [disabledSlider setMinValue: 0];
   [disabledSlider setMaxValue: 100];
   [disabledSlider setDoubleValue: 65];
   [disabledSlider setEnabled: NO];
-  [form addRowWithLabel: @"Slider (Disabled):" controls: @[ disabledSlider ]];
+  [form addRowWithLabel: @"Disabled Slider:" controls: @[ disabledSlider ]];
 
   NSTextField *stepperValue = ShowcaseValueField(@"5", 50);
   NSStepper *stepper = [[NSStepper alloc] initWithFrame: NSMakeRect(0, 0, 15, 22)];
@@ -813,14 +827,14 @@ static NSView *NewPane(NSRect bounds)
   [stepper setIntegerValue: 5];
   [stepper setTarget: stepperValue];
   [stepper setAction: @selector(takeIntegerValueFrom:)];
-  [form addRowWithLabel: @"Stepper (Enabled):" controls: @[ stepperValue, stepper ]];
+  [form addRowWithLabel: @"Stepper:" controls: @[ stepperValue, stepper ]];
 
   NSTextField *disabledStepperValue = ShowcaseValueField(@"3", 50);
   [disabledStepperValue setEnabled: NO];
   NSStepper *disabledStepper = [[NSStepper alloc] initWithFrame: NSMakeRect(0, 0, 15, 22)];
   [disabledStepper setIntegerValue: 3];
   [disabledStepper setEnabled: NO];
-  [form addRowWithLabel: @"Stepper (Disabled):" controls: @[ disabledStepperValue, disabledStepper ]];
+  [form addRowWithLabel: @"Disabled Stepper:" controls: @[ disabledStepperValue, disabledStepper ]];
 
   return pane;
 }
@@ -834,17 +848,17 @@ static NSView *NewPane(NSRect bounds)
     initWithFrame: NSMakeRect(0, 0, EauShowcaseFieldWidth, 20)];
   [determinate setIndeterminate: NO];
   [determinate setDoubleValue: 60];
-  [form addRowWithLabel: @"Progress (Determinate):" controls: @[ determinate ]];
+  [form addRowWithLabel: @"Progress:" controls: @[ determinate ]];
 
   NSProgressIndicator *indeterminate = [[NSProgressIndicator alloc]
     initWithFrame: NSMakeRect(0, 0, EauShowcaseFieldWidth, 20)];
   [indeterminate setIndeterminate: YES];
-  [form addRowWithLabel: @"Progress (Indeterminate):" controls: @[ indeterminate ]];
+  [form addRowWithLabel: @"Indeterminate:" controls: @[ indeterminate ]];
   _indeterminateBar = indeterminate;
 
   NSProgressIndicator *spinner = [[NSProgressIndicator alloc] initWithFrame: NSMakeRect(0, 0, 32, 32)];
   [spinner setStyle: NSProgressIndicatorSpinningStyle];
-  [form addRowWithLabel: @"Progress (Spinning):" controls: @[ spinner ]];
+  [form addRowWithLabel: @"Spinning:" controls: @[ spinner ]];
   _spinner = spinner;
 
   NSLevelIndicator *level = [[NSLevelIndicator alloc] initWithFrame:
@@ -852,7 +866,7 @@ static NSView *NewPane(NSRect bounds)
   [level setMinValue: 0];
   [level setMaxValue: 10];
   [level setDoubleValue: 6];
-  [form addRowWithLabel: @"Level Indicator (Enabled):" controls: @[ level ]];
+  [form addRowWithLabel: @"Level:" controls: @[ level ]];
 
   NSLevelIndicator *disabledLevel = [[NSLevelIndicator alloc] initWithFrame:
     NSMakeRect(0, 0, EauShowcaseFieldWidth, 20)];
@@ -860,7 +874,7 @@ static NSView *NewPane(NSRect bounds)
   [disabledLevel setMaxValue: 10];
   [disabledLevel setDoubleValue: 3];
   [disabledLevel setEnabled: NO];
-  [form addRowWithLabel: @"Level Indicator (Disabled):" controls: @[ disabledLevel ]];
+  [form addRowWithLabel: @"Disabled Level:" controls: @[ disabledLevel ]];
 
   return pane;
 }
@@ -880,7 +894,7 @@ static NSView *NewPane(NSRect bounds)
       [segments setWidth: 80 forSegment: (NSInteger)i];
     }
   [segments setSelectedSegment: 1];
-  [form addRowWithLabel: @"Segmented (Selected):" controls: @[ segments ]];
+  [form addRowWithLabel: @"Segmented:" controls: @[ segments ]];
 
   NSSegmentedControl *disabledSegments = [[NSSegmentedControl alloc]
     initWithFrame: NSMakeRect(0, 0, 160, METRICS_TEXT_INPUT_FIELD_HEIGHT)];
@@ -890,7 +904,7 @@ static NSView *NewPane(NSRect bounds)
   [disabledSegments setWidth: 80 forSegment: 0];
   [disabledSegments setWidth: 80 forSegment: 1];
   [disabledSegments setEnabled: NO];
-  [form addRowWithLabel: @"Segmented (Disabled):" controls: @[ disabledSegments ]];
+  [form addRowWithLabel: @"Disabled Segment:" controls: @[ disabledSegments ]];
 
   NSTabView *tabs = [[NSTabView alloc] initWithFrame: NSMakeRect(0, 0, EauShowcaseFieldWidth, 90)];
   NSTabViewItem *item1 = [[NSTabViewItem alloc] initWithIdentifier: @"one"];
@@ -1011,7 +1025,7 @@ static NSView *NewPane(NSRect bounds)
   [closed setState: NSOffState];
   NSButton *open = [EauTestControlFactory bezelButtonWithStyle: NSDisclosureBezelStyle side: 13];
   [open setState: NSOnState];
-  [form addRowWithLabel: @"Disclosure (Closed/Open):" controls: @[ closed, open ]];
+  [form addRowWithLabel: @"Disclosure:" controls: @[ closed, open ]];
 
   /* Toolbar-style bevel row: AppearanceMetrics calls for 8px between
    * toolbar bevel buttons, distinct from the 12px push-button spacing. */
@@ -1030,7 +1044,7 @@ static NSView *NewPane(NSRect bounds)
       [barContent addSubview: bevel];
       x += 24 + METRICS_SPACE_8;
     }
-  [form addRowWithLabel: @"Tool Bar (8px apart):" controls: @[ bar ]];
+  [form addRowWithLabel: @"Tool Bar:" controls: @[ bar ]];
 
   return pane;
 }
@@ -1041,17 +1055,16 @@ static NSView *NewPane(NSRect bounds)
   EauTestFormBuilder *form = [[EauTestFormBuilder alloc] initWithView: pane];
 
   NSTextField *note = [[NSTextField alloc] initWithFrame:
-    NSMakeRect(0, 0, EauShowcaseFieldWidth, 34)];
+    NSMakeRect(0, 0, 460, 34)];
   [note setEditable: NO];
   [note setSelectable: NO];
   [note setBezeled: NO];
   [note setDrawsBackground: NO];
   [note setFont: METRICS_FONT_SYSTEM_REGULAR_11];
-  [note setStringValue: @"Stub: a themed sheet transition lands separately. "
-    @"These buttons already exercise the real NSAlert/sheet paths that "
-    @"work will attach to."];
+  [note setStringValue: @"Stub for a themed sheet transition, done as a separate task. "
+    @"These buttons already exercise the real NSAlert/sheet paths it will attach to."];
   EauShowcaseExcludeFromScan(note);
-  [form addRowWithLabel: @"Sheets & Alerts (stub):" controls: @[ note ]];
+  [form addRowWithLabel: @"Sheets & Alerts:" controls: @[ note ]];
 
   [form addRowWithLabel: @"Alert (Modal):" controls: @[
     ShowcaseButton(@"Show Alert", self, @selector(showAlert:), NSRegularControlSize) ]];
@@ -1099,18 +1112,18 @@ static NSView *NewPane(NSRect bounds)
   NSColorWell *disabledWell = [[NSColorWell alloc] initWithFrame: NSMakeRect(0, 0, 52, 26)];
   [disabledWell setColor: [NSColor colorWithCalibratedRed: 0.9 green: 0.3 blue: 0.2 alpha: 1.0]];
   [disabledWell setEnabled: NO];
-  [form addRowWithLabel: @"Colour Well (Enabled/Disabled):" controls: @[ well, disabledWell ]];
+  [form addRowWithLabel: @"Colour Well:" controls: @[ well, disabledWell ]];
 
   NSDatePicker *textualDate = [[NSDatePicker alloc] initWithFrame: NSMakeRect(0, 0, 140, 22)];
   [[textualDate cell] setDatePickerStyle: NSTextFieldDatePickerStyle];
   [textualDate setDateValue: [NSDate date]];
-  [form addRowWithLabel: @"Date Picker (Textual):" controls: @[ textualDate ]];
+  [form addRowWithLabel: @"Date Picker:" controls: @[ textualDate ]];
 
   NSDatePicker *disabledDate = [[NSDatePicker alloc] initWithFrame: NSMakeRect(0, 0, 140, 22)];
   [[disabledDate cell] setDatePickerStyle: NSTextFieldDatePickerStyle];
   [disabledDate setDateValue: [NSDate date]];
   [disabledDate setEnabled: NO];
-  [form addRowWithLabel: @"Date Picker (Disabled):" controls: @[ disabledDate ]];
+  [form addRowWithLabel: @"Disabled Date:" controls: @[ disabledDate ]];
 
   return pane;
 }
