@@ -1,4 +1,5 @@
 #include "Eau.h"
+#import "EauRestartableTimer.h"
 
 /* oneway: Eau runs inside the WindowManager too, and a WindowManager waiting
  * for a reply from a busy Dock stops drawing the screen. */
@@ -14,7 +15,7 @@
 @interface Eau(EauDockProgress)
 - (void)reportDockProgress:(double)value;
 - (void)resetDockHideTimer;
-- (void)hideDockProgress:(NSTimer *)timer;
+- (void)hideDockProgress:(id)sender;
 @end
 
 // Mirror an app's progress bar into its Dock icon via the DockIcon DO service
@@ -25,7 +26,7 @@
 #define EAU_DOCK_HIDE_DELAY 2.0
 static id<EauDockService> dockProgressProxy = nil;
 static double lastDockValue = -2.0;   /* sentinel: nothing reported yet */
-static NSTimer *dockHideTimer = nil;
+static EauRestartableTimer *dockHideTimer = nil;
 static NSTimeInterval lastDockConnectAttempt = 0.0;
 
 static id<EauDockService> EauDockProgressProxy(void)
@@ -391,29 +392,23 @@ static const CGFloat EAU_SPINNER_DARK   = 0.80; /* 80% gray, darkest */
 
 - (void)resetDockHideTimer
 {
-  if (dockHideTimer)
+  if (dockHideTimer == nil)
     {
-      [dockHideTimer invalidate];
-      dockHideTimer = nil;
+      /* A timer in the default mode alone would stall under a modal alert
+       * or menu tracking (Build's success alert, a Run dialog), leaving the
+       * Dock bar stuck.  Serve those modes too. */
+      dockHideTimer = [[EauRestartableTimer alloc]
+        initWithDelay: EAU_DOCK_HIDE_DELAY
+               target: self
+               action: @selector(hideDockProgress:)
+                modes: @[NSDefaultRunLoopMode, NSModalPanelRunLoopMode,
+                         NSEventTrackingRunLoopMode]];
     }
-  /* scheduledTimerWithTimeInterval only serves the default mode; a modal
-   * alert or menu tracking (Build's success alert, a Run dialog) would stall
-   * the timer, leaving the Dock bar stuck.  Serve those modes too. */
-  NSTimer *t = [NSTimer timerWithTimeInterval: EAU_DOCK_HIDE_DELAY
-                                       target: self
-                                     selector: @selector(hideDockProgress:)
-                                     userInfo: nil
-                                      repeats: NO];
-  NSRunLoop *rl = [NSRunLoop currentRunLoop];
-  [rl addTimer: t forMode: NSDefaultRunLoopMode];
-  [rl addTimer: t forMode: NSModalPanelRunLoopMode];
-  [rl addTimer: t forMode: NSEventTrackingRunLoopMode];
-  dockHideTimer = t;
+  [dockHideTimer restart];
 }
 
-- (void)hideDockProgress:(NSTimer *)timer
+- (void)hideDockProgress:(id)sender
 {
-  dockHideTimer = nil;
   lastDockValue = -2.0;
   id<EauDockService> proxy = EauDockProgressProxy();
   if (proxy)

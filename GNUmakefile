@@ -25,6 +25,7 @@ Eau_OBJC_FILES = \
 		Eau+Menu.m\
 		Eau+Slider.m\
 		Eau+ProgressIndicator.m\
+		EauRestartableTimer.m\
 		EauProgressView.m\
 		Eau+Scroller.m\
 		Eau+ColorWell.m\
