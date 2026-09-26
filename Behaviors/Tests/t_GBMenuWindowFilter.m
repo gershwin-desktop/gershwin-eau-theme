@@ -16,8 +16,12 @@
 #import "Testing.h"
 #import "GBMenuWindowFilter.h"
 
+/* Style masks as libs-back publishes them in _GNUSTEP_WM_ATTR. */
+enum { kNoAttrs = -1, kBorderless = 0, kTitledClosable = 0x3 };
+
 static Window makeWindow(Display *dpy, const char *resName,
-                         const char *resClass, const char *typeName)
+                         const char *resClass, const char *typeName,
+                         long style)
 {
   Window w = XCreateSimpleWindow(dpy, DefaultRootWindow(dpy),
                                  0, 0, 10, 10, 0, 0, 0);
@@ -31,6 +35,14 @@ static Window makeWindow(Display *dpy, const char *resName,
       Atom type = XInternAtom(dpy, typeName, False);
       XChangeProperty(dpy, w, wmType, XA_ATOM, 32, PropModeReplace,
                       (unsigned char *)&type, 1);
+    }
+  if (style != kNoAttrs)
+    {
+      /* flags (style + level set), window_style, window_level */
+      unsigned long attrs[3] = { 0x3, (unsigned long)style, 3 };
+      Atom attrAtom = XInternAtom(dpy, "_GNUSTEP_WM_ATTR", False);
+      XChangeProperty(dpy, w, attrAtom, attrAtom, 32, PropModeReplace,
+                      (unsigned char *)attrs, 3);
     }
   XSync(dpy, False);
   return w;
@@ -57,13 +69,20 @@ int main(void)
       if (dpy == NULL)
         return 0;
 
-      Window bar = makeWindow(dpy, "Menu", "Menu", "_NET_WM_WINDOW_TYPE_DOCK");
-      Window dropdown = makeWindow(dpy, "Menu", "Menu", NULL);
+      Window bar = makeWindow(dpy, "Menu", "Menu", "_NET_WM_WINDOW_TYPE_DOCK",
+                              kBorderless);
+      Window dropdown = makeWindow(dpy, "Menu", "Menu", NULL, kBorderless);
       Window typedDropdown = makeWindow(dpy, "Menu", "Menu",
-                                        "_NET_WM_WINDOW_TYPE_MENU");
+                                        "_NET_WM_WINDOW_TYPE_MENU",
+                                        kBorderless);
       Window searchPanel = makeWindow(dpy, "Menu", "Menu",
-                                      "_NET_WM_WINDOW_TYPE_DIALOG");
-      Window otherApp = makeWindow(dpy, "TextEdit", "TextEdit", NULL);
+                                      "_NET_WM_WINDOW_TYPE_DIALOG",
+                                      kBorderless);
+      Window otherApp = makeWindow(dpy, "TextEdit", "TextEdit", NULL,
+                                   kBorderless);
+      Window titledPanel = makeWindow(dpy, "Menu", "Menu", NULL,
+                                      kTitledClosable);
+      Window unknown = makeWindow(dpy, "Menu", "Menu", NULL, kNoAttrs);
 
       /* --- the menu bar is never a dropdown --- */
       PASS(GBIsMenuDropdownWindow(dpy, bar, 24, 22) == NO,
@@ -89,6 +108,12 @@ int main(void)
       PASS(GBIsMenuDropdownWindow(dpy, searchPanel, 25, 25) == NO,
            "search panel at scale 1.1 is not a dropdown");
 
+      /* --- panels a menu item opens are not dropdowns --- */
+      PASS(GBIsMenuDropdownWindow(dpy, titledPanel, 340, 22) == NO,
+           "titled panel opened from a menu extra is not a dropdown");
+      PASS(GBIsMenuDropdownWindow(dpy, unknown, 340, 22) == NO,
+           "window without GNUstep style attributes is not a dropdown");
+
       /* --- other applications' windows are never touched --- */
       PASS(GBIsMenuDropdownWindow(dpy, otherApp, 135, 22) == NO,
            "another application's window is not a Menu dropdown");
@@ -98,6 +123,8 @@ int main(void)
       XDestroyWindow(dpy, typedDropdown);
       XDestroyWindow(dpy, searchPanel);
       XDestroyWindow(dpy, otherApp);
+      XDestroyWindow(dpy, titledPanel);
+      XDestroyWindow(dpy, unknown);
       XCloseDisplay(dpy);
     }
   return 0;

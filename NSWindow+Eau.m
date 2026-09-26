@@ -159,6 +159,14 @@
       return;
     }
 
+  /* The pulse is Eau's own default-button treatment; under another theme it
+   * would only burn a timer per dialog and redraw a button that does not
+   * pulse. */
+  if (!EauThemeIsActive())
+    {
+      return;
+    }
+
   // Check if the button cell is enabled before starting animation
   BOOL isEnabled = YES;
   if ([buttoncell respondsToSelector:@selector(isEnabled)]) {
@@ -194,7 +202,7 @@
 {
   NSButtonCell *cell = buttoncell;
 
-  if (cell == nil)
+  if (cell == nil || !EauThemeIsActive())
     {
       [self stopPulse];
       return;

@@ -23,4 +23,12 @@
   return YES;
 }
 
+- (void)prepareAlertPanelForDisplay:(NSWindow *)panel
+{
+  if ([panel isKindOfClass:[EauAlertPanel class]]) {
+    [(EauAlertPanel *)panel sizePanelToFit];
+  }
+  [panel center];
+}
+
 @end

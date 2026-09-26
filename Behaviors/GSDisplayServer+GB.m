@@ -40,6 +40,12 @@
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
 #include <stdlib.h>
+#include <string.h>
+
+#import "GBSheet.h"
+#import "GBTheme.h"
+#import "GBThemeHooks+WindowRole.h"
+#import "GBX11WindowRole.h"
 
 static BOOL GBIsDialogLikeWindow(NSWindow *window, int level)
 {
@@ -216,31 +222,143 @@ static void GBEnsureWindowStates(Display *dpy,
     }
 }
 
+/*
+ * The window manager attaches a sheet to its parent's titlebar and a drawer
+ * to its parent's edge, moves them with the parent and slides them in and
+ * out, but only for windows whose ICCCM WM_WINDOW_ROLE says "sheet" or
+ * "drawer": WM_TRANSIENT_FOR, all that libs-gui sets, is also set for
+ * dialogs and child windows.  The role must be on the window before it is
+ * mapped, and a deferred window has no X window before it is first ordered
+ * in, so it is set on every order-in.  This covers libs-gui's own sheets
+ * (app-modal fallback) as well as GBSheet ones, which GBSheetX11.m also
+ * marks when attaching.  A drawer is only a drawer when the theme takes
+ * over its placement (libs-gui otherwise moves it from a timer and the two
+ * would fight), so its role and outline come from theme hooks.  The
+ * drawer's edge and offsets are not passed on: the window manager reads
+ * them off where the drawer is put.
+ */
+static NSString *GBAttachedRoleOfWindow(NSWindow *window)
+{
+  id theme;
+
+  if ([[window parentWindow] attachedSheet] == window || GBSheetIsActive(window))
+    {
+      return GBWindowRoleSheet;
+    }
+  theme = GBThemeIfResponds(@selector(windowManagerRoleForWindow:));
+  if (theme != nil)
+    {
+      NSString *role = [theme windowManagerRoleForWindow: window];
+
+      if ([role isEqualToString: GBWindowRoleDrawer])
+        {
+          return GBWindowRoleDrawer;
+        }
+    }
+  return nil;
+}
+
+/* The WM cuts the outline (_WM_SHAPE_PATH) with a smooth edge and bends the
+ * shadow along; the theme decides the shape. */
+static void GBSetShapePath(Display *dpy, Window xwin, NSWindow *window)
+{
+  static Atom pathAtom = None;
+  id theme = GBThemeIfResponds(@selector(windowManagerShapePathForWindow:));
+  NSData *path = [theme windowManagerShapePathForWindow: window];
+  const int32_t *values = [path bytes];
+  NSUInteger count = [path length] / sizeof(int32_t);
+  long *items;
+  NSUInteger i;
+
+  if (count == 0)
+    {
+      return;
+    }
+  items = calloc(count, sizeof(long));
+  if (items == NULL)
+    {
+      return;
+    }
+  if (pathAtom == None)
+    {
+      pathAtom = XInternAtom(dpy, "_WM_SHAPE_PATH", False);
+    }
+  /* Xlib passes 32-bit items as long. */
+  for (i = 0; i < count; i++)
+    {
+      items[i] = values[i];
+    }
+  XChangeProperty(dpy, xwin, pathAtom, XA_INTEGER, 32, PropModeReplace,
+                  (unsigned char *)items, (int)count);
+  free(items);
+}
+
+static void GBMarkAttachedWindow(GSDisplayServer *server, int win)
+{
+  NSWindow *window = GSWindowWithNumber(win);
+  Display *dpy = (Display *)[server serverDevice];
+  Window xwin = (Window)(uintptr_t)[server windowDevice: win];
+  NSString *role;
+
+  if (window == nil || dpy == NULL || xwin == 0)
+    {
+      return;
+    }
+
+  role = GBAttachedRoleOfWindow(window);
+  if (role != nil)
+    {
+      GBX11SetAttachedRole(dpy, xwin, role);
+      if (role == GBWindowRoleDrawer)
+        {
+          GBSetShapePath(dpy, xwin, window);
+        }
+    }
+  else
+    {
+      /* The same panel may later be run as an ordinary dialog. */
+      GBX11ClearAttachedRole(dpy, xwin);
+    }
+}
+
+static void GBSwizzle(Class serverClass, Class category, SEL origSel, SEL swizSel)
+{
+  Method origMethod = class_getInstanceMethod(serverClass, origSel);
+  Method swizMethod = class_getInstanceMethod(category, swizSel);
+  Method addedMethod;
+
+  if (!origMethod || !swizMethod)
+    return;
+
+  /* Add our method to XGServer, then exchange implementations */
+  class_addMethod(serverClass, swizSel,
+                  method_getImplementation(swizMethod),
+                  method_getTypeEncoding(swizMethod));
+  addedMethod = class_getInstanceMethod(serverClass, swizSel);
+  method_exchangeImplementations(origMethod, addedMethod);
+}
+
 @implementation GSDisplayServer (GBPopupMenuFix)
 
 + (void) load
 {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class cls = NSClassFromString(@"XGServer");
-    if (!cls)
-      return;
+  Class cls = NSClassFromString(@"XGServer");
+  if (!cls)
+    return;
 
-    SEL origSel = @selector(setwindowlevel::);
-    SEL swizSel = @selector(gb_setwindowlevel::);
+  /* No dispatch_once: +load already runs once per class. */
+  GBSwizzle(cls, self, @selector(setwindowlevel::), @selector(gb_setwindowlevel::));
+  GBSwizzle(cls, self, @selector(orderwindow:::), @selector(gb_orderwindow:::));
+}
 
-    Method origMethod = class_getInstanceMethod(cls, origSel);
-    Method swizMethod = class_getInstanceMethod(self, swizSel);
-    if (!origMethod || !swizMethod)
-      return;
-
-    /* Add our method to XGServer, then exchange implementations */
-    class_addMethod(cls, swizSel,
-                    method_getImplementation(swizMethod),
-                    method_getTypeEncoding(swizMethod));
-    Method addedMethod = class_getInstanceMethod(cls, swizSel);
-    method_exchangeImplementations(origMethod, addedMethod);
-  });
+- (void) gb_orderwindow: (int)op : (int)otherWin : (int)winNum
+{
+  if (op != NSWindowOut)
+    {
+      GBMarkAttachedWindow(self, winNum);
+    }
+  /* Call original (swizzled) */
+  [self gb_orderwindow: op : otherWin : winNum];
 }
 
 - (void) gb_setwindowlevel: (int)level : (int)win

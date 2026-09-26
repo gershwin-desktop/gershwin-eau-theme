@@ -12,4 +12,10 @@
  * of the theme's panels so the behavior falls back to runModalForWindow:. */
 - (BOOL)runModalForAlertPanel:(NSWindow *)panel result:(NSInteger *)result;
 
+/* Lay the panel out for good before it is first shown.  Resizing or moving
+ * a panel that is already on screen leaves its pre-layout picture behind on
+ * the composited screen (a ghost in the corner), because the area it
+ * vacates is never damaged.  Without the hook the panel is only centered. */
+- (void)prepareAlertPanelForDisplay:(NSWindow *)panel;
+
 @end

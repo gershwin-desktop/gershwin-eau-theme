@@ -16,3 +16,4 @@ Eau.theme/Resources/Info-gnustep.plist
 Test/*/*.app/
 Test/obj/
 Behaviors/*.bundle/
+Test/*.app/

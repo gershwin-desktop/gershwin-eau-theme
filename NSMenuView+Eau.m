@@ -8,6 +8,8 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
+#import "Eau.h"
+
 /* GBMenuScrollManager's interface, looked up by name so the theme still
    works without the bundle (then no menu ever scrolls and nothing is drawn). */
 @interface NSObject (EauMenuScrollLookup)
@@ -76,7 +78,7 @@ static void s_eau_drawRect(id self, SEL _cmd, NSRect dirtyRect)
 
   // Overlay scroll-direction arrows on overflowing menus.
   NSMenuView *menuView = (NSMenuView *)self;
-  if ([menuView isHorizontal]) return;
+  if (!EauThemeIsActive() || [menuView isHorizontal]) return;
 
   id mgr = EauScrollManagerForMenuView(menuView);
   if (mgr)

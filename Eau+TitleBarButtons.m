@@ -9,16 +9,47 @@
 BOOL EauTitleBarButtonStyleIsOrb(void)
 {
     static BOOL isOrb = NO;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    static BOOL resolved = NO;
+    if (!resolved) {
         NSString *style = [[NSUserDefaults standardUserDefaults]
                            stringForKey:@"EauTitleBarButtonStyle"];
         isOrb = [style isEqualToString:@"orb"];
-    });
+        resolved = YES;
+    }
     return isOrb;
 }
 
 @implementation Eau (TitleBarButtons)
+
+#pragma mark - What the window manager asks
+
+/* The orb style puts the three buttons at the left of the bar and draws them
+ * with the title, so the window manager must not put its own along the edges.
+ * In the other style the buttons are the window manager's to draw. */
+- (BOOL)drawsTitlebarButtons
+{
+    return EauTitleBarButtonStyleIsOrb();
+}
+
+/* Where each button sits, counted from the bottom left of the bar, and empty
+ * for a button this window does not have. */
+- (NSRect)titlebarButtonRectForButton:(NSInteger)button
+                        titlebarWidth:(CGFloat)width
+                            styleMask:(NSUInteger)styleMask
+{
+    switch (button) {
+        case 0:
+            return (styleMask & NSClosableWindowMask)
+                     ? [self closeButtonRectForTitlebarWidth:width] : NSZeroRect;
+        case 1:
+            return (styleMask & NSMiniaturizableWindowMask)
+                     ? [self minimizeButtonRectForTitlebarWidth:width] : NSZeroRect;
+        case 2:
+            return (styleMask & NSResizableWindowMask)
+                     ? [self maximizeButtonRectForTitlebarWidth:width] : NSZeroRect;
+    }
+    return NSZeroRect;
+}
 
 #pragma mark - Geometry Queries
 

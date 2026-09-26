@@ -7,5 +7,24 @@ t_GBMenuSafeTriangle_OBJC_FILES += ../GBMenuSafeTriangleGeometry.m
 t_GBMenuWindowFilter_OBJC_FILES += ../GBMenuWindowFilter.m
 t_GBMenuWindowFilter_TOOL_LIBS += -lX11
 
-# Testing.h uses retain/release, so no ARC here; the tested code needs none.
+# The unit under test is the bundle's NSFont category, which swizzles on
+# load.  Like the bundle it is built with ARC: its static font cache would be
+# released with the first autorelease pool otherwise.
+t_GBFontSubstitution_OBJC_FILES += ../NSFont+GB.m
+t_GBFontSubstitution_TOOL_LIBS += -lgnustep-gui -lgnustep-base
+../NSFont+GB.m_FILE_FLAGS += -fobjc-arc
+
+t_GBMenuOverflowScale_OBJC_FILES += ../GBMenuScrollManager.m
+t_GBMenuOverflowScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base
+# Like the bundle, the scroll manager is built with ARC
+../GBMenuScrollManager.m_FILE_FLAGS += -fobjc-arc
+
+# Like the bundle, the relaunch manager is built with ARC; it runs inside the
+# test's own autorelease pool, as it does when the menu client starts up.
+t_GBMenuPIDScanMemory_OBJC_FILES += ../GBMenuRelaunchManager.m
+t_GBMenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
+../GBMenuRelaunchManager.m_FILE_FLAGS += -fobjc-arc
+
+# Testing.h uses retain/release, so no ARC for the test tools themselves;
+# units that the bundle builds with ARC get it per file above.
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated

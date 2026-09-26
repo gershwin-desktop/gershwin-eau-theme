@@ -15,14 +15,63 @@
 #include <string.h>
 
 #import "GBSheet.h"
+#import "GBX11WindowRole.h"
 
-/* The WM needs three things to treat a sheet like one: WM_TRANSIENT_FOR so
- * it stacks and moves with the parent, _NET_WM_STATE_MODAL so it knows the
- * parent is blocked, and Motif hints without decorations so it does not
- * frame the sheet.  libs-back only knows the style mask the window was
- * created with, so the hints are written here with Xlib, the same way
+/* The WM needs four things to treat a sheet like one: WM_TRANSIENT_FOR so
+ * it stacks and moves with the parent, WM_WINDOW_ROLE "sheet" so it hangs
+ * it from the parent's titlebar (WM_TRANSIENT_FOR alone is also set for
+ * dialogs), _NET_WM_STATE_MODAL so it knows the parent is blocked, and
+ * Motif hints without decorations so it does not frame the sheet.  libs-back only knows the style
+ * mask the window was created with, so the hints are written here with Xlib, the same way
  * GSDisplayServer+GB.m fixes window types.  The previous Motif hints are
  * kept so a panel reused later as a normal window gets its frame back. */
+
+NSString *const GBWindowRoleSheet = @"sheet";
+NSString *const GBWindowRoleDrawer = @"drawer";
+
+static Atom GBRoleAtom(Display *dpy)
+{
+  static Atom roleAtom = None;
+
+  if (roleAtom == None) {
+    roleAtom = XInternAtom(dpy, "WM_WINDOW_ROLE", False);
+  }
+  return roleAtom;
+}
+
+void GBX11SetAttachedRole(Display *dpy, Window xwin, NSString *role)
+{
+  const char *value = [role UTF8String];
+
+  XChangeProperty(dpy, xwin, GBRoleAtom(dpy), XA_STRING, 8, PropModeReplace,
+                  (const unsigned char *)value, (int)strlen(value));
+}
+
+void GBX11ClearAttachedRole(Display *dpy, Window xwin)
+{
+  Atom roleAtom = GBRoleAtom(dpy);
+  Atom actualType = None;
+  int actualFormat = 0;
+  unsigned long nitems = 0;
+  unsigned long bytesAfter = 0;
+  unsigned char *value = NULL;
+  BOOL ours = NO;
+
+  if (XGetWindowProperty(dpy, xwin, roleAtom, 0, 16, False, XA_STRING, &actualType, &actualFormat,
+                         &nitems, &bytesAfter, &value) == Success &&
+      actualType == XA_STRING && value != NULL) {
+    NSString *role = [[NSString alloc] initWithBytes:value
+                                              length:strnlen((char *)value, nitems)
+                                            encoding:NSISOLatin1StringEncoding];
+    ours = [role isEqualToString:GBWindowRoleSheet] || [role isEqualToString:GBWindowRoleDrawer];
+  }
+  if (value != NULL) {
+    XFree(value);
+  }
+  if (ours) {
+    XDeleteProperty(dpy, xwin, roleAtom);
+  }
+}
 
 static const void *kGBSheetSavedMotifKey = &kGBSheetSavedMotifKey;
 
@@ -138,6 +187,7 @@ void GBSheetX11Attach(NSWindow *sheet, NSWindow *parent)
   if (GBSheetXWindow(parent, &dpy, &xparent)) {
     XSetTransientForHint(dpy, xsheet, xparent);
   }
+  GBX11SetAttachedRole(dpy, xsheet, GBWindowRoleSheet);
   GBSheetSetModalState(dpy, xsheet, YES);
   XFlush(dpy);
 }
@@ -154,6 +204,7 @@ void GBSheetX11Detach(NSWindow *sheet)
   }
 
   XDeleteProperty(dpy, xsheet, XA_WM_TRANSIENT_FOR);
+  GBX11ClearAttachedRole(dpy, xsheet);
   GBSheetSetModalState(dpy, xsheet, NO);
 
   motif = XInternAtom(dpy, "_MOTIF_WM_HINTS", False);

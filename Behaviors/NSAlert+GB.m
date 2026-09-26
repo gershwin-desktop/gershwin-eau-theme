@@ -124,7 +124,15 @@ static char GBAlertRetiredPanelKey;
     /* Without this the alert can come up behind the key window of another
      * app, or unfocused, so the keyboard does not reach it.
      * TODO: Upstream to GNUstep - -[NSAlert runModal] should activate the app
-     * and make its panel key before entering the modal session. */
+     * and make its panel key before entering the modal session.
+     * Placed before it is first shown: see prepareAlertPanelForDisplay:. */
+    id preparer = GBThemeIfResponds(@selector(prepareAlertPanelForDisplay:));
+    if (preparer != nil) {
+      [preparer prepareAlertPanelForDisplay:window];
+    }
+    else {
+      [window center];
+    }
     [NSApp activateIgnoringOtherApps:YES];
     [window makeKeyAndOrderFront:nil];
 

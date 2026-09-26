@@ -73,6 +73,11 @@ static NSMenu *addSubmenu(NSMenu *mainMenu, NSString *title)
   addItem(windowMenu, @"Minimize", @selector(performMiniaturize:), @"m");
   addItem(windowMenu, @"Zoom", @selector(performZoom:), @"");
   [windowMenu addItem: [NSMenuItem separatorItem]];
+  /* The showcase is a second, additional window - the uitest scripts under
+   * Tests/ target the classic window this app has always opened at launch,
+   * so that behavior is untouched; this is purely an extra way in. */
+  addItem(windowMenu, @"Showcase", @selector(showShowcase:), @"");
+  [windowMenu addItem: [NSMenuItem separatorItem]];
   addItem(windowMenu, @"Bring All to Front", @selector(arrangeInFront:), @"");
   [NSApp setWindowsMenu: windowMenu];
 

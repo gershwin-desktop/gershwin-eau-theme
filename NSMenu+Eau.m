@@ -10,6 +10,8 @@
 #import <objc/runtime.h>
 #import <string.h>
 
+#import "Eau.h"
+
 /* Implemented by GershwinBehaviors.bundle; looked up by name so the theme
    still works without the bundle. */
 @interface NSObject (EauMenuTrackingLookup)
@@ -56,7 +58,7 @@ static BOOL EauMenuIsTracking(void)
   [self eau_performActionForItemAtIndex:index];
 
   // Blink only while a menu is actively being tracked on screen.
-  if (!EauMenuIsTracking()) return;
+  if (!EauThemeIsActive() || !EauMenuIsTracking()) return;
 
   // Blink only when the triggered item itself carries an action.  An item
   // that merely has a submenu (and nothing else) uses the no-op

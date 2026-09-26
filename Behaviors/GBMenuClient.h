@@ -50,6 +50,7 @@
   id menuServerProxy;
   BOOL menuServerAvailable;
   BOOL menuServerConnected;
+  NSTimer *menuClientVerifyTimer;
 }
 
 + (GBMenuClient *)sharedClient;

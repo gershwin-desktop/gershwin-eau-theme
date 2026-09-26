@@ -326,7 +326,9 @@ static NSString *AllText(NSView *view)
     c->originalStyle = [c->customSheet styleMask];
     c->callbackFired = NO;
     [c customSheet:nil];
-    [c check:-[start timeIntervalSinceNow] < 0.3 what:@"beginSheet returns immediately"];
+    NSTimeInterval took = -[start timeIntervalSinceNow];
+    [c check:took < 0.3
+        what:[NSString stringWithFormat:@"beginSheet returns immediately (%.2fs)", took]];
     [c check:[c->docWindow attachedSheet] == c->customSheet what:@"attachedSheet"];
     [c check:[c->customSheet sheetParent] == c->docWindow what:@"sheetParent"];
     [c check:[c->customSheet styleMask] == NSBorderlessWindowMask what:@"sheet is borderless"];

@@ -35,21 +35,26 @@
     method_exchangeImplementations(orig, swiz);
 }
 
-/* Also sent by NSTextView+GB.m when Escape reaches the field editor. */
+/* Also sent by NSTextView+GB.m when Escape reaches the field editor or the
+   cancel button is clicked while editing. */
 - (void) gb_clearSearch
 {
   NSSearchFieldCell *cell = [self cell];
-  [[self window] makeFirstResponder: nil];  // End editing
-  [NSApp sendAction: [self action] to: [self target] from: self];
-  [cell setStringValue: @""];
-
   NSText *editor = [self currentEditor];
+
+  /* Ending the edit copies the editor's text back into the cell, so the
+     value can only be emptied afterwards - and it has to be empty before
+     anyone is told, because an action or notification handler asks the
+     field for its stringValue and would search for the cleared text. */
   if (editor != nil)
     [editor setString: @""];
+  [[self window] makeFirstResponder: nil];
+  [cell setStringValue: @""];
+  [self setNeedsDisplay: YES];
 
   [[NSNotificationCenter defaultCenter] postNotificationName: NSControlTextDidChangeNotification
                                                       object: self];
-  [self setNeedsDisplay: YES];
+  [NSApp sendAction: [self action] to: [self target] from: self];
 }
 
 - (void) gb_keyDown: (NSEvent *)theEvent

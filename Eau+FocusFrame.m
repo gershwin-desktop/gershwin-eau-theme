@@ -81,6 +81,24 @@ static void eauHideFocusRing(NSWindow *win)
     }
 }
 
+/* Called when another theme takes over: the overlay is Eau's view and has no
+ * business sitting on top of a window the rest of the run. */
+void EauRemoveFocusOverlayFromWindow(NSWindow *win)
+{
+  EauFocusOverlay *ov;
+
+  if (win == nil)
+    return;
+  ov = objc_getAssociatedObject(win, EauFocusOverlayKey);
+  if (ov == nil)
+    return;
+  [ov setRingPath: nil];
+  [ov setFocusedView: nil];
+  [ov removeFromSuperview];
+  objc_setAssociatedObject(win, EauFocusOverlayKey, nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static EauFocusOverlay *eauOverlayForWindow(NSWindow *win)
 {
   EauFocusOverlay *ov = objc_getAssociatedObject(win, EauFocusOverlayKey);

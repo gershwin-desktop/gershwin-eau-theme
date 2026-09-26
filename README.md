@@ -37,6 +37,62 @@ The repository builds two bundles:
 - [Original rik.theme](https://github.com/mclarenlabs/rik.theme)
 - [Alessandro Sangiuliano's rik.theme fork](https://github.com/AlessandroSangiuliano/rik.theme)
 
+## Sheets and the window manager
+
+libs-gui shows a sheet (`-beginSheet:modalForWindow:...`, `NSAlert`
+`-beginSheetModalForWindow:...`, `NSSavePanel` as a sheet) as an ordinary
+window that only carries `WM_TRANSIENT_FOR`, which dialogs, drawers and child
+windows carry too. So that the Gershwin window manager can hang the sheet from
+its parent's titlebar, slide it in and out and keep it attached,
+GershwinBehaviors marks it, under any theme (sheets it runs itself, in
+`Behaviors/GBSheetX11.m`, carry the same mark):
+
+- The ICCCM `WM_WINDOW_ROLE` (`STRING`) = `sheet` is put on the window every
+  time it is ordered in while it is its parent's `attachedSheet`, and removed
+  when the same window is ordered in as anything else (a panel reused as an
+  ordinary dialog); a role the application set itself is left alone. No
+  private property is used.
+- It is set in the swizzled `XGServer -orderwindow:::`
+  (`Behaviors/GSDisplayServer+GB.m`), the first point at which even a deferred sheet
+  has an X window, and before the window is mapped, as the window manager
+  reads it at the map request.
+- `WM_TRANSIENT_FOR` (set by libs-back) names the parent; the window manager
+  needs both.
+
+The window manager's side of the contract is described in `SHEETS.md` of
+gershwin-windowmanager. The showcase (`Test/`, Window > Showcase, "Sheets &
+Alerts") opens an alert sheet and a save panel sheet.
+
+## Drawers and the window manager
+
+libs-gui shows an `NSDrawer` in a borderless `GSDrawerWindow` that it moves
+after its parent from a timer and slides by resizing it in blocking steps,
+the opening ones before the window is even shown. Under Gershwin the window
+manager attaches the drawer to its parent instead (moves, resizes, wobble,
+stacking below the parent, the slide out from under the edge; see
+`DRAWERS.md` of gershwin-windowmanager), and the theme (`EauDrawer.m`,
+`EauDrawerGeometry.m`):
+
+- has the ICCCM `WM_WINDOW_ROLE` (`STRING`) = `drawer` set in the swizzled
+  `XGServer -orderwindow:::`, like `sheet` for sheets: GershwinBehaviors asks
+  the theme through an optional hook (`Eau+WindowRole.m`), so only a drawer
+  Eau places itself is handed to the window manager. Nothing else is passed
+  on: the window manager reads the edge, the leading and trailing offsets and
+  the thickness off where the drawer is put next to its parent;
+- places the drawer flush against its parent's edge, as thick as its content
+  plus `METRICS_DRAWER_MARGIN` on both sides (libs-gui made it as wide as a
+  window can be), and always gives it its open frame; the slide steps are
+  dropped, the window manager slides the finished drawer;
+- draws the drawer in `-drawWindowBackground:view:`: a shade darker than the
+  window, finely textured along its length, with the window's shadow on the
+  seam and a rim round the outer sides; the content box is inset by the
+  margin and draws nothing;
+- rounds the two outer corners with `_WM_SHAPE_PATH`
+  (`METRICS_DRAWER_CORNER_RADIUS`, through the same hook), which the window manager cuts with a
+  smooth edge.
+
+The showcase's "Drawers" section opens one.
+
 ## Developers
 
 ### Method Swizzling Pattern

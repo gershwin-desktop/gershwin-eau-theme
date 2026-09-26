@@ -165,6 +165,11 @@ static void EAULayoutGWDialog(GWDialog *dialog)
 
 - (void)eau_drawRect:(NSRect)rect
 {
+  if (!EauThemeIsActive())
+    {
+      [self eau_drawRect: rect];
+      return;
+    }
   [[NSColor windowBackgroundColor] setFill];
   NSRectFill(rect);
 }

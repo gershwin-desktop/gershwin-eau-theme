@@ -20,6 +20,12 @@ CGFloat GSWScaleFactorValue = 0;
 - (void)invalidateTitleTextAttributes;
 @end
 
+/* Only one Eau instance is the active theme at a time.  GSTheme creates a
+ * fresh instance on every +setTheme:, and the old one can outlive the switch,
+ * so the flag is tied to the instance that last activated rather than to
+ * "an Eau exists". */
+static __unsafe_unretained Eau *gActiveEauTheme = nil;
+
 // Implementation of safe color conversion helper
 NSColor *EauSafeCalibratedRGB(NSColor *c)
 {
@@ -80,6 +86,11 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 {
   NSDebugLog(@"Eau: >>> initWithBundle ENTRY (before super init)");
   EauEnsureBehaviorsLoaded();
+
+  /* Before GSTheme looks at this class' override methods for the first time,
+     so that what it replaces is on record. */
+  EauRecordOriginalOverriddenMethods();
+
   if ((self = [super initWithBundle:bundle]) != nil)
     {
       NSDebugLog(@"Eau: >>> initWithBundle after super init, self=%p", self);
@@ -116,6 +127,74 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
       NSDebugLog(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
+}
+
+#pragma mark - Theme activation
+
+/* Everything Eau does beyond plain drawing - the swizzles in the category
+   files - is switched on here and off in -deactivate, so another theme can
+   take over in a running application.
+
+   The Menu.app IPC is NOT started or stopped here (Eau used to connect to
+   Menu.app before [super activate] and, on -deactivate, withdraw its windows
+   and hand the bar back with -setMain:).
+   It lives in GershwinBehaviors.bundle (Behaviors/GBMenuClient.m,
+   Behaviors/GSTheme+GBMenu.m) and stays on under every theme, so a theme
+   switch neither disconnects from Menu.app nor brings back the in-app bar. */
+- (void) activate
+{
+  gActiveEauTheme = self;
+  EauSetThemeActive(YES);
+  [super activate];
+}
+
+- (void) deactivate
+{
+  if (gActiveEauTheme == self)
+    {
+      gActiveEauTheme = nil;
+      EauSetThemeActive(NO);
+    }
+
+  [super deactivate];
+
+  /* GSTheme restores whatever it believed the previous implementations were;
+     that belief is wrong whenever this instance was built while another Eau
+     instance was already active, so put the real originals back.  What Eau
+     put into live windows - the title bar buttons, the resize grip - is taken
+     out by EauThemeSwitchWatcher when the incoming theme activates, which is
+     the only moment replacements for them can be asked for. */
+  EauRestoreOverriddenMethods();
+}
+
+/* -[NSColor themeDidActivate:] completes a theme's system colour list with the
+   defaults the theme does not define, and raises
+   NSColorListNotEditableException when the list came straight out of a
+   read-only bundle - which cuts that method short, before it announces
+   NSSystemColorsDidChangeNotification, on every single activation.  Hand out a
+   copy that can take those additions. */
+- (NSColorList *) colors
+{
+  NSColorList *list = [super colors];
+  NSEnumerator *enumerator;
+  NSString *key;
+
+  if (list == nil || [list isEditable])
+    {
+      return list;
+    }
+
+  if (editableSystemColors == nil)
+    {
+      editableSystemColors = [[NSColorList alloc] initWithName: [list name]];
+      enumerator = [[list allKeys] objectEnumerator];
+      while ((key = [enumerator nextObject]) != nil)
+        {
+          [editableSystemColors setColor: [list colorWithKey: key]
+                                  forKey: key];
+        }
+    }
+  return editableSystemColors;
 }
 
 + (NSColor *) controlStrokeColor

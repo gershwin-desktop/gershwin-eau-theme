@@ -1,14 +1,35 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
+#import "GBTheme.h"
+#import "GBThemeHooks+Font.h"
+
 /*
  * NSFont+GB.m - font resolution robustness, theme-independent
  *
  * Guards against two GNUstep/fontconfig integration gaps that any theme
  * would otherwise hit: a resolved family that is not actually installed,
  * and a resolved face at the wrong weight. Neither depends on which family
- * a theme chooses to draw with.
+ * a theme chooses to draw with.  The typography itself (a fixed menu font
+ * size, which weights to enforce) is the theme's call, asked for through the
+ * optional hooks in GBThemeHooks+Font.h: under a theme without them, callers
+ * keep the size they asked for and fontconfig's weight is trusted.
  */
+
+/* Sizes and weights are asked for on every call rather than cached, because
+ * the user can switch themes at run time and the answer changes with it. */
+static CGFloat GBMenuFontSize(CGFloat requested)
+{
+  id theme = GBThemeIfResponds(@selector(gbMenuFontSize));
+  CGFloat size = theme ? [theme gbMenuFontSize] : 0.0;
+  return (size > 0.0) ? size : requested;
+}
+
+static NSInteger GBSystemFontWeight(BOOL bold)
+{
+  id theme = GBThemeIfResponds(@selector(gbSystemFontWeight:));
+  return theme ? [theme gbSystemFontWeight: bold] : 0;
+}
 
 // Category on NSFont used for method swizzling
 @interface NSFont (GBSwizzling)
@@ -96,8 +117,9 @@ static NSFont *GBFallbackFont(void)
  * the Menu process was the wrong weight (systemFontOfSize:11 came back
  * Inter-Bold, boldSystemFontOfSize:13 came back Inter-Medium).  The system
  * font contract is regular for systemFontOfSize: and bold for
- * boldSystemFontOfSize:, so those two entry points enforce weight 6 / 9 here
- * to restore it, while every other selector keeps its base face.
+ * boldSystemFontOfSize:, so those two entry points enforce the weight the
+ * theme names (Eau: 6 / 9) to restore it, while every other selector keeps
+ * its base face.
  *
  * TODO: Upstream to GNUstep - systemFontOfSize:/boldSystemFontOfSize: should
  * guarantee the regular/bold weight contract themselves when resolving
@@ -195,31 +217,29 @@ static NSFont *GBFallbackFont(void)
 + (NSFont *)gb_menuBarFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self gb_menuBarFontOfSize:fontSize];
-  return [self gb_fontOrDefault:base size:14.0];
+  return [self gb_fontOrDefault:base size:GBMenuFontSize(fontSize)];
 }
 
 + (NSFont *)gb_menuFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self gb_menuFontOfSize:fontSize];
-  return [self gb_fontOrDefault:base size:14.0];
+  return [self gb_fontOrDefault:base size:GBMenuFontSize(fontSize)];
 }
 
 + (NSFont *)gb_systemFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self gb_systemFontOfSize:fontSize];
-  /* The system font is non-bold by contract; enforce it so a fontconfig
-   * mis-resolution cannot render regular text bold.  Weight 6 is the
-   * platform's regular UI face (Inter-Medium on this system, matching what
-   * a correct GNUstep resolves), not 5 (Inter-Regular). */
-  return [self gb_fontOrDefault: base size: fontSize weight: 6];
+  /* The system font is non-bold by contract; the theme may enforce it so a
+   * fontconfig mis-resolution cannot render regular text bold. */
+  return [self gb_fontOrDefault: base size: fontSize weight: GBSystemFontWeight(NO)];
 }
 
 + (NSFont *)gb_boldSystemFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self gb_boldSystemFontOfSize:fontSize];
-  /* The bold system font must be bold; enforce it so a fontconfig
-   * mis-resolution cannot render the headline weight regular. */
-  return [self gb_fontOrDefault: base size: fontSize weight: 9];
+  /* The bold system font must be bold; the theme may enforce it so a
+   * fontconfig mis-resolution cannot render the headline weight regular. */
+  return [self gb_fontOrDefault: base size: fontSize weight: GBSystemFontWeight(YES)];
 }
 
 + (NSFont *)gb_controlContentFontOfSize:(CGFloat)fontSize
@@ -246,9 +266,14 @@ static NSFont *GBFallbackFont(void)
   if (base == nil)
     {
       // The requested font name does not resolve to anything on this system;
-      // use the fallback sans-serif font so callers never receive nil.
+      // use the fallback sans-serif font so callers never receive nil.  The
+      // fallback is built once at a fixed size, so it is rebuilt at the size
+      // that was asked for: callers such as font panels or video titles
+      // would otherwise get 13 pt text whatever size they chose.
       NSFont *usable = GBAvailableFamily() ? GBFallbackFont() : nil;
-      return usable ?: base;
+      if (usable == nil)
+        return nil;
+      return [NSFont fontWithDescriptor: [usable fontDescriptor] size: size];
     }
   return base;
 }

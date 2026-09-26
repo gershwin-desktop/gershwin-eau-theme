@@ -133,6 +133,15 @@ static inline void GSWScaleFactorInvalidate(void) {
 // Window corner radii for rounded corners
 static const float METRICS_TITLEBAR_CORNER_RADIUS = 7.0;  // Optically matches Menu app corner radius
 static const float METRICS_WINDOW_BOTTOM_CORNER_RADIUS = 0.0;
+
+// Drawers (NSDrawer) sit behind their window's edge.  Their content is inset
+// from every edge of the drawer by the drawer margin; the two outer corners
+// (away from the window) are rounded; the window casts an inner shadow onto
+// the drawer along the seam.
+static const float METRICS_DRAWER_MARGIN = 6.0;
+static const float METRICS_DRAWER_CORNER_RADIUS = 5.0;
+static const float METRICS_DRAWER_SEAM_SHADOW = 6.0;
+#define METRICS_DRAWER_CORNER_RADIUS_PX (METRICS_DRAWER_CORNER_RADIUS * GSWScaleFactor())
 static const float METRICS_TITLEBAR_HEIGHT = 22.0;
 // TODO: Remove the following 2 lines once WindowManager has been updated
 static const float METRICS_TITLEBAR_EDGE_BUTTON_WIDTH = 22.0;      // TODO: Remove

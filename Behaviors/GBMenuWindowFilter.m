@@ -67,6 +67,38 @@ static BOOL hasWindowType(Display *dpy, Window w, const char *typeName)
   return found;
 }
 
+/* libs-back publishes every window's style mask in _GNUSTEP_WM_ATTR (flags,
+   window_style, window_level, ...).  Dropdowns are borderless; a titled
+   panel that a menu item opens (a menu extra's configuration, Force Quit) is
+   not, and destroying it would kill a window its owner still shows. */
+static BOOL isBorderless(Display *dpy, Window w)
+{
+  Atom attrAtom = XInternAtom(dpy, "_GNUSTEP_WM_ATTR", True);
+  if (attrAtom == None)
+    return NO;
+
+  Atom actualType;
+  int actualFormat;
+  unsigned long nitems;
+  unsigned long bytesAfter;
+  unsigned char *data = NULL;
+  if (XGetWindowProperty(dpy, w, attrAtom, 0, 2, False, attrAtom,
+                         &actualType, &actualFormat, &nitems, &bytesAfter,
+                         &data) != Success)
+    return NO;
+
+  BOOL borderless = NO;
+  if (data != NULL)
+    {
+      const unsigned long styleAttrFlag = 1 << 0;  // GSWindowStyleAttr
+      unsigned long *attrs = (unsigned long *)data;
+      if (actualFormat == 32 && nitems >= 2 && (attrs[0] & styleAttrFlag))
+        borderless = (attrs[1] == 0);  // NSBorderlessWindowMask
+      XFree(data);
+    }
+  return borderless;
+}
+
 BOOL GBIsMenuDropdownWindow(Display *dpy, Window w, int height,
                             int utilityHeightLimit)
 {
@@ -78,6 +110,9 @@ BOOL GBIsMenuDropdownWindow(Display *dpy, Window w, int height,
      other way round: libs-back only sets them when it found an EWMH window
      manager at startup, and the session starts Menu before the WM. */
   if (hasWindowType(dpy, w, "_NET_WM_WINDOW_TYPE_DOCK"))
+    return NO;
+
+  if (!isBorderless(dpy, w))
     return NO;
 
   /* A dropdown is taller than a menu item, so anything up to the scaled bar

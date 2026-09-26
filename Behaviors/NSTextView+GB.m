@@ -140,15 +140,11 @@ static void s_gb_textView_mouseDown(id self, SEL _cmd, NSEvent *event)
               NSRect cancelRect = [cell cancelButtonRectForBounds: cellFrame];
               NSPoint mouseLoc = [sf convertPoint: [event locationInWindow] fromView: nil];
 
-              if (NSMouseInRect(mouseLoc, cancelRect, [sf isFlipped]))
+              /* The same clearing as ESC, so both ways behave alike. */
+              if (NSMouseInRect(mouseLoc, cancelRect, [sf isFlipped])
+                  && [sf respondsToSelector: @selector(gb_clearSearch)])
                 {
-                  [[sf window] makeFirstResponder: nil];  // End editing
-                  [NSApp sendAction: [sf action] to: [sf target] from: sf];
-                  [cell setStringValue: @""];
-                  [self setString: @""];  // Clear the field editor text
-                  [[NSNotificationCenter defaultCenter] postNotificationName: NSControlTextDidChangeNotification
-                                                                      object: sf];
-                  [sf setNeedsDisplay: YES];
+                  [sf performSelector: @selector(gb_clearSearch)];
                   return;
                 }
             }

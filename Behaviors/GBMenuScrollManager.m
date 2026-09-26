@@ -101,6 +101,14 @@ static char kGBScrollManagerAssociationKey;
 
 + (BOOL) setupOverflowForMenuView: (NSMenuView *)menuView
 {
+  /* The window resize below goes through NSMenuPanel's frame setters,
+   * which NSMenu+GB.m swizzles to call back into this method.  Without this guard
+   * a frame that does not come back exactly as set (rounded to whole
+   * pixels at a scale factor such as 1.1) recursed until the stack ran out
+   * and took Menu.app down. */
+  static BOOL inSetup = NO;
+  if (inSetup) return [self scrollManagerForMenuView: menuView] != nil;
+
   if (!menuView || [menuView isHorizontal]) return NO;
 
   NSWindow *window = [menuView window];
@@ -110,47 +118,44 @@ static char kGBScrollManagerAssociationKey;
   if (!screen) screen = [NSScreen mainScreen];
   if (!screen) return NO;
 
+  /* Units: the screen and window frames are device pixels, the menu view
+   * and everything the scroll manager keeps are points.  They differ by
+   * the window's scale factor (GSScaleFactor). */
+  CGFloat scale = [window userSpaceScaleFactor];
+  if (scale <= 0) scale = 1.0;
+
   NSRect screenFrame = [screen frame];
 
-  // Total content height of the menu.
+  // Total content height of the menu, in points and in pixels.
   CGFloat totalHeight = [menuView totalHeight];
   if (totalHeight < 1) return NO;
+  NSRect fullContent = NSMakeRect(0, 0, NSWidth([menuView frame]), totalHeight);
+  CGFloat totalPixels = NSHeight([window frameRectForContentRect: fullContent]);
 
-  // Usable vertical space (menu bar excluded).
-  CGFloat menuBarHeight = [[GSTheme theme] menuBarHeight] + 2;
-  CGFloat maxUsableHeight = screenFrame.size.height - menuBarHeight;
+  // Usable vertical space in pixels, between the menu bar and the bottom.
+  CGFloat menuBarPixels = ([[GSTheme theme] menuBarHeight] + 2) * scale;
+  // Whole pixels: a fraction of one would overlap the menu bar's last row
+  CGFloat usableTop = floor(NSMaxY(screenFrame) - menuBarPixels);
+  CGFloat usableBottom = NSMinY(screenFrame);
 
   // If the menu fits on screen no overflow is needed.
-  if (totalHeight <= maxUsableHeight) return NO;
+  if (totalPixels <= usableTop - usableBottom) return NO;
 
-  // Determine the current position of the window and which direction has
-  // more room.  In GNUstep screen coordinates the origin is the bottom-left
-  // corner; the window's frame tells us exactly where it sits.
+  /* A menu hangs down from its top edge (from the menu bar, or from the
+   * item that opened a submenu), which may not lie above the menu bar.
+   * When too little room is left below it, it uses the whole height. */
   NSRect winFrame = [window frame];
-  CGFloat winBottom = winFrame.origin.y;
-  CGFloat screenTop  = NSMaxY(screenFrame);
-  CGFloat screenBottom = NSMinY(screenFrame);
-
-  CGFloat availAbove = screenTop - winBottom - menuBarHeight;
-  CGFloat availBelow = winBottom - screenBottom;
-
-  CGFloat visibleHeight;
-  CGFloat newBottom;
-
-  if (availAbove >= availBelow)
+  CGFloat top = MIN(NSMaxY(winFrame), usableTop);
+  if (top - usableBottom < 100.0 * scale)
     {
-      // Place the menu extending upward from its current bottom edge.
-      visibleHeight = MIN(availAbove, totalHeight);
-      newBottom = winBottom;
-    }
-  else
-    {
-      // Place the menu extending downward from the screen's bottom edge.
-      visibleHeight = MIN(availBelow, totalHeight);
-      newBottom = screenBottom;
+      top = usableTop;
     }
 
-  if (visibleHeight < 30) visibleHeight = maxUsableHeight;
+  // Viewport height in whole points, and the window height it needs.
+  CGFloat decoration = totalPixels - totalHeight * scale;
+  CGFloat visibleHeight = floor((top - usableBottom - decoration) / scale);
+  NSRect visibleContent = NSMakeRect(0, 0, NSWidth([menuView frame]), visibleHeight);
+  CGFloat windowPixels = NSHeight([window frameRectForContentRect: visibleContent]);
 
   // Create (or update) the scroll manager.
   GBMenuScrollManager *mgr = [self scrollManagerForMenuView: menuView];
@@ -171,28 +176,28 @@ static char kGBScrollManagerAssociationKey;
       [mgr setVisibleHeight: visibleHeight];
     }
 
-  // Resize the menu view so its bounds reflect the visible viewport.
+  inSetup = YES;
+
+  // The menu view's bounds are the visible viewport.
   {
     NSSize vs = [menuView frame].size;
     vs.height = visibleHeight;
     [menuView setFrameSize: vs];
   }
 
-  // Resize the window to the visible viewport height.
-  // ONLY set the frame if it actually needs changing - this serves as a
-  // re-entrancy guard: the swizzled setFrame:display: in NSMenu+GB.m
-  // calls back into this method, and without this guard we'd loop.
+  // The window: the viewport, hanging down from its top edge.
   {
-    NSRect currentWinFrame = [window frame];
-    if (currentWinFrame.size.height != visibleHeight
-        || currentWinFrame.origin.y != newBottom)
+    NSRect wf = winFrame;
+    wf.size.height = windowPixels;
+    wf.origin.y = top - windowPixels;
+    if (fabs(NSHeight([window frame]) - NSHeight(wf)) > 0.5
+        || fabs(NSMinY([window frame]) - NSMinY(wf)) > 0.5)
       {
-        NSRect wf = winFrame;
-        wf.size.height = visibleHeight;
-        wf.origin.y = newBottom;
         [window setFrame: wf display: NO];
       }
   }
+
+  inSetup = NO;
 
   // Centre the initial selection.
   NSMenu *menu = [menuView menu];
