@@ -249,17 +249,22 @@ static void _eau_ensureState(void)
     _eau_x11_display = XOpenDisplay(NULL);
 }
 
-/* ---- Destroy ALL X11 "Menu" windows + their containers ---- */
-static void _eau_destroyX11MenuWindows(void)
+/* ---- Withdraw still-mapped X11 "Menu" dropdowns ----
+ *
+ * Withdrawn, never destroyed: each of these X windows belongs to an
+ * NSMenuPanel that stays alive and is shown again the next time its menu
+ * opens.  Destroying it behind AppKit's back left the panel holding a dead
+ * window id, so every later MapWindow failed with BadWindow and that menu
+ * (e.g. a menu extra left open while the user clicked the app menu) could
+ * never be opened again until Menu.app restarted.
+ *
+ * keepXids (may be nil) lists windows that must stay up.
+ */
+static void _eau_withdrawX11MenuWindows(NSSet *keepXids)
 {
   _eau_ensureState();
   if (_eau_x11_display == NULL) return;
 
-  /* Walk the X11 tree looking for GNUstep "Menu" windows in Normal
-     state.  These are orphaned dropdowns.  We destroy BOTH the
-     window AND its parent container, because the NSWindow's X11
-     window is often a child of an unmanaged container (0x40f7ce
-     style) that stays visible even after the child is destroyed. */
   Window root = DefaultRootWindow(_eau_x11_display);
   Window unused_root, unused_parent;
   Window *children = NULL;
@@ -283,42 +288,27 @@ static void _eau_destroyX11MenuWindows(void)
                                    utilityLimit))
         continue;
 
-      /* Found a visible GNUstep Menu window.  Destroy the parent
-         container (w itself may be the child).  Walk up one level
-         to find the actual parent container to destroy. */
+      if ([keepXids containsObject: [NSNumber numberWithUnsignedLong: (unsigned long)w]])
+        continue;
+
+      NSDebugLog(@"Eau+Menu: withdrawing stale dropdown X window 0x%lx",
+                 (unsigned long)w);
+      XWithdrawWindow(_eau_x11_display, w,
+                      XScreenNumberOfScreen(attr.screen));
+
+      /* Withdraw the parent too: GNUstep may reparent the NSWindow's X11
+         window under an unmanaged container that stays visible on its own. */
       Window parent = w;
-      Window root2 = None;
       Window *children2 = NULL;
       unsigned int nc2 = 0;
-      if (XQueryTree(_eau_x11_display, parent, &root2, &parent,
+      if (XQueryTree(_eau_x11_display, w, &unused_root, &parent,
                      &children2, &nc2))
         {
           if (children2) XFree(children2);
         }
-      // parent now holds the actual parent of w
-
-      // Also recurse into children to destroy any sub-windows
-      // (deeper submenus)
-      Window *subchildren = NULL;
-      unsigned int nsub = 0;
-      if (XQueryTree(_eau_x11_display, w, &unused_root, &unused_parent,
-                     &subchildren, &nsub))
-        {
-          for (unsigned int j = 0; j < nsub; j++)
-            {
-              XDestroyWindow(_eau_x11_display, subchildren[j]);
-            }
-          if (subchildren) XFree(subchildren);
-        }
-
-      // Destroy w itself
-      XDestroyWindow(_eau_x11_display, w);
-
-      // If parent is not root, also destroy the parent container
       if (parent != root && parent != None)
-        {
-          XDestroyWindow(_eau_x11_display, parent);
-        }
+        XWithdrawWindow(_eau_x11_display, parent,
+                        XScreenNumberOfScreen(attr.screen));
     }
 
   if (children) XFree(children);
@@ -360,19 +350,12 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
    * correct and crash-free way to fix it.
    */
 
-  /* X11-level fallback: withdraw every still-mapped "Menu" dropdown window
-     that is not part of the opening menu's keep-set.  AppKit's visibility
-     flag is not consulted here because the stale panel is typically already
-     flagged hidden by the tracking loop while its X11 window remains mapped
-     (that is the wedge this enforcement exists to prevent).  Withdrawing,
-     rather than destroying, keeps the cached NSMenuPanel window usable for
-     later re-display.
-     The keep-set is built from openingMenu's own window chain (menus, which
-     are retained by the menu system and cannot dangle), NOT from [NSApp
-     windows] (which can contain freed panels). */
-  _eau_ensureState();
-  if (_eau_x11_display == NULL) return;
-
+  /* AppKit's visibility flag is not consulted because the stale panel is
+     typically already flagged hidden by the tracking loop while its X11
+     window remains mapped (that is the wedge this enforcement exists to
+     prevent).  The keep-set is built from openingMenu's own window chain
+     (menus, which are retained by the menu system and cannot dangle), NOT
+     from [NSApp windows] (which can contain freed panels). */
   NSMutableSet *keepXids = [NSMutableSet set];
   {
     NSMenu *km = openingMenu;
@@ -389,55 +372,7 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
       }
   }
 
-  Window root = DefaultRootWindow(_eau_x11_display);
-  Window unused_root, unused_parent;
-  Window *children = NULL;
-  unsigned int nchildren = 0;
-
-  if (!XQueryTree(_eau_x11_display, root, &unused_root, &unused_parent,
-                  &children, &nchildren))
-    return;
-
-  int utilityLimit = _eau_menuUtilityHeightLimit();
-  for (unsigned int i = 0; i < nchildren; i++)
-    {
-      Window w = children[i];
-      XWindowAttributes attr;
-      if (!XGetWindowAttributes(_eau_x11_display, w, &attr))
-        continue;
-
-      if (attr.map_state != IsViewable)
-        continue;
-
-      if (!EauIsMenuDropdownWindow(_eau_x11_display, w, attr.height,
-                                   utilityLimit))
-        continue;
-
-      if ([keepXids containsObject: [NSNumber numberWithUnsignedLong: (unsigned long)w]])
-        continue;
-
-      NSDebugLog(@"Eau+Menu: withdrawing stale dropdown X window 0x%lx "
-                 "before opening %@", (unsigned long)w, openingMenu);
-      XWithdrawWindow(_eau_x11_display, w,
-                      XScreenNumberOfScreen(attr.screen));
-
-      /* Withdraw the parent too: GNUstep may reparent the NSWindow's X11
-         window under an unmanaged container that stays visible on its own. */
-      Window parent = w;
-      Window *children2 = NULL;
-      unsigned int nc2 = 0;
-      if (XQueryTree(_eau_x11_display, w, &unused_root, &parent,
-                     &children2, &nc2))
-        {
-          if (children2) XFree(children2);
-        }
-      if (parent != root && parent != None)
-        XWithdrawWindow(_eau_x11_display, parent,
-                        XScreenNumberOfScreen(attr.screen));
-    }
-
-  if (children) XFree(children);
-  XSync(_eau_x11_display, False);
+  _eau_withdrawX11MenuWindows(keepXids);
 }
 
 /* ---- NSMenuPanel orderFrontRegardless swizzle ---- */
@@ -478,7 +413,7 @@ static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
     _eau_trackedMenuView = nil;
   NSDebugLog(@"Eau+Menu: trackWithEvent end tracking=%d",
              _eau_activeTrackingCount);
-  _eau_destroyX11MenuWindows();
+  _eau_withdrawX11MenuWindows(nil);
   return result;
 }
 
