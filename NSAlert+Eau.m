@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import <objc/objc-arc.h>
 #import <dispatch/dispatch.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
@@ -1750,8 +1751,10 @@ static void setKeyEquivalent(NSButton *button)
 
             // NSLog(@"Eau: Clearing _window ivar on NSAlert (keeping associated object to prevent premature dealloc)");
             object_setIvar(self, windowIvar, nil);
-            // IMPORTANT: Do NOT release the associated object here.  The _window ivar
-            // in GNUstep's NSAlert is __weak, so the associated object with
+            // The ivar's own reference (see eau_setupPanel) goes with it.
+            objc_release(currentWindow);
+            // IMPORTANT: Do NOT release the associated object here.  Once the
+            // _window ivar is cleared, the associated object with
             // OBJC_ASSOCIATION_RETAIN_NONATOMIC is the ONLY strong reference keeping
             // the EauAlertPanel alive.  Releasing it here triggers -dealloc while the
             // window system (DPS/X11 backend) may still have pending operations or
@@ -1920,7 +1923,18 @@ static void setKeyEquivalent(NSButton *button)
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
-            object_setIvar(self, windowIvar, panel);
+            // NSAlert is not built with ARC and owns what _window points
+            // to: -dealloc releases it and -beginSheetModalForWindow:...
+            // destroys it once the sheet ends.  object_setIvar() does not
+            // retain into such an ivar, so the ivar is given its own
+            // reference; without it the sheet path freed the panel under the
+            // association below, and the alert crashed when deallocated.
+            __unsafe_unretained id previous = object_getIvar(self, windowIvar);
+            object_setIvar(self, windowIvar, objc_retain(panel));
+            if (previous != nil)
+            {
+                objc_release(previous);
+            }
             objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // NSLog(@"Eau: Successfully set _window via ivar");
         }
