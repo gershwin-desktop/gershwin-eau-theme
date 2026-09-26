@@ -1,6 +1,6 @@
 /*
  * EauSound.h
- * Eau Theme - system sound playback
+ * Eau Theme - thin forward to GershwinBehaviors' sound playback
  *
  * Copyright (c) 2026 Simon Peter
  *
@@ -9,8 +9,9 @@
 
 #import <Foundation/Foundation.h>
 
-/* Plays a system sound by name (e.g. @"Glass") at the alert volume the user
- * configured in the Sound prefPane (.config/gershwin/sound-defaults.plist).
- * Searches the usual system and per-user sound directories. Returns NO when
- * no matching sound file exists, so callers can fall back. */
+/* The real implementation (WAV decode/attenuate, alert-volume lookup) moved
+ * to Behaviors/GBSound.{h,m} as GBPlaySystemSound: it is theme-independent
+ * and still wanted under any theme. Drawing-side code in Eau (e.g. the
+ * progress indicator's completion sound) keeps calling this name; see
+ * EauSound.m for how it reaches the bundle. */
 BOOL EauPlaySystemSound(NSString *soundName);
