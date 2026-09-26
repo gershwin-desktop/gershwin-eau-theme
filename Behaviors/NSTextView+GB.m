@@ -109,20 +109,10 @@ static void s_gb_textView_keyDown(id self, SEL _cmd, NSEvent *event)
            && [self isFieldEditor])
          {
            id delegate = [self delegate];
-           /* The search field itself still implements eau_clearSearch
-            * (NSSearchField+Eau.m, owned by another task); gb_clearSearch is
-            * tried first so this keeps working once that file adopts the
-            * gb_ convention without a coordinated rename. Two literal
-            * @selector() calls (rather than one variable) so ARC can verify
-            * each performSelector: call's ownership at compile time. */
+           /* The delegate is the search field (NSSearchField+GB.m). */
            if (delegate && [delegate respondsToSelector: @selector(gb_clearSearch)])
              {
                [delegate performSelector: @selector(gb_clearSearch)];
-               return;
-             }
-           if (delegate && [delegate respondsToSelector: @selector(eau_clearSearch)])
-             {
-               [delegate performSelector: @selector(eau_clearSearch)];
                return;
              }
          }
