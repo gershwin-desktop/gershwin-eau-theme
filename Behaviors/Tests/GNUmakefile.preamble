@@ -4,5 +4,8 @@ ADDITIONAL_INCLUDE_DIRS += -I..
 # +load and needs a running menu tracking loop.
 t_GBMenuSafeTriangle_OBJC_FILES += ../GBMenuSafeTriangleGeometry.m
 
-# Testing.h uses retain/release, so no ARC here; the geometry needs none.
+t_GBMenuWindowFilter_OBJC_FILES += ../GBMenuWindowFilter.m
+t_GBMenuWindowFilter_TOOL_LIBS += -lX11
+
+# Testing.h uses retain/release, so no ARC here; the tested code needs none.
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated

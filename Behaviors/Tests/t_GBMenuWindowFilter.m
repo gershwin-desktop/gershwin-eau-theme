@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 
-/* ObjectTesting coverage for EauMenuWindowFilter: which of Menu.app's
+/* ObjectTesting coverage for GBMenuWindowFilter: which of Menu.app's
  * top-level X windows the stale-dropdown cleanup may withdraw/destroy.
  * Needs an X display; the windows are created unmapped, so nothing shows up
  * on screen. */
@@ -14,7 +14,7 @@
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 #import "Testing.h"
-#import "EauMenuWindowFilter.h"
+#import "GBMenuWindowFilter.h"
 
 static Window makeWindow(Display *dpy, const char *resName,
                          const char *resClass, const char *typeName)
@@ -41,15 +41,15 @@ int main(void)
   @autoreleasepool
     {
       /* --- utility height limit follows the scale factor --- */
-      PASS(EauMenuUtilityHeightLimit(22, 1.0) == 22,
+      PASS(GBMenuUtilityHeightLimit(22, 1.0) == 22,
            "limit is the bar height at scale 1.0");
-      PASS(EauMenuUtilityHeightLimit(22, 1.09f) == 24,
+      PASS(GBMenuUtilityHeightLimit(22, 1.09f) == 24,
            "limit covers the 24px bar at scale 1.09");
-      PASS(EauMenuUtilityHeightLimit(22, 1.1f) == 25,
+      PASS(GBMenuUtilityHeightLimit(22, 1.1f) == 25,
            "limit rounds up so a 24.2pt search panel is covered");
-      PASS(EauMenuUtilityHeightLimit(22, 1.25f) == 28,
+      PASS(GBMenuUtilityHeightLimit(22, 1.25f) == 28,
            "limit at scale 1.25");
-      PASS(EauMenuUtilityHeightLimit(22, 2.0) == 44,
+      PASS(GBMenuUtilityHeightLimit(22, 2.0) == 44,
            "limit at scale 2.0");
 
       Display *dpy = XOpenDisplay(NULL);
@@ -66,31 +66,31 @@ int main(void)
       Window otherApp = makeWindow(dpy, "TextEdit", "TextEdit", NULL);
 
       /* --- the menu bar is never a dropdown --- */
-      PASS(EauIsMenuDropdownWindow(dpy, bar, 24, 22) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, bar, 24, 22) == NO,
            "24px menu bar survives when scaled above the 22px limit");
-      PASS(EauIsMenuDropdownWindow(dpy, bar, 44, 44) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, bar, 44, 44) == NO,
            "menu bar at scale 2.0 is not a dropdown");
-      PASS(EauIsMenuDropdownWindow(dpy, bar, 300, 22) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, bar, 300, 22) == NO,
            "menu bar is protected by its DOCK type, not by its height");
 
       /* --- real dropdowns are still cleaned up --- */
-      PASS(EauIsMenuDropdownWindow(dpy, dropdown, 135, 22) == YES,
+      PASS(GBIsMenuDropdownWindow(dpy, dropdown, 135, 22) == YES,
            "untyped dropdown panel is a dropdown");
-      PASS(EauIsMenuDropdownWindow(dpy, dropdown, 135, 25) == YES,
+      PASS(GBIsMenuDropdownWindow(dpy, dropdown, 135, 25) == YES,
            "untyped dropdown panel is a dropdown at scale 1.1");
-      PASS(EauIsMenuDropdownWindow(dpy, typedDropdown, 135, 22) == YES,
+      PASS(GBIsMenuDropdownWindow(dpy, typedDropdown, 135, 22) == YES,
            "MENU-typed dropdown panel is a dropdown");
 
       /* --- small utility windows are not dropdowns --- */
-      PASS(EauIsMenuDropdownWindow(dpy, dropdown, 1, 22) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, dropdown, 1, 22) == NO,
            "empty 1px panel is not a dropdown");
-      PASS(EauIsMenuDropdownWindow(dpy, searchPanel, 22, 22) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, searchPanel, 22, 22) == NO,
            "search panel at scale 1.0 is not a dropdown");
-      PASS(EauIsMenuDropdownWindow(dpy, searchPanel, 25, 25) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, searchPanel, 25, 25) == NO,
            "search panel at scale 1.1 is not a dropdown");
 
       /* --- other applications' windows are never touched --- */
-      PASS(EauIsMenuDropdownWindow(dpy, otherApp, 135, 22) == NO,
+      PASS(GBIsMenuDropdownWindow(dpy, otherApp, 135, 22) == NO,
            "another application's window is not a Menu dropdown");
 
       XDestroyWindow(dpy, bar);

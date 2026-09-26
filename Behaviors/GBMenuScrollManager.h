@@ -1,5 +1,5 @@
 /*
- * EauMenuScrollManager.h
+ * GBMenuScrollManager.h
  *
  * Manages scroll state for overflowing menus, implementing the
  * Mac OS X 10.5 (Leopard) menu scrolling behavior:
@@ -17,21 +17,25 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#ifndef EAU_MENU_SCROLL_MANAGER_H
-#define EAU_MENU_SCROLL_MANAGER_H
+#ifndef GB_MENU_SCROLL_MANAGER_H
+#define GB_MENU_SCROLL_MANAGER_H
 
 #import <AppKit/AppKit.h>
 
 @class NSMenuView;
 
 /**
- * EauMenuScrollManager is associated with an NSMenuView (via
+ * GBMenuScrollManager is associated with an NSMenuView (via
  * objc_setAssociatedObject) when the menu overflows the screen.
+ *
+ * Themes draw the scroll arrows themselves and find the manager with
+ * [NSClassFromString(@"GBMenuScrollManager") scrollManagerForMenuView:],
+ * reading isScrolling, scrollOffset, maxScrollOffset and visibleHeight.
  *
  * It holds the scroll offset and provides scrolling operations
  * (scroll wheel delta, edge autoscroll, selection centering).
  */
-@interface EauMenuScrollManager : NSObject
+@interface GBMenuScrollManager : NSObject
 {
   NSMenuView   *_menuView;
   CGFloat       _scrollOffset;        // Current scroll offset in points
@@ -101,14 +105,14 @@
 /// Used as a guard to prevent scroll-into-view conflicts.
 - (BOOL) isEdgeScrolling;
 
-// Legacy API — kept for compatibility, now a no-op.
+// Legacy API - kept for compatibility, now a no-op.
 - (void) startEdgeScrolling;
 - (void) stopEdgeScrolling;
 
 /// Find the scroll manager associated with a menu view
-+ (EauMenuScrollManager *)scrollManagerForMenuView: (NSMenuView *)menuView;
++ (GBMenuScrollManager *)scrollManagerForMenuView: (NSMenuView *)menuView;
 /// Find the scroll manager associated with a window
-+ (EauMenuScrollManager *)scrollManagerForWindow: (NSWindow *)window;
++ (GBMenuScrollManager *)scrollManagerForWindow: (NSWindow *)window;
 
 /// Check if the menu needs overflow (virtual scrolling), and if so set up
 /// the scroll manager and resize the view/window.  Call this from any code
@@ -116,12 +120,6 @@
 /// Returns YES if overflow mode was activated.
 + (BOOL) setupOverflowForMenuView: (NSMenuView *)menuView;
 
-/// Draw scroll-direction arrow indicators in the given view.
-/// Should be called from drawRect: (focus is already locked).
-/// Draws small upward/downward triangles at the top/bottom edges of
-/// the view when there is content hidden off-screen.
-- (void) drawScrollIndicatorsInView: (NSView *)view;
-
 @end
 
-#endif // EAU_MENU_SCROLL_MANAGER_H
+#endif // GB_MENU_SCROLL_MANAGER_H

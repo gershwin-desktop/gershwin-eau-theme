@@ -1,4 +1,4 @@
-#import "EauMenuRelaunchManager.h"
+#import "GBMenuRelaunchManager.h"
 
 #import <Foundation/Foundation.h>
 
@@ -9,22 +9,22 @@
 #import <time.h>
 #import <unistd.h>
 
-static pid_t EauFindMenuPIDInProcFS(void);
-static pid_t EauFindMenuPIDWithPS(void);
-static BOOL EauCaptureMenuSnapshotFromProcFS(pid_t pid,
+static pid_t GBFindMenuPIDInProcFS(void);
+static pid_t GBFindMenuPIDWithPS(void);
+static BOOL GBCaptureMenuSnapshotFromProcFS(pid_t pid,
                                              NSString **exeOut,
                                              NSArray **argsOut,
                                              NSDictionary **envOut,
                                              uid_t *uidOut,
                                              gid_t *gidOut);
-static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
+static BOOL GBCaptureMenuSnapshotFromProcstat(pid_t pid,
                                                NSString **exeOut,
                                                NSArray **argsOut,
                                                NSDictionary **envOut);
-static NSString *EauTailAfterColumns(NSString *line, NSUInteger cols);
-static NSString *EauReadlinkTarget(NSString *path);
+static NSString *GBTailAfterColumns(NSString *line, NSUInteger cols);
+static NSString *GBReadlinkTarget(NSString *path);
 
-@interface EauMenuRelaunchManager ()
+@interface GBMenuRelaunchManager ()
 {
   NSString *_menuExecutablePath;
   NSArray *_menuArguments;
@@ -36,16 +36,16 @@ static NSString *EauReadlinkTarget(NSString *path);
 }
 @end
 
-@implementation EauMenuRelaunchManager
+@implementation GBMenuRelaunchManager
 
 + (instancetype)sharedManager
 {
-  static EauMenuRelaunchManager *manager = nil;
+  static GBMenuRelaunchManager *manager = nil;
   static BOOL initialized = NO;
 
   if (!initialized)
     {
-      manager = [[EauMenuRelaunchManager alloc] init];
+      manager = [[GBMenuRelaunchManager alloc] init];
       initialized = YES;
     }
   return manager;
@@ -68,14 +68,14 @@ static NSString *EauReadlinkTarget(NSString *path);
 {
   @synchronized(self)
     {
-      pid_t pid = EauFindMenuPIDInProcFS();
+      pid_t pid = GBFindMenuPIDInProcFS();
       if (pid <= 0)
         {
-          pid = EauFindMenuPIDWithPS();
+          pid = GBFindMenuPIDWithPS();
         }
       if (pid <= 0)
         {
-          NSLog(@"Eau: No running Menu process snapshot found");
+          NSLog(@"GershwinBehaviors: No running Menu process snapshot found");
           return NO;
         }
 
@@ -85,7 +85,7 @@ static NSString *EauReadlinkTarget(NSString *path);
       uid_t uid = (uid_t)-1;
       gid_t gid = (gid_t)-1;
 
-      if (EauCaptureMenuSnapshotFromProcFS(pid, &exe, &args, &env, &uid, &gid))
+      if (GBCaptureMenuSnapshotFromProcFS(pid, &exe, &args, &env, &uid, &gid))
         {
           _menuExecutablePath = exe;
           _menuArguments = args;
@@ -94,7 +94,7 @@ static NSString *EauReadlinkTarget(NSString *path);
           _menuGid = gid;
           _menuSnapshotCaptured = YES;
 
-          NSLog(@"Eau: Captured Menu snapshot via /proc pid=%d exec=%@ argc=%lu envc=%lu uid=%u gid=%u",
+          NSLog(@"GershwinBehaviors: Captured Menu snapshot via /proc pid=%d exec=%@ argc=%lu envc=%lu uid=%u gid=%u",
                 (int)pid,
                 _menuExecutablePath,
                 (unsigned long)[_menuArguments count],
@@ -104,7 +104,7 @@ static NSString *EauReadlinkTarget(NSString *path);
           return YES;
         }
 
-      if (EauCaptureMenuSnapshotFromProcstat(pid, &exe, &args, &env))
+      if (GBCaptureMenuSnapshotFromProcstat(pid, &exe, &args, &env))
         {
           _menuExecutablePath = exe;
           _menuArguments = args;
@@ -113,7 +113,7 @@ static NSString *EauReadlinkTarget(NSString *path);
           _menuGid = (gid_t)-1;
           _menuSnapshotCaptured = YES;
 
-          NSLog(@"Eau: Captured Menu snapshot via procstat pid=%d exec=%@ argc=%lu envc=%lu",
+          NSLog(@"GershwinBehaviors: Captured Menu snapshot via procstat pid=%d exec=%@ argc=%lu envc=%lu",
                 (int)pid,
                 _menuExecutablePath,
                 (unsigned long)[_menuArguments count],
@@ -121,7 +121,7 @@ static NSString *EauReadlinkTarget(NSString *path);
           return YES;
         }
 
-      NSLog(@"Eau: Failed to capture Menu process snapshot for pid %d", (int)pid);
+      NSLog(@"GershwinBehaviors: Failed to capture Menu process snapshot for pid %d", (int)pid);
       return NO;
     }
 }
@@ -144,14 +144,14 @@ static NSString *EauReadlinkTarget(NSString *path);
 
       if (!_menuSnapshotCaptured || _menuExecutablePath == nil || [_menuExecutablePath length] == 0)
         {
-          NSLog(@"Eau: Menu restart skipped - no process snapshot available");
+          NSLog(@"GershwinBehaviors: Menu restart skipped - no process snapshot available");
           return;
         }
 
       pid_t pid = fork();
       if (pid < 0)
         {
-          NSLog(@"Eau: Failed to fork to launch Menu process: %s", strerror(errno));
+          NSLog(@"GershwinBehaviors: Failed to fork to launch Menu process: %s", strerror(errno));
           return;
         }
 
@@ -230,7 +230,7 @@ static NSString *EauReadlinkTarget(NSString *path);
                 }
             }
 
-          NSLog(@"Eau: Menu restart failed - unable to exec captured command (%@): %s",
+          NSLog(@"GershwinBehaviors: Menu restart failed - unable to exec captured command (%@): %s",
                 _menuExecutablePath,
                 strerror(errno));
           _exit(1);
@@ -240,7 +240,7 @@ static NSString *EauReadlinkTarget(NSString *path);
 
 @end
 
-static pid_t EauFindMenuPIDInProcFS(void)
+static pid_t GBFindMenuPIDInProcFS(void)
 {
   NSFileManager *fm = [NSFileManager defaultManager];
   NSArray *entries = [fm contentsOfDirectoryAtPath:@"/proc" error:nil];
@@ -269,7 +269,7 @@ static pid_t EauFindMenuPIDInProcFS(void)
   return (pid_t)0;
 }
 
-static pid_t EauFindMenuPIDWithPS(void)
+static pid_t GBFindMenuPIDWithPS(void)
 {
   FILE *pipe = popen("ps -ax -o pid= -o comm=", "r");
   if (pipe == NULL)
@@ -297,7 +297,7 @@ static pid_t EauFindMenuPIDWithPS(void)
   return found;
 }
 
-static BOOL EauCaptureMenuSnapshotFromProcFS(pid_t pid,
+static BOOL GBCaptureMenuSnapshotFromProcFS(pid_t pid,
                                              NSString **exeOut,
                                              NSArray **argsOut,
                                              NSDictionary **envOut,
@@ -305,7 +305,7 @@ static BOOL EauCaptureMenuSnapshotFromProcFS(pid_t pid,
                                              gid_t *gidOut)
 {
   NSString *procPath = [NSString stringWithFormat:@"/proc/%d", (int)pid];
-  NSString *exePath = EauReadlinkTarget([procPath stringByAppendingPathComponent:@"exe"]);
+  NSString *exePath = GBReadlinkTarget([procPath stringByAppendingPathComponent:@"exe"]);
   if (exePath == nil || [exePath length] == 0)
     {
       return NO;
@@ -427,7 +427,7 @@ static BOOL EauCaptureMenuSnapshotFromProcFS(pid_t pid,
   return YES;
 }
 
-static NSString *EauTailAfterColumns(NSString *line, NSUInteger cols)
+static NSString *GBTailAfterColumns(NSString *line, NSUInteger cols)
 {
   NSUInteger len = [line length];
   NSUInteger i = 0;
@@ -459,7 +459,7 @@ static NSString *EauTailAfterColumns(NSString *line, NSUInteger cols)
   return [line substringFromIndex:i];
 }
 
-static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
+static BOOL GBCaptureMenuSnapshotFromProcstat(pid_t pid,
                                                NSString **exeOut,
                                                NSArray **argsOut,
                                                NSDictionary **envOut)
@@ -482,7 +482,7 @@ static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
             {
               continue;
             }
-          exePath = EauTailAfterColumns(s, 3);
+          exePath = GBTailAfterColumns(s, 3);
           break;
         }
       pclose(pipe);
@@ -499,7 +499,7 @@ static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
             {
               continue;
             }
-          NSString *tail = EauTailAfterColumns(s, 2);
+          NSString *tail = GBTailAfterColumns(s, 2);
           NSArray *parts = [tail componentsSeparatedByCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]];
           for (NSString *part in parts)
             {
@@ -524,7 +524,7 @@ static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
             {
               continue;
             }
-          NSString *tail = EauTailAfterColumns(s, 2);
+          NSString *tail = GBTailAfterColumns(s, 2);
           NSRange eq = [tail rangeOfString:@"="];
           if (eq.location != NSNotFound)
             {
@@ -563,7 +563,7 @@ static BOOL EauCaptureMenuSnapshotFromProcstat(pid_t pid,
   return YES;
 }
 
-static NSString *EauReadlinkTarget(NSString *path)
+static NSString *GBReadlinkTarget(NSString *path)
 {
   char buffer[4096];
   ssize_t n = readlink([path UTF8String], buffer, sizeof(buffer) - 1);

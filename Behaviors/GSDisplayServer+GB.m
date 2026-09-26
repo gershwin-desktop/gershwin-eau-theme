@@ -1,4 +1,4 @@
-/* GSDisplayServer+Eau.m - Fix popup menu window type
+/* GSDisplayServer+GB.m - Fix popup menu window type
    Copyright (C) 2026 Free Software Foundation, Inc.
 
    This file is part of GNUstep.
@@ -27,7 +27,11 @@
  * popup menus with frames/titlebars instead of mapping them undecorated.
  *
  * This category swizzles -setwindowlevel:: on XGServer to fix the
- * _NET_WM_WINDOW_TYPE property after the original method runs.
+ * _NET_WM_WINDOW_TYPE property after the original method runs.  It lives in
+ * GershwinBehaviors rather than a theme because every theme needs it.
+ *
+ * TODO: Upstream to GNUstep - libs-back XGServerWindow -setwindowlevel::
+ * should set _NET_WM_WINDOW_TYPE_POPUP_MENU for NSPopUpMenuWindowLevel.
  */
 
 #import <AppKit/AppKit.h>
@@ -37,7 +41,7 @@
 #import <X11/Xatom.h>
 #include <stdlib.h>
 
-static BOOL EAUIsDialogLikeWindow(NSWindow *window, int level)
+static BOOL GBIsDialogLikeWindow(NSWindow *window, int level)
 {
   if (window == nil)
     {
@@ -62,13 +66,13 @@ static BOOL EAUIsDialogLikeWindow(NSWindow *window, int level)
   return NO;
 }
 
-static BOOL EAUIsMenuPanelWindow(NSWindow *window)
+static BOOL GBIsMenuPanelWindow(NSWindow *window)
 {
   Class menuPanelClass = NSClassFromString(@"NSMenuPanel");
   return (menuPanelClass != Nil && [window isKindOfClass: menuPanelClass]);
 }
 
-static BOOL EAUIsModalDialogWindow(NSWindow *window, int level)
+static BOOL GBIsModalDialogWindow(NSWindow *window, int level)
 {
   if (window == nil)
     {
@@ -83,7 +87,7 @@ static BOOL EAUIsModalDialogWindow(NSWindow *window, int level)
   return NO;
 }
 
-static void EAUEnsureWindowStates(Display *dpy,
+static void GBEnsureWindowStates(Display *dpy,
                                   Window xwin,
                                   Atom *requiredStates,
                                   unsigned int requiredCount)
@@ -212,7 +216,7 @@ static void EAUEnsureWindowStates(Display *dpy,
     }
 }
 
-@implementation GSDisplayServer (EauPopupMenuFix)
+@implementation GSDisplayServer (GBPopupMenuFix)
 
 + (void) load
 {
@@ -223,7 +227,7 @@ static void EAUEnsureWindowStates(Display *dpy,
       return;
 
     SEL origSel = @selector(setwindowlevel::);
-    SEL swizSel = @selector(eau_setwindowlevel::);
+    SEL swizSel = @selector(gb_setwindowlevel::);
 
     Method origMethod = class_getInstanceMethod(cls, origSel);
     Method swizMethod = class_getInstanceMethod(self, swizSel);
@@ -239,12 +243,12 @@ static void EAUEnsureWindowStates(Display *dpy,
   });
 }
 
-- (void) eau_setwindowlevel: (int)level : (int)win
+- (void) gb_setwindowlevel: (int)level : (int)win
 {
   NSWindow *nswin;
 
   /* Call original (swizzled) */
-  [self eau_setwindowlevel: level : win];
+  [self gb_setwindowlevel: level : win];
 
   nswin = GSWindowWithNumber(win);
   if (nswin == nil)
@@ -281,7 +285,7 @@ static void EAUEnsureWindowStates(Display *dpy,
         }
     }
 
-  if (EAUIsDialogLikeWindow(nswin, level) && EAUIsMenuPanelWindow(nswin) == NO)
+  if (GBIsDialogLikeWindow(nswin, level) && GBIsMenuPanelWindow(nswin) == NO)
     {
       Display *dpy = (Display *)[self serverDevice];
       Window xwin = (Window)(uintptr_t)[self windowDevice: win];
@@ -316,13 +320,13 @@ static void EAUEnsureWindowStates(Display *dpy,
               states[stateCount] = skipPager;
               stateCount++;
             }
-          if (EAUIsModalDialogWindow(nswin, level) && modal != None)
+          if (GBIsModalDialogWindow(nswin, level) && modal != None)
             {
               states[stateCount] = modal;
               stateCount++;
             }
 
-          EAUEnsureWindowStates(dpy, xwin, states, stateCount);
+          GBEnsureWindowStates(dpy, xwin, states, stateCount);
         }
     }
 }

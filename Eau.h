@@ -14,46 +14,7 @@
 // Loads GershwinBehaviors.bundle when GSAppKitUserBundles did not.
 extern void EauEnsureBehaviorsLoaded(void);
 
-@protocol GSGNUstepMenuClient <NSObject>
-- (oneway void)activateMenuItemAtPath:(NSArray *)indexPath
-                            forWindow:(NSNumber *)windowId;
-// Async push: Menu.app asks the client to send its current menu.
-- (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId;
-// Sync pull: Menu.app asks for fresh enabled/state data right before a submenu opens.
-- (bycopy id)validateMenuStateForWindow:(NSNumber *)windowId;
-// Async push: Menu.app asks the client to send its application-level menu.
-- (oneway void)requestApplicationMenuUpdate;
-@end
-
-@protocol GSGNUstepMenuServer <NSObject>
-- (oneway void)updateMenuForWindow:(bycopy NSNumber *)windowId
-                          menuData:(bycopy NSDictionary *)menuData
-                        clientName:(bycopy NSString *)clientName;
-- (oneway void)unregisterWindow:(bycopy NSNumber *)windowId
-                       clientName:(bycopy NSString *)clientName;
-// Lightweight: patches only enabled/state on the existing NSMenu without rebuilding.
-- (oneway void)updateMenuEnabledStatesForWindow:(bycopy NSNumber *)windowId
-                                       menuData:(bycopy NSDictionary *)menuData
-                                     clientName:(bycopy NSString *)clientName;
-// Application-level (frontmost-app) menu, keyed by clientName, not window.
-- (oneway void)updateMenuForApplication:(bycopy NSDictionary *)menuData
-                             clientName:(bycopy NSString *)clientName;
-- (oneway void)unregisterApplication:(bycopy NSString *)clientName;
-- (oneway void)updateApplicationMenuEnabledStates:(bycopy NSDictionary *)menuData
-                                        clientName:(bycopy NSString *)clientName;
-@end
-
-@interface Eau: GSTheme <GSGNUstepMenuClient>
-{
-    NSMutableDictionary *menuByWindowId;
-    NSString *menuClientName;
-    NSConnection *menuClientConnection;
-    NSPort *menuClientReceivePort;
-    NSConnection *menuServerConnection;
-    id menuServerProxy;
-    BOOL menuServerAvailable;
-    BOOL menuServerConnected;
-}
+@interface Eau: GSTheme
 + (NSColor *) controlStrokeColor;
 - (void) invalidateScaleFactorCache;
 - (CGFloat) menuItemIconSize;
