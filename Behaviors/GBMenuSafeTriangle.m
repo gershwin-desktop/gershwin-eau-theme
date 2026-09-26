@@ -29,8 +29,8 @@
  * safe-triangle test (any submenu side) instead of MOVE_THRESHOLD_DELTA.
  *
  * Menu.app's menu bar dropdowns go through the same libs-gui loop in the
- * same process, so they get this too.  Eau also chains
- * nextEventMatchingMask:untilDate:inMode:dequeue: (scroll wheel); both
+ * same process, so they get this too.  NSMenu+GB.m also chains
+ * nextEventMatchingMask:untilDate:inMode:dequeue: (scroll wheel, keys); both
  * capture whatever implementation is current, so load order does not
  * matter. */
 

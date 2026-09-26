@@ -197,6 +197,16 @@ static void s_gb_menuWindowSetFrameDisplay(id self, SEL _cmd, NSRect frameRect, 
   _gb_clampMenuWindowToScreenBounds(self);
 }
 
+/* NSMenuPanel inherits both frame setters from NSWindow; replacing the
+ * inherited Method would clamp (and scan for a menu view) every window in
+ * the app, so the replacement is added to NSMenuPanel itself, which then
+ * chains to the inherited implementation captured by the caller. */
+static void _gb_overrideOnMenuPanel(Class menuPanelClass, Method m, IMP imp)
+{
+  if (!class_addMethod(menuPanelClass, method_getName(m), imp, method_getTypeEncoding(m)))
+    method_setImplementation(m, imp);
+}
+
 static void _gb_swizzleMenuWindowFrameMethods(void)
 {
   Class menuPanelClass = objc_getClass("NSMenuPanel");
@@ -212,7 +222,7 @@ static void _gb_swizzleMenuWindowFrameMethods(void)
   if (mOrigin)
     {
       s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))method_getImplementation(mOrigin);
-      method_setImplementation(mOrigin, (IMP)s_gb_menuWindowSetFrameOrigin);
+      _gb_overrideOnMenuPanel(menuPanelClass, mOrigin, (IMP)s_gb_menuWindowSetFrameOrigin);
       NSDebugLog(@"GershwinBehaviors: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
     }
 
@@ -222,7 +232,7 @@ static void _gb_swizzleMenuWindowFrameMethods(void)
   if (mFrameDisplay)
     {
       s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))method_getImplementation(mFrameDisplay);
-      method_setImplementation(mFrameDisplay, (IMP)s_gb_menuWindowSetFrameDisplay);
+      _gb_overrideOnMenuPanel(menuPanelClass, mFrameDisplay, (IMP)s_gb_menuWindowSetFrameDisplay);
       NSDebugLog(@"GershwinBehaviors: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
     }
 }
