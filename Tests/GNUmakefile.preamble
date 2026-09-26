@@ -47,3 +47,7 @@ t_RestartableTimer_TOOL_LIBS += -lgnustep-base -lobjc
 # showcase; keep them headless (no gnustep-gui link needed).
 t_EauMetricsChecker_TOOL_LIBS += -lgnustep-base
 t_EauShowcaseSectionRegistry_TOOL_LIBS += -lgnustep-base
+
+# Pure geometry of the theme's NSDrawer windows; headless.
+t_EauDrawerGeometry_OBJC_FILES += ../EauDrawerGeometry.m
+t_EauDrawerGeometry_TOOL_LIBS += -lgnustep-base
