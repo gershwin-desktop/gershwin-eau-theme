@@ -149,7 +149,9 @@
  * wiped by the data source value and the row renders empty (apps written
  * against macOS semantics set cell content in willDisplayCell). Setting the
  * content first and calling the delegate last restores that order without
- * patching the gui library. */
+ * patching the gui library.
+ * TODO: Upstream to GNUstep - GSTheme's table/outline row drawing should call
+ * setObjectValue: before the delegate's willDisplayCell:, as Cocoa does. */
 - (void) drawOutlineViewRow: (NSInteger)rowIndex
 		    clipRect: (NSRect)clipRect
 		      inView: (NSOutlineView *)outlineView
