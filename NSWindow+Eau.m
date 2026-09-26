@@ -9,203 +9,10 @@
 #import <AppKit/NSAlert.h>
 #import "GNUstepGUI/GSTheme.h"
 #import <objc/runtime.h>
+#import "Behaviors/GBThemeHooks+DefaultButton.h"
+#import "Behaviors/GBThemeHooks+Window.h"
 
-// Dialog logging helpers (used by NSWindow presentation hooks).
-static BOOL EAUIsDialogWindow(NSWindow *window)
-{
-  if (window == nil)
-    {
-      return NO;
-    }
-  if ([window isKindOfClass: [NSPanel class]])
-    {
-      return YES;
-    }
-  if ([window level] >= NSModalPanelWindowLevel)
-    {
-      return YES;
-    }
-  if (([window styleMask] & NSUtilityWindowMask) != 0)
-    {
-      return YES;
-    }
-  return NO;
-}
-
-static void EAUCollectDialogTextFromView(NSMutableArray *parts, NSView *view)
-{
-  if (view == nil || parts == nil)
-    {
-      return;
-    }
-    
-  @try {
-    if ([view isKindOfClass: [NSTextField class]])
-      {
-        NSTextField *field = (NSTextField *)view;
-        NSString *value = [field stringValue];
-        if (value != nil && [value length] > 0)
-          {
-            [parts addObject: value];
-          }
-      }
-    
-    // Check if subviews array exists and is valid
-    NSArray *subviews = nil;
-    @try {
-      subviews = [view subviews];
-    } @catch (id ex) {}
-    
-    if (subviews) {
-      NSUInteger count = [subviews count];
-      for (NSUInteger i = 0; i < count; i++)
-        {
-          @try {
-            EAUCollectDialogTextFromView(parts, [subviews objectAtIndex: i]);
-          } @catch (id ex) {}
-        }
-    }
-  } @catch (NSException *e) {
-    // Silently ignore errors during view traversal (e.g. during dealloc)
-  }
-}
-
-static NSString *EAUDialogTextSummary(NSWindow *window)
-{
-  NSMutableArray *parts = [NSMutableArray array];
-  NSString *title = [window title];
-  if (title != nil && [title length] > 0)
-    {
-      [parts addObject: title];
-    }
-  EAUCollectDialogTextFromView(parts, [window contentView]);
-  if ([parts count] == 0)
-    {
-      return @"";
-    }
-  return [parts componentsJoinedByString: @" | "];
-}
-
-static void EAUWindowLog(NSString *event, NSWindow *window)
-{
-  if (window == nil)
-    {
-      NSDebugLog(@"EauWindowLog: %@ window=(null)", event);
-      return;
-    }
-  NSString *summary = nil;
-  if (EAUIsDialogWindow(window))
-    {
-      summary = EAUDialogTextSummary(window);
-    }
-  NSDebugLog(@"EauWindowLog: %@ window=%p class=%@ title='%@' visible=%d key=%d main=%d level=%ld",
-         event,
-         window,
-         NSStringFromClass([window class]),
-         [window title],
-         (int)[window isVisible],
-         (int)[window isKeyWindow],
-         (int)[window isMainWindow],
-         (long)[window level]);
-  if (summary != nil && [summary length] > 0)
-    {
-      NSDebugLog(@"EauDialog: window=%p class=%@ text='%@'", window, NSStringFromClass([window class]), summary);
-    }
-}
-
-@implementation NSWindow (EauLogging)
-
-+ (void) load
-{
-  static BOOL swizzled = NO;
-  if (swizzled)
-    {
-      return;
-    }
-  swizzled = YES;
-
-  Class cls = [NSWindow class];
-  Method orig;
-  Method swiz;
-
-  orig = class_getInstanceMethod(cls, @selector(orderFront:));
-  swiz = class_getInstanceMethod(cls, @selector(eau_orderFront:));
-  if (orig && swiz) method_exchangeImplementations(orig, swiz);
-
-  orig = class_getInstanceMethod(cls, @selector(orderFrontRegardless));
-  swiz = class_getInstanceMethod(cls, @selector(eau_orderFrontRegardless));
-  if (orig && swiz) method_exchangeImplementations(orig, swiz);
-
-  orig = class_getInstanceMethod(cls, @selector(makeKeyAndOrderFront:));
-  swiz = class_getInstanceMethod(cls, @selector(eau_makeKeyAndOrderFront:));
-  if (orig && swiz) method_exchangeImplementations(orig, swiz);
-
-  orig = class_getInstanceMethod(cls, @selector(orderOut:));
-  swiz = class_getInstanceMethod(cls, @selector(eau_orderOut:));
-  if (orig && swiz) method_exchangeImplementations(orig, swiz);
-
-  orig = class_getInstanceMethod(cls, @selector(close));
-  swiz = class_getInstanceMethod(cls, @selector(eau_close));
-  if (orig && swiz) method_exchangeImplementations(orig, swiz);
-
-  /* windowWillReturnFieldEditor:toObject: swizzling REMOVED - it was causing crashes */
-
-  [[NSNotificationCenter defaultCenter] addObserver: self
-                                           selector: @selector(eau_windowWillClose:)
-                                               name: NSWindowWillCloseNotification
-                                             object: nil];
-}
-
-+ (void) eau_windowWillClose: (NSNotification *)note
-{
-  NSWindow *window = (NSWindow *)[note object];
-  EAUWindowLog(@"willClose", window);
-}
-
-
-- (void) eau_orderFront: (id)sender
-{
-  EAUWindowLog(@"orderFront", self);
-  [EauGrowBoxView addToWindow:self];
-  [self eau_orderFront: sender];
-}
-
-- (void) eau_orderFrontRegardless
-{
-  EAUWindowLog(@"orderFrontRegardless", self);
-  [EauGrowBoxView addToWindow:self];
-  [self eau_orderFrontRegardless];
-}
-
-- (void) eau_makeKeyAndOrderFront: (id)sender
-{
-  EAUWindowLog(@"makeKeyAndOrderFront", self);
-  [EauGrowBoxView addToWindow:self];
-  [self eau_makeKeyAndOrderFront: sender];
-}
-
-- (void) eau_orderOut: (id)sender
-{
-  EAUWindowLog(@"orderOut", self);
-  [self eau_orderOut: sender];
-}
-
-- (void) eau_close
-{
-  EAUWindowLog(@"close", self);
-  [self eau_close];
-}
-
-/* REMOVED: eau_windowWillReturnFieldEditor:toObject: swizzling.
-   This delegate method should not be swizzled into NSWindow itself.
-   The swizzle caused objc_msgSend_stret crashes due to incorrect type
-   encoding. If GWDialog needs to customize field editor behavior, it
-   should implement this as a proper delegate method on its delegate object,
-   not swizzle it into the window class. */
-
-@end
-
-@interface DefaultButtonAnimationController : NSObject <NSWindowDelegate>
+@interface DefaultButtonAnimationController : NSObject
 
 {
   NSTimer * pulseTimer;
@@ -298,31 +105,6 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   }
   return self;
 }
-
-/* windowWillReturnFieldEditor:toObject:
- * NSWindowDelegate method that allows customizing the field editor for text input.
- * The field editor is a shared NSText object used for editing text in NSTextField
- * and other text controls.
- *
- * CRITICAL: This method MUST be implemented to avoid a crash on ARM64 architecture.
- * Without this implementation, the Objective-C runtime can incorrectly use
- * objc_msgSend_stret (structure-return calling convention) instead of objc_msgSend
- * (pointer-return calling convention), causing a SIGSEGV when the window tries to
- * get a field editor for text input.
- *
- * By explicitly implementing this method and returning nil, we:
- * 1. Prevent the objc_msgSend_stret crash
- * 2. Tell NSWindow to use its default field editor (which is correct behavior)
- * 3. Ensure text fields work properly with focus and keyboard input
- *
- * This is safe for GWDialog and other windows that use text fields.
- */
-- (id)windowWillReturnFieldEditor:(id)fieldEditor toObject:(id)anObject
-{
-  NSDebugLog(@"DefaultButtonAnimationController: windowWillReturnFieldEditor called for object %p, returning nil (use default)", anObject);
-  return nil;  // Return nil to use the default field editor
-}
-
 
 - (void) dealloc
 {
@@ -564,11 +346,7 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
 }
 @end
 
-// TS: forward dec
-@interface NSWindow(EauTheme)
-- (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell;
-- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell;
-@end
+static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonControllerKey;
 
 @implementation Eau(NSWindow)
 
@@ -664,178 +442,42 @@ static void EAUWindowLog(NSString *event, NSWindow *window)
   return newButton;
 }
 
-- (void) _overrideNSWindowMethod_setDefaultButtonCell: (NSButtonCell *)aCell {
-  NSDebugLog(@"_overrideNSWindowMethod_setDefaultButtonCell:");
-  NSWindow *xself = (NSWindow*)self;
-  [xself EAUsetDefaultButtonCell:aCell];
+/* GershwinBehaviors decides which cell is a window's default button and
+ * reports every change here; the theme only owns the pulse.  The controller
+ * lives on the window, so a new default button (or none) retires the old
+ * pulse together with its timer. */
+- (void) gbDefaultButtonCellChanged: (NSButtonCell *)cell forWindow: (NSWindow *)window
+{
+  if (window == nil)
+    {
+      return;
+    }
+
+  objc_setAssociatedObject(window, kEAUDefaultButtonControllerKey, nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  if (cell == nil)
+    {
+      return;
+    }
+
+  [cell setIsDefaultButton: [NSNumber numberWithBool: YES]];
+
+  DefaultButtonAnimationController *controller =
+    [[DefaultButtonAnimationController alloc] initWithButtonCell: cell];
+  objc_setAssociatedObject(window, kEAUDefaultButtonControllerKey, controller,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+  [controller startPulse];
+}
+
+/* The grow box has to be in place before the window's first frame. */
+- (void) gbWindowWillOrderFront: (NSWindow *)window
+{
+  [EauGrowBoxView addToWindow: window];
 }
 
 @end
 
 @implementation NSWindow(EauTheme)
-
-static const void *kEAUDefaultButtonControllerKey = &kEAUDefaultButtonControllerKey;
-static const void *kEAUDefaultButtonInstallingKey = &kEAUDefaultButtonInstallingKey;
-
-/* NSWindow keeps its delegate as a plain unretained reference, so the animation
- * controller has to be unhooked from the window *before* the association drops
- * the last reference to it.  Releasing it first leaves -delegate handing out a
- * freed object, which ARC then tries to retain. */
-static void EAUReleaseDefaultButtonController(NSWindow *window)
-{
-  id controller = objc_getAssociatedObject(window, kEAUDefaultButtonControllerKey);
-
-  if (controller == nil)
-    {
-      return;
-    }
-
-  if ([window delegate] == controller)
-    {
-      [window setDelegate: nil];
-    }
-
-  objc_setAssociatedObject(window,
-                           kEAUDefaultButtonControllerKey,
-                           nil,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-}
-
-/* EAUsetDefaultButtonCell:
- * 
- * Custom implementation of setDefaultButtonCell: for the Eau theme.
- * This method is installed as a replacement for NSWindow's setDefaultButtonCell:
- * via the _overrideNSWindowMethod_setDefaultButtonCell: block architecture.
- * 
- * WHAT THIS DOES:
- * - Creates a DefaultButtonAnimationController to manage button pulsing animation
- * - Sets the button's key equivalent to Enter (\r) so pressing Enter activates it
- * - Marks the button cell as the default button (isDefaultButton = YES)
- * - Retains the controller via objc_setAssociatedObject to keep it alive
- * - CONDITIONALLY sets the controller as window delegate (NOT for GWDialog!)
- * 
- * WHY DELEGATE HANDLING IS CRITICAL:
- * GWDialog and other windows with text fields need special handling.
- * When an NSTextField becomes first responder, NSWindow calls the delegate method:
- *   [delegate windowWillReturnFieldEditor:toObject:]
- * 
- * PROBLEM: On ARM64, if this delegate method isn't properly implemented with the
- * correct type encoding, the Objective-C runtime can incorrectly use objc_msgSend_stret
- * (structure-return calling convention) instead of objc_msgSend (pointer-return
- * calling convention), causing a SIGSEGV crash when the field editor is requested.
- * 
- * SOLUTION: 
- * 1. For GWDialog: Don't set a delegate at all. The animation controller still works
- *    via NSNotificationCenter (windowDidBecomeKey, windowDidResignKey, etc.) and
- *    doesn't need to be a delegate.
- * 2. For other windows: Safely set the delegate after checking for existing delegates.
- * 3. DefaultButtonAnimationController implements windowWillReturnFieldEditor:toObject:
- *    returning nil, which tells NSWindow to use its default field editor.
- * 
- * FOCUS MANAGEMENT:
- * By not setting a delegate on GWDialog, we preserve the text field's
- * initialFirstResponder setup done in GWDialog+Eau.m, giving immediate focus
- * with a blinking cursor when dialogs open. Users can type immediately.
- */
-- (void) EAUsetDefaultButtonCell: (NSButtonCell *)aCell
-{
-  NSDebugLog(@"NSWindow+Eau: EAUsetDefaultButtonCell called with cell %p for window %p", aCell, self);
-
-  /* -setKeyEquivalent: below travels through GSTheme into the button and
-   * button cell categories, which may hand this very cell to this window
-   * again.  Letting that re-entry run would install a second controller for
-   * the same cell and tear the first one down again as soon as the outer call
-   * resumed. */
-  if (aCell != nil
-      && objc_getAssociatedObject(self, kEAUDefaultButtonInstallingKey) == aCell)
-    {
-      NSDebugLog(@"NSWindow+Eau: Ignoring re-entrant setDefaultButtonCell: for cell %p", aCell);
-      return;
-    }
-
-  _defaultButtonCell = aCell;
-
-  EAUReleaseDefaultButtonController(self);
-
-  if (aCell == nil) {
-    return;
-  }
-
-  objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, aCell, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  @try
-    {
-      [self EAUinstallDefaultButtonCell: aCell];
-    }
-  @finally
-    {
-      objc_setAssociatedObject(self, kEAUDefaultButtonInstallingKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    }
-}
-
-/* Everything that actually wires the cell up as the window's default button.
- * Split out so the re-entrancy marker set by -EAUsetDefaultButtonCell: is
- * cleared again even if any of this raises. */
-- (void) EAUinstallDefaultButtonCell: (NSButtonCell *)aCell
-{
-  [self enableKeyEquivalentForDefaultButtonCell];
-
-  [aCell setKeyEquivalent: @"\r"];
-  [aCell setKeyEquivalentModifierMask: 0];
-  [aCell setIsDefaultButton: [NSNumber numberWithBool: YES]];
-
-  NSDebugLog(@"NSWindow+Eau: Creating DefaultButtonAnimationController for cell %p", aCell);
-  DefaultButtonAnimationController * animationcontroller = [[DefaultButtonAnimationController alloc] initWithButtonCell: aCell];
-
-  // Retain controller via association to ensure it stays alive
-  objc_setAssociatedObject(self,
-                           kEAUDefaultButtonControllerKey,
-                           animationcontroller,
-                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-
-  /* CRITICAL FOCUS MANAGEMENT:
-   * We deliberately DO NOT set the animation controller as delegate for GWDialog.
-   * 
-   * Why? GWDialog has text fields that need focus when the dialog opens. When a
-   * text field becomes first responder, NSWindow calls the delegate method
-   * windowWillReturnFieldEditor:toObject: to get a field editor.
-   * 
-   * If we set a delegate here, there's a risk of:
-   * 1. Method resolution issues causing objc_msgSend_stret crashes on ARM64
-   * 2. Interfering with GWDialog's own text field management
-   * 3. Breaking the initial first responder setup done in GWDialog+Eau.m
-   * 
-   * The animation controller doesn't need to be a delegate to work - it receives
-   * window notifications (windowDidBecomeKey, windowDidResignKey, etc.) via
-   * NSNotificationCenter, which is sufficient for controlling the button animation.
-   * 
-   * For other window types (non-GWDialog), we can safely set the delegate because
-   * they typically don't have the same text field focus requirements on open.
-   */
-  if ([self isKindOfClass: NSClassFromString(@"GWDialog")])
-    {
-      NSDebugLog(@"NSWindow+Eau: Skipping delegate assignment for GWDialog %p to preserve text field focus", self);
-    }
-  else
-    {
-      // Guard against overriding existing delegates for non-GWDialog windows
-      id currentDelegate = [self delegate];
-      if (currentDelegate == nil || currentDelegate == animationcontroller)
-        {
-          NSDebugLog(@"NSWindow+Eau: Setting window delegate to animation controller %p for window %p", animationcontroller, self);
-          [self setDelegate: animationcontroller];
-        }
-      else
-        {
-          NSDebugLog(@"NSWindow+Eau: Preserving existing delegate %@ for window %p", currentDelegate, self);
-        }
-    }
-  
-  NSDebugLog(@"NSWindow+Eau: Starting pulse animation for cell %p", aCell);
-  [animationcontroller startPulse];
-  
-  NSDebugLog(@"NSWindow+Eau: Default button cell setup completed for cell %p", aCell);
-}
 
 - (void) animateDefaultButton: (id)sender
 {

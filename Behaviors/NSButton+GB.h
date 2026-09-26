@@ -1,4 +1,4 @@
-/* NSButton+Eau.h - Eau theme button keyboard handling
+/* NSButton+GB.h - button keyboard handling and default-button registration
    Copyright (C) 2026 Free Software Foundation, Inc.
 
    This file is part of GNUstep.
@@ -22,5 +22,5 @@
 
 #import <AppKit/NSButton.h>
 
-@interface NSButton(EauKeyboardHandling)
+@interface NSButton (GBKeyboardHandling)
 @end

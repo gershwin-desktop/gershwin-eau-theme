@@ -1,4 +1,4 @@
-/* NSButton+Eau.m - Eau theme button keyboard handling
+/* NSButton+GB.m - button keyboard handling and default-button registration
    Copyright (C) 2026 Free Software Foundation, Inc.
 
    This file is part of GNUstep.
@@ -15,19 +15,16 @@
 
    You should have received a copy of the GNU Lesser General Public
    License along with this library; see the file COPYING.LIB.
-   If not, see <http://www.gnu.org/licenses/> or write to the 
-   Free Software Foundation, 51 Franklin Street, Fifth Floor, 
+   If not, see <http://www.gnu.org/licenses/> or write to the
+   Free Software Foundation, 51 Franklin Street, Fifth Floor,
    Boston, MA 02110-1301, USA.
 */
 
-#import "NSButton+Eau.h"
-#import "Eau.h"
-#import "Eau+Button.h"
-#import "NSButtonCell+Eau.h"
+#import "NSButton+GB.h"
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
-@implementation NSButton (EauKeyboardHandling)
+@implementation NSButton (GBKeyboardHandling)
 
 + (void) load
 {
@@ -36,7 +33,7 @@
   // keyDown: swizzle
   {
     SEL origSelector = @selector(keyDown:);
-    SEL swizSelector = @selector(eau_keyDown:);
+    SEL swizSelector = @selector(gb_keyDown:);
     Method origMethod = class_getInstanceMethod(cls, origSelector);
     Method swizMethod = class_getInstanceMethod(cls, swizSelector);
     BOOL didAddMethod = class_addMethod(cls, origSelector,
@@ -50,10 +47,11 @@
       method_exchangeImplementations(origMethod, swizMethod);
   }
 
-  // setKeyEquivalent: swizzle - when @"\r", start pulse on the cell
+  // setKeyEquivalent: swizzle - a Return key equivalent makes the button its
+  // window's default button
   {
     SEL orig = @selector(setKeyEquivalent:);
-    SEL swiz = @selector(eau_setKeyEquivalent:);
+    SEL swiz = @selector(gb_setKeyEquivalent:);
     Method origM = class_getInstanceMethod(cls, orig);
     Method swizM = class_getInstanceMethod(cls, swiz);
     if (origM && swizM)
@@ -66,7 +64,7 @@
   // implementation for every view in the application.
   {
     SEL origSelector = @selector(viewDidMoveToWindow);
-    SEL swizSelector = @selector(eau_viewDidMoveToWindow);
+    SEL swizSelector = @selector(gb_viewDidMoveToWindow);
     Method origMethod = class_getInstanceMethod(cls, origSelector);
     Method swizMethod = class_getInstanceMethod(cls, swizSelector);
     BOOL didAddMethod = class_addMethod(cls, origSelector,
@@ -90,8 +88,11 @@
  * and by retrying on a timer; that scan called -setDefaultButtonCell: back
  * into the window that was in the middle of calling it, and it still missed
  * the common case of a button that gets its key equivalent before being added
- * to a window. */
-- (void) eauBecomeWindowDefaultButton
+ * to a window.
+ *
+ * TODO: Upstream to GNUstep - a button whose key equivalent is Return should
+ * become its window's default button cell by itself, as on macOS. */
+- (void) gb_becomeWindowDefaultButton
 {
   NSWindow *window = [self window];
   NSCell *cell = [self cell];
@@ -102,8 +103,8 @@
     }
 
   /* Whoever got there first keeps the slot - including this very cell, so a
-   * repeated -setKeyEquivalent: does not tear the window's animation
-   * controller down and build it again. */
+   * repeated -setKeyEquivalent: does not make the theme tear down and rebuild
+   * whatever it hangs off the window's default button. */
   if ([window defaultButtonCell] != nil)
     {
       return;
@@ -112,76 +113,64 @@
   [window setDefaultButtonCell: (NSButtonCell *)cell];
 }
 
-- (void) eau_viewDidMoveToWindow
+- (void) gb_viewDidMoveToWindow
 {
-  [self eau_viewDidMoveToWindow];
+  [self gb_viewDidMoveToWindow];
 
   if ([[self keyEquivalent] isEqualToString: @"\r"])
     {
-      [self eauBecomeWindowDefaultButton];
+      [self gb_becomeWindowDefaultButton];
     }
 }
 
-- (void) eau_setKeyEquivalent: (NSString *)key
+- (void) gb_setKeyEquivalent: (NSString *)key
 {
-  [self eau_setKeyEquivalent: key];
+  [self gb_setKeyEquivalent: key];
   if ([key isEqualToString: @"\r"])
     {
-      /* The redraw ticker that makes the pulse visible belongs to the window
-       * (see DefaultButtonAnimationController in NSWindow+Eau.m), so it can
-       * pause while the window is not key and stop when the default button
-       * changes. */
-      [(NSButtonCell *)[self cell] setIsDefaultButton: @YES];
-      [self eauBecomeWindowDefaultButton];
+      [self gb_becomeWindowDefaultButton];
     }
 }
 
-/**
- * Swizzled keyDown to ensure spacebar activates buttons with focus ring.
- */
-- (void) eau_keyDown: (NSEvent*)theEvent
+/* Space clicks the focused button, but Return goes to the window's default
+ * button rather than to whichever button happens to have focus (macOS
+ * convention).
+ *
+ * TODO: Upstream to GNUstep - -[NSButton keyDown:] clicks the focused button on
+ * Return; it should leave Return to the window's default button cell. */
+- (void) gb_keyDown: (NSEvent *)theEvent
 {
   NSString *characters = [theEvent characters];
-  
+
   if ([self isEnabled] && [characters length] > 0)
     {
       unichar keyChar = [characters characterAtIndex: 0];
-      
-      // Handle spacebar - activate the focused button
-      if (keyChar == ' ' || keyChar == 0x20)
+
+      if (keyChar == ' ')
         {
           [self performClick: self];
           return;
         }
-      
-      // Handle Enter/Return — activate the window's default button,
-      // not necessarily the focused button (macOS convention).
+
       if (keyChar == '\r' || keyChar == '\n' || keyChar == 0x03)
         {
           NSWindow *win = [self window];
-          if (win)
+          id defaultCell = [win defaultButtonCell];
+
+          if (defaultCell != nil && [defaultCell isKindOfClass: [NSButtonCell class]])
             {
-              id defaultCell = [win defaultButtonCell];
-              if (defaultCell && [defaultCell respondsToSelector: @selector(performClick:)])
+              NSButton *defaultBtn = (NSButton *)[(NSButtonCell *)defaultCell controlView];
+              if (defaultBtn && [defaultBtn isEnabled])
                 {
-                  // Find the NSButton that owns the default cell and click it
-                  if ([defaultCell isKindOfClass: [NSButtonCell class]])
-                    {
-                      NSButton *defaultBtn = (NSButton *)[(NSButtonCell *)defaultCell controlView];
-                      if (defaultBtn && [defaultBtn isEnabled])
-                        {
-                          [defaultBtn performClick: nil];
-                          return;
-                        }
-                    }
+                  [defaultBtn performClick: nil];
+                  return;
                 }
             }
-          // No default button: fall through to original implementation
+          // No usable default button: let the original handle Return.
         }
     }
-  
-  // Call the original implementation (which now points to eau_keyDown)
-  [self eau_keyDown: theEvent];
+
+  [self gb_keyDown: theEvent];
 }
 
 @end
