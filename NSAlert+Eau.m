@@ -40,6 +40,26 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 static const void *kEAUAlertIsStoppingKey = &kEAUAlertIsStoppingKey;
 static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
 
+/* Manual retain/release for libs-gui's MRC-owned NSAlert _window ivar.
+ * Tests/ also builds this file without ARC, hence both spellings. */
+static inline id EauRetainUnmanaged(id obj)
+{
+#if __has_feature(objc_arc)
+    return (__bridge id)(__bridge_retained void *)obj;
+#else
+    return [obj retain];
+#endif
+}
+
+static inline void EauReleaseUnmanaged(id obj)
+{
+#if __has_feature(objc_arc)
+    (void)(__bridge_transfer id)(__bridge void *)obj;
+#else
+    [obj release];
+#endif
+}
+
 static BOOL eauAlertIsStopping(id panel)
 {
     return [objc_getAssociatedObject(panel, kEAUAlertIsStoppingKey) boolValue];
@@ -1574,8 +1594,20 @@ static void setKeyEquivalent(NSButton *button)
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
-            object_setIvar(self, windowIvar, panel);
-            objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // libs-gui (MRC) owns _window: it DESTROYs it after runModal and
+            // beginSheet, and in -dealloc. The ivar is unretained as far as
+            // ARC and object_setIvar are concerned, so hand it its own +1.
+            // A panel left over from an earlier setup is parked on the alert
+            // instead of released, since releasing a just-used panel may
+            // crash (see gb_cleanupPanel in GershwinBehaviors).
+            id previous = object_getIvar(self, windowIvar);
+            if (previous != nil)
+            {
+                objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, previous,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                EauReleaseUnmanaged(previous);
+            }
+            object_setIvar(self, windowIvar, EauRetainUnmanaged(panel));
             // NSLog(@"Eau: Successfully set _window via ivar");
         }
         else

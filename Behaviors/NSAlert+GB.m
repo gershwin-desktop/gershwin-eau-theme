@@ -14,6 +14,8 @@
 - (void)_setupPanel;
 @end
 
+static char GBAlertRetiredPanelKey;
+
 @protocol GBAlertPanelResult
 - (NSInteger)result;
 @end
@@ -77,6 +79,13 @@
       return NSAlertErrorReturn;
     }
 
+    /* A rerun within the cleanup delay would have libs-gui's _setupPanel
+     * overwrite (leak) the previous panel and the pending cleanup detach the
+     * new one mid-session; retire the previous panel now instead. */
+    [NSObject cancelPreviousPerformRequestsWithTarget:self
+                                             selector:@selector(gb_cleanupPanel)
+                                               object:nil];
+    [self gb_cleanupPanel];
     [self _setupPanel];
 
     /* Audible cue that an alert needs attention; -beep is provided by the
@@ -154,12 +163,13 @@
   }
 }
 
-/* Detaches the finished panel from the alert without releasing it.
+/* Detaches the finished panel from the alert without releasing it yet.
  * Releasing the panel right after its modal session crashes (segfault) while
- * the X11 back end still has pending work for it.  The theme may keep its
- * panel alive with an associated object on the alert, so it dies with the
- * alert, by which time it is inert: ordered out, no delegate and no
- * default-button animation.
+ * the X11 back end still has pending work for it.  _window owns a retain
+ * (libs-gui's _setupPanel and a theme's replacement both hand it +1), which
+ * moves to an associated object so the panel dies with the alert, by which
+ * time it is inert: ordered out, no delegate and no default-button
+ * animation.  Nilling the ivar without that would leak one panel per alert.
  * TODO: Upstream to GNUstep - window teardown in libs-gui/libs-back should
  * survive releasing a just-closed modal panel. */
 - (void)gb_cleanupPanel
@@ -188,7 +198,11 @@
   }
   @catch (NSException *e) {
   }
+  objc_setAssociatedObject(self, &GBAlertRetiredPanelKey, window,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
   object_setIvar(self, windowIvar, nil);
+  /* Balances the retain the ivar held; ARC cannot see it (MRC ivar). */
+  (void)(__bridge_transfer id)(__bridge void *)window;
 }
 
 @end
