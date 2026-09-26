@@ -4,14 +4,14 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 
-#import "EauMenuWindowFilter.h"
+#import "GBMenuWindowFilter.h"
 
 #import <math.h>
 #import <string.h>
 #import <X11/Xatom.h>
 #import <X11/Xutil.h>
 
-int EauMenuUtilityHeightLimit(CGFloat menuBarHeight, CGFloat scaleFactor)
+int GBMenuUtilityHeightLimit(CGFloat menuBarHeight, CGFloat scaleFactor)
 {
   /* Round up: the backend may round a fractional device height either way,
      and a utility window must never end up one pixel above the limit. */
@@ -67,8 +67,8 @@ static BOOL hasWindowType(Display *dpy, Window w, const char *typeName)
   return found;
 }
 
-BOOL EauIsMenuDropdownWindow(Display *dpy, Window w, int height,
-                             int utilityHeightLimit)
+BOOL GBIsMenuDropdownWindow(Display *dpy, Window w, int height,
+                            int utilityHeightLimit)
 {
   if (!isMenuAppWindow(dpy, w))
     return NO;

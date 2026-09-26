@@ -1,5 +1,5 @@
 /*
- * EauMenuScrollManager.m
+ * GBMenuScrollManager.m
  *
  * Scroll state manager for overflowing menus.
  *
@@ -16,7 +16,7 @@
  * SPDX-License-Identifier: BSD-2-Clause
  */
 
-#import "EauMenuScrollManager.h"
+#import "GBMenuScrollManager.h"
 #import <AppKit/NSMenuView.h>
 #import <GNUstepGUI/GSTheme.h>
 #import <objc/runtime.h>
@@ -28,17 +28,17 @@
 #define SCROLL_WHEEL_FACTOR    8.0    // Multiplier for scroll wheel deltas
 
 /* Association key for attaching scroll manager to views/windows */
-static char kEauScrollManagerAssociationKey;
+static char kGBScrollManagerAssociationKey;
 
 /* Forward declaration of private NSMenuView methods used for
    coordinate calculations. These exist in GNUstep's NSMenuView.m. */
-@interface NSMenuView (EauScrollHelper)
+@interface NSMenuView (GBScrollHelper)
 - (CGFloat) yOriginForItem: (NSInteger)item;
 - (CGFloat) heightForItem: (NSInteger)item;
 - (CGFloat) totalHeight;
 @end
 
-@implementation EauMenuScrollManager
+@implementation GBMenuScrollManager
 
 @synthesize scrollOffset = _scrollOffset;
 @synthesize scrolling = _isScrolling;
@@ -67,7 +67,7 @@ static char kEauScrollManagerAssociationKey;
 
   // Associate with the menu view so rectOfItemAtIndex: can find us
   objc_setAssociatedObject(menuView,
-                           &kEauScrollManagerAssociationKey,
+                           &kGBScrollManagerAssociationKey,
                            self,
                            OBJC_ASSOCIATION_RETAIN_NONATOMIC);
 
@@ -77,24 +77,24 @@ static char kEauScrollManagerAssociationKey;
   if (window)
     {
       objc_setAssociatedObject(window,
-                               &kEauScrollManagerAssociationKey,
+                               &kGBScrollManagerAssociationKey,
                                self,
                                OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
 }
 
-+ (EauMenuScrollManager *)scrollManagerForMenuView: (NSMenuView *)menuView
++ (GBMenuScrollManager *)scrollManagerForMenuView: (NSMenuView *)menuView
 {
   if (!menuView) return nil;
-  return (EauMenuScrollManager *)objc_getAssociatedObject(menuView,
-                                                          &kEauScrollManagerAssociationKey);
+  return (GBMenuScrollManager *)objc_getAssociatedObject(menuView,
+                                                          &kGBScrollManagerAssociationKey);
 }
 
-+ (EauMenuScrollManager *)scrollManagerForWindow: (NSWindow *)window
++ (GBMenuScrollManager *)scrollManagerForWindow: (NSWindow *)window
 {
   if (!window) return nil;
-  return (EauMenuScrollManager *)objc_getAssociatedObject(window,
-                                                          &kEauScrollManagerAssociationKey);
+  return (GBMenuScrollManager *)objc_getAssociatedObject(window,
+                                                          &kGBScrollManagerAssociationKey);
 }
 
 #pragma mark - Overflow Detection (class method, callable from any code path)
@@ -153,7 +153,7 @@ static char kEauScrollManagerAssociationKey;
   if (visibleHeight < 30) visibleHeight = maxUsableHeight;
 
   // Create (or update) the scroll manager.
-  EauMenuScrollManager *mgr = [self scrollManagerForMenuView: menuView];
+  GBMenuScrollManager *mgr = [self scrollManagerForMenuView: menuView];
   if (!mgr)
     {
       mgr = [[self alloc] init];
@@ -179,8 +179,8 @@ static char kEauScrollManagerAssociationKey;
   }
 
   // Resize the window to the visible viewport height.
-  // ONLY set the frame if it actually needs changing — this serves as a
-  // re-entrancy guard: the swizzled setFrame:display: in NSMenu+Eau.m
+  // ONLY set the frame if it actually needs changing - this serves as a
+  // re-entrancy guard: the swizzled setFrame:display: in NSMenu+GB.m
   // calls back into this method, and without this guard we'd loop.
   {
     NSRect currentWinFrame = [window frame];
@@ -222,11 +222,11 @@ static char kEauScrollManagerAssociationKey;
           CGFloat targetInTop  = itemOrigin + itemHeight - [mgr visibleHeight];
           if (targetInTop >= 0)
             {
-              // Item fits in the top portion — position the viewport so the
+              // Item fits in the top portion - position the viewport so the
               // item sits near the top edge.
               mgr.scrollOffset = targetInTop;
             }
-          // else: item is near the bottom — keep the default top-of-menu
+          // else: item is near the bottom - keep the default top-of-menu
           // scrollOffset set above.
         }
     }
@@ -330,12 +330,12 @@ static char kEauScrollManagerAssociationKey;
       return;
     }
 
-  // Item extends above viewport top — scroll up (increase scrollOffset)
+  // Item extends above viewport top - scroll up (increase scrollOffset)
   if (itemTop > viewTop)
     {
       self.scrollOffset = itemTop - _visibleHeight;
     }
-  // Item extends below viewport bottom — scroll down (decrease scrollOffset)
+  // Item extends below viewport bottom - scroll down (decrease scrollOffset)
   else if (itemBottom < viewBottom)
     {
       self.scrollOffset = itemBottom;
@@ -422,60 +422,12 @@ static char kEauScrollManagerAssociationKey;
     }
 }
 
-#pragma mark - Scroll Arrow Indicators
-
-- (void) drawScrollIndicatorsInView: (NSView *)view
-{
-  if (!_isScrolling || !view) return;
-
-  CGFloat viewWidth = [view bounds].size.width;
-  CGFloat maxScroll = self.maxScrollOffset;
-
-  [[NSColor colorWithCalibratedWhite: 0.18 alpha: 1.0] set];
-
-  CGFloat cx = viewWidth / 2.0;   // centre of the menu
-
-  // ── Top arrow (points ↑) ────────────────────────────────────────────
-  // Shown when content is hidden above the viewport (scrollOffset < maxScroll).
-  if (_scrollOffset < maxScroll)
-    {
-      NSPoint pts[3] = {
-        NSMakePoint(cx - 4.0, _visibleHeight - 8.0),
-        NSMakePoint(cx + 4.0, _visibleHeight - 8.0),
-        NSMakePoint(cx,        _visibleHeight - 2.0)
-      };
-      NSBezierPath *path = [NSBezierPath bezierPath];
-      [path moveToPoint: pts[0]];
-      [path lineToPoint: pts[1]];
-      [path lineToPoint: pts[2]];
-      [path closePath];
-      [path fill];
-    }
-
-  // ── Bottom arrow (points ↓) ─────────────────────────────────────────
-  // Shown when content is hidden below the viewport (scrollOffset > 0).
-  if (_scrollOffset > 0)
-    {
-      NSPoint pts[3] = {
-        NSMakePoint(cx - 4.0, 7.0),
-        NSMakePoint(cx + 4.0, 7.0),
-        NSMakePoint(cx,        1.0)
-      };
-      NSBezierPath *path = [NSBezierPath bezierPath];
-      [path moveToPoint: pts[0]];
-      [path lineToPoint: pts[1]];
-      [path lineToPoint: pts[2]];
-      [path closePath];
-      [path fill];
-    }
-}
-
 #pragma mark - Internal
 
 - (void) _updateDisplay
 {
   // Force immediate redraw.  setNeedsDisplay: alone does not cause a
-  // visible update during the tracking loop — the view is only drawn
+  // visible update during the tracking loop - the view is only drawn
   // when the event loop naturally processes display events, which
   // doesn't happen frequently enough during menu tracking.
   [_menuView setNeedsDisplay: YES];

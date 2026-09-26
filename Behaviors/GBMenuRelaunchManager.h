@@ -1,6 +1,6 @@
 #import <Foundation/Foundation.h>
 
-@interface EauMenuRelaunchManager : NSObject
+@interface GBMenuRelaunchManager : NSObject
 + (instancetype)sharedManager;
 - (BOOL)captureMenuProcessSnapshotIfAvailable;
 - (void)relaunchMenuProcessIfSnapshotAvailable;

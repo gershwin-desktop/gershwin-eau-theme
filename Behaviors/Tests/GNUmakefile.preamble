@@ -1,0 +1,6 @@
+ADDITIONAL_INCLUDE_DIRS += -I..
+
+t_GBMenuWindowFilter_OBJC_FILES += ../GBMenuWindowFilter.m
+t_GBMenuWindowFilter_TOOL_LIBS += -lX11
+
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated

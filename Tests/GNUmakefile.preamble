@@ -5,7 +5,4 @@ ADDITIONAL_INCLUDE_DIRS += -I..
 t_AlertPanelScrolling_OBJC_FILES += ../NSAlert+Eau.m
 t_AlertPanelScrolling_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 
-t_EauMenuWindowFilter_OBJC_FILES += ../EauMenuWindowFilter.m
-t_EauMenuWindowFilter_TOOL_LIBS += -lX11
-
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
