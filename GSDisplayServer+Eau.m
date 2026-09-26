@@ -36,6 +36,7 @@
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
 #include <stdlib.h>
+#include <string.h>
 
 static BOOL EAUIsDialogLikeWindow(NSWindow *window, int level)
 {
@@ -214,39 +215,77 @@ static void EAUEnsureWindowStates(Display *dpy,
 
 /*
  * The window manager hangs a sheet from its parent's titlebar, moves it
- * with the parent and slides it in and out, but only for windows marked
- * with _GERSHWIN_SHEET: WM_TRANSIENT_FOR, all that libs-gui sets for a
- * sheet, is also set for child windows and drawers.  The mark must be on
- * the window before it is mapped, and a deferred sheet has no X window
+ * with the parent and slides it in and out, but only for windows whose
+ * ICCCM WM_WINDOW_ROLE is "sheet": WM_TRANSIENT_FOR, all that libs-gui sets
+ * for a sheet, is also set for child windows and drawers.  The role must be
+ * on the window before it is mapped, and a deferred sheet has no X window
  * before it is first ordered in, so it is set on every order-in.
  */
-static void EAUMarkSheet(GSDisplayServer *server, int win)
+static NSString *EAUAttachedRoleOfWindow(NSWindow *window)
 {
-  static Atom sheetAtom = None;
+  if ([[window parentWindow] attachedSheet] == window)
+    {
+      return @"sheet";
+    }
+  return nil;
+}
+
+/* Only a role this theme set is removed; any other belongs to the app. */
+static BOOL EAUIsAttachedRole(Display *dpy, Window xwin, Atom roleAtom)
+{
+  Atom actualType = None;
+  int actualFormat = 0;
+  unsigned long nitems = 0;
+  unsigned long bytesAfter = 0;
+  unsigned char *value = NULL;
+  BOOL ours = NO;
+
+  if (XGetWindowProperty(dpy, xwin, roleAtom, 0, 16, False, XA_STRING,
+                         &actualType, &actualFormat, &nitems, &bytesAfter,
+                         &value) == Success
+      && actualType == XA_STRING && value != NULL)
+    {
+      NSString *role = [[NSString alloc] initWithBytes: value
+                                                length: strnlen((char *)value, nitems)
+                                              encoding: NSISOLatin1StringEncoding];
+      ours = [role isEqualToString: @"sheet"];
+    }
+  if (value != NULL)
+    {
+      XFree(value);
+    }
+  return ours;
+}
+
+static void EAUMarkAttachedWindow(GSDisplayServer *server, int win)
+{
+  static Atom roleAtom = None;
   NSWindow *window = GSWindowWithNumber(win);
   Display *dpy = (Display *)[server serverDevice];
   Window xwin = (Window)(uintptr_t)[server windowDevice: win];
+  NSString *role;
 
   if (window == nil || dpy == NULL || xwin == 0)
     {
       return;
     }
-  if (sheetAtom == None)
+  if (roleAtom == None)
     {
-      sheetAtom = XInternAtom(dpy, "_GERSHWIN_SHEET", False);
+      roleAtom = XInternAtom(dpy, "WM_WINDOW_ROLE", False);
     }
 
-  if ([[window parentWindow] attachedSheet] == window)
+  role = EAUAttachedRoleOfWindow(window);
+  if (role != nil)
     {
-      long isSheet = 1;
+      const char *value = [role UTF8String];
 
-      XChangeProperty(dpy, xwin, sheetAtom, XA_CARDINAL, 32,
-                      PropModeReplace, (unsigned char *)&isSheet, 1);
+      XChangeProperty(dpy, xwin, roleAtom, XA_STRING, 8, PropModeReplace,
+                      (const unsigned char *)value, (int)strlen(value));
     }
-  else
+  else if (EAUIsAttachedRole(dpy, xwin, roleAtom))
     {
       /* The same panel may later be run as an ordinary dialog. */
-      XDeleteProperty(dpy, xwin, sheetAtom);
+      XDeleteProperty(dpy, xwin, roleAtom);
     }
 }
 
@@ -281,7 +320,7 @@ static void EAUSwizzle(Class serverClass, Class category, SEL origSel, SEL swizS
 {
   if (op != NSWindowOut)
     {
-      EAUMarkSheet(self, winNum);
+      EAUMarkAttachedWindow(self, winNum);
     }
   /* Call original (swizzled) */
   [self eau_orderwindow: op : otherWin : winNum];

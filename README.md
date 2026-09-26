@@ -36,10 +36,11 @@ windows carry too. So that the Gershwin window manager can hang the sheet from
 its parent's titlebar, slide it in and out and keep it attached, the theme
 marks it:
 
-- `_GERSHWIN_SHEET` (`CARDINAL`, 32 bit) = `1` is put on the window every time
-  it is ordered in while it is its parent's `attachedSheet`, and deleted when
-  the same window is ordered in as anything else (a panel reused as an
-  ordinary dialog).
+- The ICCCM `WM_WINDOW_ROLE` (`STRING`) = `sheet` is put on the window every
+  time it is ordered in while it is its parent's `attachedSheet`, and removed
+  when the same window is ordered in as anything else (a panel reused as an
+  ordinary dialog); a role the application set itself is left alone. No
+  private property is used.
 - It is set in the swizzled `XGServer -orderwindow:::`
   (`GSDisplayServer+Eau.m`), the first point at which even a deferred sheet
   has an X window, and before the window is mapped, as the window manager
