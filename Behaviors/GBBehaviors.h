@@ -10,4 +10,11 @@
  * bundle as present: a theme checks NSClassFromString(@"GBBehaviors") to
  * find out whether it still has to load the bundle itself. */
 @interface GBBehaviors : NSObject
+
+/* Plays a named system sound at the user's alert volume (see GBSound.h).
+ * For themes that trigger a sound from drawing-side code: they reach it
+ * through NSClassFromString(@"GBBehaviors") and stay silent without the
+ * bundle.  Returns NO when no such sound exists. */
++ (BOOL)playSystemSound:(NSString *)name;
+
 @end

@@ -4,6 +4,7 @@
  */
 
 #import "GBBehaviors.h"
+#import "GBSound.h"
 
 @implementation GBBehaviors
 
@@ -17,6 +18,11 @@
       NSDebugLog(@"GershwinBehaviors: loaded");
     }
   return self;
+}
+
++ (BOOL)playSystemSound:(NSString *)name
+{
+  return GBPlaySystemSound(name);
 }
 
 @end
