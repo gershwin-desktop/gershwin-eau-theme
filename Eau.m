@@ -455,6 +455,7 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 - (id)initWithBundle:(NSBundle *)bundle
 {
   NSDebugLog(@"Eau: >>> initWithBundle ENTRY (before super init)");
+  EauEnsureBehaviorsLoaded();
   if ((self = [super initWithBundle:bundle]) != nil)
     {
       NSDebugLog(@"Eau: >>> initWithBundle after super init, self=%p", self);

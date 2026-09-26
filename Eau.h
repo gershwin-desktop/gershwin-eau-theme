@@ -11,6 +11,9 @@
 // number of pixels, usually in the range [4.0, 16.0].
 #define EAU_MENU_ITEM_PADDING 10.0
 
+// Loads GershwinBehaviors.bundle when GSAppKitUserBundles did not.
+extern void EauEnsureBehaviorsLoaded(void);
+
 @protocol GSGNUstepMenuClient <NSObject>
 - (oneway void)activateMenuItemAtPath:(NSArray *)indexPath
                             forWindow:(NSNumber *)windowId;
