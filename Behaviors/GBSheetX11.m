@@ -21,7 +21,7 @@
  * parent is blocked, and Motif hints without decorations so it does not
  * frame the sheet.  libs-back only knows the style mask the window was
  * created with, so the hints are written here with Xlib, the same way
- * GSDisplayServer+Eau.m fixes window types.  The previous Motif hints are
+ * GSDisplayServer+GB.m fixes window types.  The previous Motif hints are
  * kept so a panel reused later as a normal window gets its frame back. */
 
 static const void *kGBSheetSavedMotifKey = &kGBSheetSavedMotifKey;
