@@ -1084,8 +1084,8 @@ static NSView *NewPane(NSRect bounds)
   [form addRowWithLabel: @"Sheet (Attached):" controls: @[
     ShowcaseButton(@"Show Sheet", self, @selector(showSheet:), NSRegularControlSize) ]];
 
-  [form addRowWithLabel: @"Save Panel (Sheet):" controls: @[
-    ShowcaseButton(@"Show Save Sheet", self, @selector(showSaveSheet:), NSRegularControlSize) ]];
+  [form addRowWithLabel: @"Save (Sheet):" controls: @[
+    ShowcaseButton(@"Show Save", self, @selector(showSaveSheet:), NSRegularControlSize) ]];
 
   return pane;
 }
