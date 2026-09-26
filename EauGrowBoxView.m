@@ -96,7 +96,8 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 
 - (BOOL)isOpaque
 {
-  return YES;
+  // Drawn nothing (see -drawRect:), what is behind it must show through
+  return [[self window] showsResizeIndicator];
 }
 
 - (BOOL)isFlipped
@@ -118,6 +119,12 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 
 - (void)drawRect:(NSRect)dirtyRect
 {
+  // A window that says it shows no resize indicator (full screen) has none
+  if ([[self window] showsResizeIndicator] == NO)
+    {
+      return;
+    }
+
   EauGrowBoxCell *cell = [[EauGrowBoxCell alloc] init];
   [cell drawWithFrame:[self bounds] inView:self];
 }

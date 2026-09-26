@@ -1,6 +1,7 @@
 #import "Eau.h"
 #import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
+#import "EauDrawer.h"
 
 @interface Eau(EauWindowDecoration)
 
@@ -27,6 +28,10 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
 - (void) drawWindowBackground: (NSRect) frame view: (NSView*) view
 {
+  if (EauDrawDrawerBackground(view, frame))
+    {
+      return;
+    }
   NSColor* backgroundColor = [[view window] backgroundColor];
   [backgroundColor setFill];
   NSRectFill(frame);

@@ -242,28 +242,36 @@ static NSString *EauReadlinkTarget(NSString *path);
 
 static pid_t EauFindMenuPIDInProcFS(void)
 {
-  NSFileManager *fm = [NSFileManager defaultManager];
-  NSArray *entries = [fm contentsOfDirectoryAtPath:@"/proc" error:nil];
-  NSCharacterSet *digits = [NSCharacterSet decimalDigitCharacterSet];
-  NSCharacterSet *trim = [NSCharacterSet whitespaceAndNewlineCharacterSet];
-
-  for (NSString *entry in entries)
+  /* This runs while the theme activates, before the application has drained
+     an autorelease pool even once, so whatever is left autoreleased here
+     stays for the life of the process.  -invertedSet copies the whole
+     Unicode bitmap (139 KB) per call: made once, not once per process. */
+  @autoreleasepool
     {
-      if ([entry rangeOfCharacterFromSet:[digits invertedSet]].location != NSNotFound)
+      NSFileManager *fm = [NSFileManager defaultManager];
+      NSArray *entries = [fm contentsOfDirectoryAtPath:@"/proc" error:nil];
+      NSCharacterSet *nonDigits =
+        [[NSCharacterSet decimalDigitCharacterSet] invertedSet];
+      NSCharacterSet *trim = [NSCharacterSet whitespaceAndNewlineCharacterSet];
+
+      for (NSString *entry in entries)
         {
-          continue;
-        }
-      NSString *commPath = [[@"/proc" stringByAppendingPathComponent:entry] stringByAppendingPathComponent:@"comm"];
-      NSString *comm = [NSString stringWithContentsOfFile:commPath
-                                                 encoding:NSUTF8StringEncoding
-                                                    error:nil];
-      if (comm == nil)
-        {
-          continue;
-        }
-      if ([[comm stringByTrimmingCharactersInSet:trim] isEqualToString:@"Menu"])
-        {
-          return (pid_t)[entry intValue];
+          if ([entry rangeOfCharacterFromSet:nonDigits].location != NSNotFound)
+            {
+              continue;
+            }
+          NSString *commPath = [[@"/proc" stringByAppendingPathComponent:entry] stringByAppendingPathComponent:@"comm"];
+          NSString *comm = [NSString stringWithContentsOfFile:commPath
+                                                     encoding:NSUTF8StringEncoding
+                                                        error:nil];
+          if (comm == nil)
+            {
+              continue;
+            }
+          if ([[comm stringByTrimmingCharactersInSet:trim] isEqualToString:@"Menu"])
+            {
+              return (pid_t)[entry intValue];
+            }
         }
     }
   return (pid_t)0;

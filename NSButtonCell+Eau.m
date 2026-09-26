@@ -12,13 +12,13 @@
  * most applications will not do this, so we handle it here. 
  */
 
+#import "Eau.h"
 #import "NSCell+Eau.h"
 #import "NSButtonCell+Eau.h"
 #import "Eau+Button.h"
 #import "AppearanceMetrics.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
-#import <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
 // Prevent the specific "return" images from ever being drawn by intercepting common draw methods.
@@ -37,10 +37,6 @@
 
     Class cls = [self class];
     Method orig, swiz;
-
-    orig = class_getInstanceMethod(cls, @selector(drawAtPoint:));
-    swiz = class_getInstanceMethod(cls, @selector(EAU_drawAtPoint:));
-    if (orig && swiz) method_exchangeImplementations(orig, swiz);
 
     orig = class_getInstanceMethod(cls, @selector(drawInRect:));
     swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:));
@@ -64,18 +60,9 @@
   return [base isEqualToString:@"common_ret"] || [base isEqualToString:@"common_retH"];
 }
 
-- (void)EAU_drawAtPoint:(NSPoint)point
-{
-  if ([self EAU_isReturnImage]) {
-    NSDebugLog(@"NSImage: Suppressing drawAtPoint for %@", [self name]);
-    return;
-  }
-  [self EAU_drawAtPoint:point];
-}
-
 - (void)EAU_drawInRect:(NSRect)rect
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect for %@", [self name]);
     return;
   }
@@ -84,7 +71,7 @@
 
 - (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect:fromRect:operation:fraction: for %@", [self name]);
     return;
   }
@@ -93,7 +80,7 @@
 
 - (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta respectFlipped:(BOOL)respectFlipped hints:(NSDictionary *)hints
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect:respectFlipped:hints: for %@", [self name]);
     return;
   }
@@ -142,6 +129,13 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   // (METRICS_BUTTON_MIN_WIDTH), giving the pill shape enough horizontal room.
   orig = class_getInstanceMethod(cls, @selector(cellSize));
   swiz = class_getInstanceMethod(cls, @selector(EAU_cellSize));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  // Swizzle -setImage: rather than overriding it in this category: a category
+  // method replaces -[NSButtonCell setImage:], whose image position update
+  // buttons created in code rely on to show their image at all.
+  orig = class_getInstanceMethod(cls, @selector(setImage:));
+  swiz = class_getInstanceMethod(cls, @selector(EAU_setImage:));
   if (orig && swiz) method_exchangeImplementations(orig, swiz);
 }
 
@@ -202,9 +196,9 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 }
 
 // Intercept setImage to handle common_ret/common_retH images
-- (void) setImage:(NSImage *)image
+- (void) EAU_setImage:(NSImage *)image
 {
-  if (image) {
+  if (EauThemeIsActive() && image) {
     NSString *imageName = [image name];
     NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
@@ -231,7 +225,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
     }
   }
   
-  [super setImage:image];
+  [self EAU_setImage:image];
 }
 
 // Handle common_ret/common_retH alternate images
@@ -273,7 +267,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 // Intercept setAlternateImage to handle common_ret/common_retH images
 - (void) EAU_setAlternateImage:(NSImage *)alternateImage
 {
-  if (alternateImage) {
+  if (EauThemeIsActive() && alternateImage) {
     NSString *imageName = [alternateImage name];
     NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
@@ -359,6 +353,18 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 {
   BOOL shouldRemoveImagePosition = NO;
 
+  if (!EauThemeIsActive())
+    {
+      [self EAU_drawInteriorWithFrame:cellFrame inView:controlView];
+      return;
+    }
+
+  // The bezel draws the whole face of a disclosure button; interfaces still
+  // carry a placeholder title for them that must not show.
+  if ([self bezelStyle] == NSDisclosureBezelStyle
+    || [self bezelStyle] == NSRoundedDisclosureBezelStyle)
+    return;
+
   NSCellImagePosition oldPos = [self imagePosition];
 
   if ([self EAUhasSuppressedReturnImage] && oldPos != NSNoImage) {
@@ -398,6 +404,11 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 - (NSSize) EAU_cellSize
 {
   NSSize size = [self EAU_cellSize]; // call original (swizzled)
+
+  /* The pill shape and its minimum width belong to Eau; another theme sizes
+   * its own buttons. */
+  if (!EauThemeIsActive())
+    return size;
 
   // Width needed for the title as actually rendered (using the cell's font)
   // plus horizontal bezel margins.  GNUstep's cellSize already adds border

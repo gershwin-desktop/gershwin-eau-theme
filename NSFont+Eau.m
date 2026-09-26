@@ -178,12 +178,20 @@ static NSFont *EauFallbackFont(void)
 + (NSFont *)eau_menuBarFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self eau_menuBarFontOfSize:fontSize];
+  /* The fixed 14 pt and the enforced weights below are Eau's typography;
+   * another theme has to keep the size it asked for.  The substitution of an
+   * unavailable family stays in place either way, because a font with no
+   * glyphs breaks text drawing whatever theme is in charge. */
+  if (!EauThemeIsActive())
+    return [self eau_fontOrDefault:base size:fontSize];
   return [self eau_fontOrDefault:base size:14.0];
 }
 
 + (NSFont *)eau_menuFontOfSize:(CGFloat)fontSize
 {
   NSFont *base = [self eau_menuFontOfSize:fontSize];
+  if (!EauThemeIsActive())
+    return [self eau_fontOrDefault:base size:fontSize];
   return [self eau_fontOrDefault:base size:14.0];
 }
 
@@ -194,7 +202,9 @@ static NSFont *EauFallbackFont(void)
    * mis-resolution cannot render regular text bold.  Weight 6 is the
    * platform's regular UI face (Inter-Medium on this system, matching what
    * a correct GNUstep resolves), not 5 (Inter-Regular). */
-  return [self eau_fontOrDefault: base size: fontSize weight: 6];
+  return [self eau_fontOrDefault: base
+                             size: fontSize
+                           weight: EauThemeIsActive() ? 6 : 0];
 }
 
 + (NSFont *)eau_boldSystemFontOfSize:(CGFloat)fontSize
@@ -202,7 +212,9 @@ static NSFont *EauFallbackFont(void)
   NSFont *base = [self eau_boldSystemFontOfSize:fontSize];
   /* The bold system font must be bold; enforce it so a fontconfig
    * mis-resolution cannot render the headline weight regular. */
-  return [self eau_fontOrDefault: base size: fontSize weight: 9];
+  return [self eau_fontOrDefault: base
+                             size: fontSize
+                           weight: EauThemeIsActive() ? 9 : 0];
 }
 
 + (NSFont *)eau_controlContentFontOfSize:(CGFloat)fontSize
@@ -229,9 +241,14 @@ static NSFont *EauFallbackFont(void)
   if (base == nil)
     {
       // The requested font name does not resolve to anything on this system;
-      // use the fallback sans-serif font so callers never receive nil.
+      // use the fallback sans-serif font so callers never receive nil.  The
+      // fallback is built once at a fixed size, so it is rebuilt at the size
+      // that was asked for: callers such as font panels or video titles
+      // would otherwise get 13 pt text whatever size they chose.
       NSFont *usable = EauAvailableFamily() ? EauFallbackFont() : nil;
-      return usable ?: base;
+      if (usable == nil)
+        return nil;
+      return [NSFont fontWithDescriptor: [usable fontDescriptor] size: size];
     }
   return base;
 }

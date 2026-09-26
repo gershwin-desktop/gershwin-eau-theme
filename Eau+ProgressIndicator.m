@@ -1,4 +1,5 @@
 #include "Eau.h"
+#import "EauRestartableTimer.h"
 
 /* oneway: Eau runs inside the WindowManager too, and a WindowManager waiting
  * for a reply from a busy Dock stops drawing the screen. */
@@ -14,7 +15,7 @@
 @interface Eau(EauDockProgress)
 - (void)reportDockProgress:(double)value;
 - (void)resetDockHideTimer;
-- (void)hideDockProgress:(NSTimer *)timer;
+- (void)hideDockProgress:(id)sender;
 @end
 
 // Mirror an app's progress bar into its Dock icon via the DockIcon DO service
@@ -25,7 +26,7 @@
 #define EAU_DOCK_HIDE_DELAY 2.0
 static id<EauDockService> dockProgressProxy = nil;
 static double lastDockValue = -2.0;   /* sentinel: nothing reported yet */
-static NSTimer *dockHideTimer = nil;
+static EauRestartableTimer *dockHideTimer = nil;
 static NSTimeInterval lastDockConnectAttempt = 0.0;
 
 static id<EauDockService> EauDockProgressProxy(void)
@@ -111,10 +112,52 @@ static NSImage *spinningImages[MaxCount];
     }
 }
 
+/* The indeterminate images are one stripe pattern, each shifted this many
+ * pixels further left than the previous one. */
+#define EAU_INDETERMINATE_STRIPE_STEP 8.0
+
 - (void) drawProgressIndicator: (NSProgressIndicator*)progress
                     withBounds: (NSRect)bounds
                       withClip: (NSRect)rect
                        atCount: (int)count
+                      forValue: (double)val
+{
+  if (fillColour == nil)
+    {
+      [self initProgressIndicatorDrawing];
+    }
+  /* Callers that only have a frame count step through the images as
+   * before. */
+  CGFloat offset = indeterminateMaxCount != 0
+    ? (count % indeterminateMaxCount) * EAU_INDETERMINATE_STRIPE_STEP
+    : 0.0;
+  [self drawProgressIndicator: progress
+                   withBounds: bounds
+                     withClip: rect
+                      atCount: count
+                 stripeOffset: offset
+                     forValue: val];
+}
+
+/* Six images give only six stripe positions per 48 px, so a bar redrawn at
+ * a steady frame rate still visibly jumps.  Sliding the first image by a
+ * continuous offset keeps the look and moves the stripes smoothly. */
+- (void) drawIndeterminateStripesInRect: (NSRect)r offset: (CGFloat)offset
+{
+  NSGraphicsContext *ctxt = [NSGraphicsContext currentContext];
+  NSPoint oldPhase = [ctxt patternPhase];
+
+  [ctxt setPatternPhase: NSMakePoint(-offset, 0.0)];
+  [indeterminateColors[0] set];
+  NSRectFill(r);
+  [ctxt setPatternPhase: oldPhase];
+}
+
+- (void) drawProgressIndicator: (NSProgressIndicator*)progress
+                    withBounds: (NSRect)bounds
+                      withClip: (NSRect)rect
+                       atCount: (int)count
+                  stripeOffset: (CGFloat)stripeOffset
                       forValue: (double)val
 {
   NSRect r;
@@ -154,9 +197,7 @@ static NSImage *spinningImages[MaxCount];
          {
 	   if (indeterminateMaxCount != 0)
 	     {
-	       count = count % indeterminateMaxCount;
-	       [indeterminateColors[count] set];
-	       NSRectFill(r);
+	       [self drawIndeterminateStripesInRect: r offset: stripeOffset];
 	     }
          }
        else
@@ -335,41 +376,51 @@ static const CGFloat EAU_SPINNER_DARK   = 0.80; /* 80% gray, darkest */
       return;
     }
   lastDockValue = value;
-  [proxy setProgressValue: value];
-  [proxy setProgressVisible: YES];
+  @try
+    {
+      [proxy setProgressValue: value];
+      [proxy setProgressVisible: YES];
+    }
+  @catch (NSException *e)
+    {
+      /* Proxy connection died; nil it so EauDockProgressProxy retries later */
+      dockProgressProxy = nil;
+      lastDockValue = -2.0;
+    }
   [self resetDockHideTimer];
 }
 
 - (void)resetDockHideTimer
 {
-  if (dockHideTimer)
+  if (dockHideTimer == nil)
     {
-      [dockHideTimer invalidate];
-      dockHideTimer = nil;
+      /* A timer in the default mode alone would stall under a modal alert
+       * or menu tracking (Build's success alert, a Run dialog), leaving the
+       * Dock bar stuck.  Serve those modes too. */
+      dockHideTimer = [[EauRestartableTimer alloc]
+        initWithDelay: EAU_DOCK_HIDE_DELAY
+               target: self
+               action: @selector(hideDockProgress:)
+                modes: @[NSDefaultRunLoopMode, NSModalPanelRunLoopMode,
+                         NSEventTrackingRunLoopMode]];
     }
-  /* scheduledTimerWithTimeInterval only serves the default mode; a modal
-   * alert or menu tracking (Build's success alert, a Run dialog) would stall
-   * the timer, leaving the Dock bar stuck.  Serve those modes too. */
-  NSTimer *t = [NSTimer timerWithTimeInterval: EAU_DOCK_HIDE_DELAY
-                                       target: self
-                                     selector: @selector(hideDockProgress:)
-                                     userInfo: nil
-                                      repeats: NO];
-  NSRunLoop *rl = [NSRunLoop currentRunLoop];
-  [rl addTimer: t forMode: NSDefaultRunLoopMode];
-  [rl addTimer: t forMode: NSModalPanelRunLoopMode];
-  [rl addTimer: t forMode: NSEventTrackingRunLoopMode];
-  dockHideTimer = t;
+  [dockHideTimer restart];
 }
 
-- (void)hideDockProgress:(NSTimer *)timer
+- (void)hideDockProgress:(id)sender
 {
-  dockHideTimer = nil;
   lastDockValue = -2.0;
   id<EauDockService> proxy = EauDockProgressProxy();
   if (proxy)
     {
-      [proxy setProgressVisible: NO];
+      @try
+        {
+          [proxy setProgressVisible: NO];
+        }
+      @catch (NSException *e)
+        {
+          dockProgressProxy = nil;
+        }
     }
 }
 

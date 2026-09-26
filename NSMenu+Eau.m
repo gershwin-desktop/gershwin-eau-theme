@@ -181,14 +181,36 @@ static void s_eau_menuWindowSetFrameOrigin(id self, SEL _cmd, NSPoint aPoint)
 {
   if (s_orig_menuWindowSetFrameOrigin)
     s_orig_menuWindowSetFrameOrigin(self, _cmd, aPoint);
-  _eau_clampMenuWindowToScreenBounds(self);
+  if (EauThemeIsActive())
+    _eau_clampMenuWindowToScreenBounds(self);
 }
 
 static void s_eau_menuWindowSetFrameDisplay(id self, SEL _cmd, NSRect frameRect, BOOL flag)
 {
   if (s_orig_menuWindowSetFrameDisplay)
     s_orig_menuWindowSetFrameDisplay(self, _cmd, frameRect, flag);
-  _eau_clampMenuWindowToScreenBounds(self);
+  if (EauThemeIsActive())
+    _eau_clampMenuWindowToScreenBounds(self);
+}
+
+/* NSMenuPanel inherits both frame setters from NSWindow, so patching the
+ * Method that class_getInstanceMethod returns would clamp every window of the
+ * application.  Install the replacement on NSMenuPanel itself instead and
+ * return the implementation it overrides. */
+static IMP _eau_overrideMenuPanelMethod(Class menuPanelClass, SEL sel, IMP replacement)
+{
+  Method m = class_getInstanceMethod(menuPanelClass, sel);
+  if (m == NULL)
+    {
+      return NULL;
+    }
+
+  IMP original = method_getImplementation(m);
+  if (!class_addMethod(menuPanelClass, sel, replacement, method_getTypeEncoding(m)))
+    {
+      method_setImplementation(m, replacement);
+    }
+  return original;
 }
 
 static void _eau_swizzleMenuWindowFrameMethods(void)
@@ -200,25 +222,14 @@ static void _eau_swizzleMenuWindowFrameMethods(void)
       return;
     }
 
-  // Swizzle setFrameOrigin:
-  SEL selOrigin = sel_registerName("setFrameOrigin:");
-  Method mOrigin = class_getInstanceMethod(menuPanelClass, selOrigin);
-  if (mOrigin)
-    {
-      s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))method_getImplementation(mOrigin);
-      method_setImplementation(mOrigin, (IMP)s_eau_menuWindowSetFrameOrigin);
-      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrameOrigin: for bottom-screen clamping");
-    }
+  s_orig_menuWindowSetFrameOrigin = (void (*)(id, SEL, NSPoint))
+    _eau_overrideMenuPanelMethod(menuPanelClass, @selector(setFrameOrigin:),
+                                 (IMP)s_eau_menuWindowSetFrameOrigin);
 
-  // Swizzle setFrame:display: (catches sizeToFit calls that bypass setFrameOrigin:)
-  SEL selFrameDisplay = sel_registerName("setFrame:display:");
-  Method mFrameDisplay = class_getInstanceMethod(menuPanelClass, selFrameDisplay);
-  if (mFrameDisplay)
-    {
-      s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))method_getImplementation(mFrameDisplay);
-      method_setImplementation(mFrameDisplay, (IMP)s_eau_menuWindowSetFrameDisplay);
-      NSDebugLog(@"Eau: Swizzled NSMenuPanel setFrame:display: for bottom-screen clamping");
-    }
+  // setFrame:display: catches sizeToFit calls that bypass setFrameOrigin:
+  s_orig_menuWindowSetFrameDisplay = (void (*)(id, SEL, NSRect, BOOL))
+    _eau_overrideMenuPanelMethod(menuPanelClass, @selector(setFrame:display:),
+                                 (IMP)s_eau_menuWindowSetFrameDisplay);
 }
 
 /* ---- Tracked windows + active tracking counter ---- */
@@ -238,17 +249,22 @@ static void _eau_ensureState(void)
     _eau_x11_display = XOpenDisplay(NULL);
 }
 
-/* ---- Destroy ALL X11 "Menu" windows + their containers ---- */
-static void _eau_destroyX11MenuWindows(void)
+/* ---- Withdraw still-mapped X11 "Menu" dropdowns ----
+ *
+ * Withdrawn, never destroyed: each of these X windows belongs to an
+ * NSMenuPanel that stays alive and is shown again the next time its menu
+ * opens.  Destroying it behind AppKit's back left the panel holding a dead
+ * window id, so every later MapWindow failed with BadWindow and that menu
+ * (e.g. a menu extra left open while the user clicked the app menu) could
+ * never be opened again until Menu.app restarted.
+ *
+ * keepXids (may be nil) lists windows that must stay up.
+ */
+static void _eau_withdrawX11MenuWindows(NSSet *keepXids)
 {
   _eau_ensureState();
   if (_eau_x11_display == NULL) return;
 
-  /* Walk the X11 tree looking for GNUstep "Menu" windows in Normal
-     state.  These are orphaned dropdowns.  We destroy BOTH the
-     window AND its parent container, because the NSWindow's X11
-     window is often a child of an unmanaged container (0x40f7ce
-     style) that stays visible even after the child is destroyed. */
   Window root = DefaultRootWindow(_eau_x11_display);
   Window unused_root, unused_parent;
   Window *children = NULL;
@@ -272,42 +288,27 @@ static void _eau_destroyX11MenuWindows(void)
                                    utilityLimit))
         continue;
 
-      /* Found a visible GNUstep Menu window.  Destroy the parent
-         container (w itself may be the child).  Walk up one level
-         to find the actual parent container to destroy. */
+      if ([keepXids containsObject: [NSNumber numberWithUnsignedLong: (unsigned long)w]])
+        continue;
+
+      NSDebugLog(@"Eau+Menu: withdrawing stale dropdown X window 0x%lx",
+                 (unsigned long)w);
+      XWithdrawWindow(_eau_x11_display, w,
+                      XScreenNumberOfScreen(attr.screen));
+
+      /* Withdraw the parent too: GNUstep may reparent the NSWindow's X11
+         window under an unmanaged container that stays visible on its own. */
       Window parent = w;
-      Window root2 = None;
       Window *children2 = NULL;
       unsigned int nc2 = 0;
-      if (XQueryTree(_eau_x11_display, parent, &root2, &parent,
+      if (XQueryTree(_eau_x11_display, w, &unused_root, &parent,
                      &children2, &nc2))
         {
           if (children2) XFree(children2);
         }
-      // parent now holds the actual parent of w
-
-      // Also recurse into children to destroy any sub-windows
-      // (deeper submenus)
-      Window *subchildren = NULL;
-      unsigned int nsub = 0;
-      if (XQueryTree(_eau_x11_display, w, &unused_root, &unused_parent,
-                     &subchildren, &nsub))
-        {
-          for (unsigned int j = 0; j < nsub; j++)
-            {
-              XDestroyWindow(_eau_x11_display, subchildren[j]);
-            }
-          if (subchildren) XFree(subchildren);
-        }
-
-      // Destroy w itself
-      XDestroyWindow(_eau_x11_display, w);
-
-      // If parent is not root, also destroy the parent container
       if (parent != root && parent != None)
-        {
-          XDestroyWindow(_eau_x11_display, parent);
-        }
+        XWithdrawWindow(_eau_x11_display, parent,
+                        XScreenNumberOfScreen(attr.screen));
     }
 
   if (children) XFree(children);
@@ -349,19 +350,12 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
    * correct and crash-free way to fix it.
    */
 
-  /* X11-level fallback: withdraw every still-mapped "Menu" dropdown window
-     that is not part of the opening menu's keep-set.  AppKit's visibility
-     flag is not consulted here because the stale panel is typically already
-     flagged hidden by the tracking loop while its X11 window remains mapped
-     (that is the wedge this enforcement exists to prevent).  Withdrawing,
-     rather than destroying, keeps the cached NSMenuPanel window usable for
-     later re-display.
-     The keep-set is built from openingMenu's own window chain (menus, which
-     are retained by the menu system and cannot dangle), NOT from [NSApp
-     windows] (which can contain freed panels). */
-  _eau_ensureState();
-  if (_eau_x11_display == NULL) return;
-
+  /* AppKit's visibility flag is not consulted because the stale panel is
+     typically already flagged hidden by the tracking loop while its X11
+     window remains mapped (that is the wedge this enforcement exists to
+     prevent).  The keep-set is built from openingMenu's own window chain
+     (menus, which are retained by the menu system and cannot dangle), NOT
+     from [NSApp windows] (which can contain freed panels). */
   NSMutableSet *keepXids = [NSMutableSet set];
   {
     NSMenu *km = openingMenu;
@@ -378,55 +372,7 @@ static void _eau_closeStaleMenuPanelsForMenu(NSMenu *openingMenu)
       }
   }
 
-  Window root = DefaultRootWindow(_eau_x11_display);
-  Window unused_root, unused_parent;
-  Window *children = NULL;
-  unsigned int nchildren = 0;
-
-  if (!XQueryTree(_eau_x11_display, root, &unused_root, &unused_parent,
-                  &children, &nchildren))
-    return;
-
-  int utilityLimit = _eau_menuUtilityHeightLimit();
-  for (unsigned int i = 0; i < nchildren; i++)
-    {
-      Window w = children[i];
-      XWindowAttributes attr;
-      if (!XGetWindowAttributes(_eau_x11_display, w, &attr))
-        continue;
-
-      if (attr.map_state != IsViewable)
-        continue;
-
-      if (!EauIsMenuDropdownWindow(_eau_x11_display, w, attr.height,
-                                   utilityLimit))
-        continue;
-
-      if ([keepXids containsObject: [NSNumber numberWithUnsignedLong: (unsigned long)w]])
-        continue;
-
-      NSDebugLog(@"Eau+Menu: withdrawing stale dropdown X window 0x%lx "
-                 "before opening %@", (unsigned long)w, openingMenu);
-      XWithdrawWindow(_eau_x11_display, w,
-                      XScreenNumberOfScreen(attr.screen));
-
-      /* Withdraw the parent too: GNUstep may reparent the NSWindow's X11
-         window under an unmanaged container that stays visible on its own. */
-      Window parent = w;
-      Window *children2 = NULL;
-      unsigned int nc2 = 0;
-      if (XQueryTree(_eau_x11_display, w, &unused_root, &parent,
-                     &children2, &nc2))
-        {
-          if (children2) XFree(children2);
-        }
-      if (parent != root && parent != None)
-        XWithdrawWindow(_eau_x11_display, parent,
-                        XScreenNumberOfScreen(attr.screen));
-    }
-
-  if (children) XFree(children);
-  XSync(_eau_x11_display, False);
+  _eau_withdrawX11MenuWindows(keepXids);
 }
 
 /* ---- NSMenuPanel orderFrontRegardless swizzle ---- */
@@ -435,7 +381,7 @@ static void (*s_orig_menuPanelOrderFrontRegardless)(id, SEL) = NULL;
 
 static void s_eau_menuPanelOrderFrontRegardless(id self, SEL _cmd)
 {
-  NSMenu *menu = [(id)self _menu];
+  NSMenu *menu = EauThemeIsActive() ? [(id)self _menu] : nil;
   if (menu != nil)
     _eau_closeStaleMenuPanelsForMenu(menu);
   if (s_orig_menuPanelOrderFrontRegardless)
@@ -448,6 +394,11 @@ static BOOL (*s_orig_trackWithEvent)(id, SEL, id) = NULL;
 
 static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
 {
+  if (!EauThemeIsActive())
+    {
+      return s_orig_trackWithEvent ? s_orig_trackWithEvent(self, _cmd, event) : NO;
+    }
+
   _eau_activeTrackingCount++;
   _eau_trackedMenuView = (NSMenuView *)self;
   BOOL result = NO;
@@ -462,7 +413,7 @@ static BOOL s_eau_trackWithEvent(id self, SEL _cmd, NSEvent *event)
     _eau_trackedMenuView = nil;
   NSDebugLog(@"Eau+Menu: trackWithEvent end tracking=%d",
              _eau_activeTrackingCount);
-  _eau_destroyX11MenuWindows();
+  _eau_withdrawX11MenuWindows(nil);
   return result;
 }
 
@@ -524,6 +475,11 @@ static EauMenuScrollManager *_eau_activeScrollManager(void)
 
 static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, NSDate *date, NSString *mode, BOOL dequeue)
 {
+  if (!EauThemeIsActive())
+    {
+      return s_orig_nextEventMatchingMask(self, _cmd, mask, date, mode, dequeue);
+    }
+
   // During menu tracking, add scroll wheel and keyboard events to the mask
   // so we can process them in the tracking loop.
   if (_eau_activeTrackingCount > 0)
@@ -706,7 +662,8 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
   // Same close-ahead as eau_display/orderFrontRegardless: transient
   // panels are shown via _bWindow orderFront:, which bypasses the
   // NSMenuPanel orderFrontRegardless swizzle, so enforce here too.
-  _eau_closeStaleMenuPanelsForMenu(self);
+  if (EauThemeIsActive())
+    _eau_closeStaleMenuPanelsForMenu(self);
   [self eau_displayTransient];
 }
 
@@ -740,7 +697,7 @@ static NSEvent* s_eau_nextEventMatchingMask(id self, SEL _cmd, NSUInteger mask, 
   [self eau_performActionForItemAtIndex:index];
 
   // Blink only while a menu is actively being tracked on screen.
-  if (_eau_activeTrackingCount <= 0) return;
+  if (!EauThemeIsActive() || _eau_activeTrackingCount <= 0) return;
 
   // Blink only when the triggered item itself carries an action.  An item
   // that merely has a submenu (and nothing else) uses the no-op

@@ -7,6 +7,7 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 
+#import "Eau.h"
 #import "EauProgressView.h"
 #import "EauSound.h"
 
@@ -27,7 +28,8 @@ static char EauProgressStartKey;
 
 static BOOL EauProgressIndicatorHostsView(NSProgressIndicator *indicator)
 {
-  return [indicator style] == NSProgressIndicatorBarStyle
+  return EauThemeIsActive()
+    && [indicator style] == NSProgressIndicatorBarStyle
     && [indicator isBezeled]
     && ![indicator isVertical];
 }
@@ -308,10 +310,32 @@ static void EauSwizzle(Class cls, SEL original, SEL swizzled)
 
 - (void) eau_syncProgressView
 {
+  EauProgressView *progressView;
+  BOOL hostsView;
+
+  if (!EauThemeIsActive())
+    {
+      /* Take the hosted view out entirely rather than only hiding it, so the
+       * theme that is taking over draws the indicator itself and nothing of
+       * Eau's is left in the view tree. */
+      EauProgressView *hosted =
+        objc_getAssociatedObject(self, &EauEauProgressViewKey);
+
+      if (hosted != nil)
+        {
+          [hosted setAnimated: NO];
+          [hosted removeFromSuperview];
+          objc_setAssociatedObject(self, &EauEauProgressViewKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+          [self setNeedsDisplay: YES];
+        }
+      return;
+    }
+
   [self eau_announceCompletionIfNeeded];
 
-  EauProgressView *progressView = EauEauProgressViewFor(self);
-  BOOL hostsView = EauProgressIndicatorHostsView(self);
+  progressView = EauEauProgressViewFor(self);
+  hostsView = EauProgressIndicatorHostsView(self);
 
   [progressView setHidden: (!hostsView || [self isHidden])];
   if (!hostsView)

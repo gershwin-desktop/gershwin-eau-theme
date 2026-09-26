@@ -7,6 +7,7 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
+#import <objc/objc-arc.h>
 #import <dispatch/dispatch.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
@@ -202,6 +203,14 @@ static void eauAlertSetStopping(id panel, BOOL val)
 // (eauAlertIsStopping / eauAlertSetStopping) so the instance sizes match.
 - (id) eau_initWithoutGModelHelper
 {
+    /* This method is swizzled onto GSAlertPanel as -_initWithoutGModel, so
+       under another theme it has to hand the panel back to GNUstep's own
+       builder, which the swizzle parked under -eau_initWithoutGModel. */
+    if (!EauThemeIsActive())
+    {
+        return [self eau_initWithoutGModel];
+    }
+
     // Do NOT call the original GSAlertPanel _initWithoutGModel — we're building
     // an EauAlertPanel from scratch instead.
 
@@ -324,6 +333,41 @@ static void eauAlertSetStopping(id panel, BOOL val)
     return button;
 }
 
+/* Scrolling copies the visible text by the scroll distance, and only a text
+ * area whose edges sit on whole device pixels gets a whole-pixel copy; at a
+ * fractional edge cairo resamples the text on every scroll step and it
+ * blurs a little more each time.  Whole points are not enough: at a scale
+ * factor such as 1.1 a point is not a whole number of pixels.  So the text
+ * area is moved inward onto device pixels by shifting the scroll view. */
+static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
+                                           NSView *content)
+{
+    NSRect frame = [scroll frame];
+
+    /* Where the text area really lands: the border and the scroller are
+       laid out by the scroll view itself. */
+    NSClipView *clip = [scroll contentView];
+    NSRect device = [clip convertRect: [clip bounds] toView: nil];
+    NSRect snapped;
+    snapped.origin.x = ceil(device.origin.x);
+    snapped.origin.y = ceil(device.origin.y);
+    snapped.size.width = floor(NSMaxX(device)) - snapped.origin.x;
+    snapped.size.height = floor(NSMaxY(device)) - snapped.origin.y;
+
+    /* Device pixels per point; convertSize: would drop the sign of a
+       shrink, so the differences are divided by it instead. */
+    NSSize scale = [content convertSize: NSMakeSize(1.0, 1.0) toView: nil];
+    NSSize move = NSMakeSize((snapped.origin.x - device.origin.x) / scale.width,
+                             (snapped.origin.y - device.origin.y) / scale.height);
+    NSSize grow = NSMakeSize((snapped.size.width - device.size.width) / scale.width,
+                             (snapped.size.height - device.size.height) / scale.height);
+    frame.origin.x += move.width;
+    frame.origin.y += move.height;
+    frame.size.width += grow.width;
+    frame.size.height += grow.height;
+    [scroll setFrame: frame];
+}
+
 - (void) sizePanelToFit
 {
     // NSLog(@"Eau: sizePanelToFit called");
@@ -342,6 +386,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     BOOL couldNeedScroll;
     NSUInteger mask = [self styleMask];
     float textAreaWidth;
+    float buttonRowWidth;
     float titleHeight = 0.0;
     float messageHeight = 0.0;
     
@@ -354,23 +399,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
     ssize = bounds.size;
     ssize.width = METRICS_SIZE_SCALE * ssize.width;
     ssize.height = METRICS_SIZE_SCALE_HEIGHT * ssize.height;
-    
-    // Start with minimum width
-    wsize.width = METRICS_WIN_MIN_WIDTH;
-    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-    
-    // Calculate title size
-    if (useControl(titleField))
-    {
-        NSRect rect = [titleField frame];
-        // Constrain title to available width and let it wrap if needed
-        NSSize titleSize = [[titleField attributedStringValue]
-                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
-                            options: NSStringDrawingUsesLineFragmentOrigin].size;
-        titleHeight = titleSize.height;
-        rect.size = titleSize;
-        [titleField setFrame: rect];
-    }
     
     // Count buttons and calculate button area size
     bsize.width = METRICS_BUTTON_MIN_WIDTH;
@@ -391,6 +419,38 @@ static void eauAlertSetStopping(id panel, BOOL val)
                 bsize.height = rect.size.height;
             numberOfButtons++;
         }
+    }
+    
+    /* Every button is drawn as wide as the widest one, so the row only fits if
+       the panel is at least as wide as the whole row plus its side margins.
+       Measure it before the text, so the text wraps to the final width. */
+    buttonRowWidth = 0.0;
+    if (numberOfButtons > 0)
+    {
+        /* Rounded up: the panel width is floored to whole pixels further
+           down, and half a pixel less already clips the leftmost button. */
+        buttonRowWidth = ceil(2 * METRICS_CONTENT_SIDE_MARGIN
+            + numberOfButtons * bsize.width
+            + (numberOfButtons - 1) * METRICS_BUTTON_VERT_INTERSPACE);
+    }
+
+    // Start with minimum width, widened to whatever the buttons need
+    wsize.width = METRICS_WIN_MIN_WIDTH;
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
+    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
+    
+    // Calculate title size
+    if (useControl(titleField))
+    {
+        NSRect rect = [titleField frame];
+        // Constrain title to available width and let it wrap if needed
+        NSSize titleSize = [[titleField attributedStringValue]
+                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
+                            options: NSStringDrawingUsesLineFragmentOrigin].size;
+        titleHeight = titleSize.height;
+        rect.size = titleSize;
+        [titleField setFrame: rect];
     }
     
     // Message field sizing with word wrap
@@ -447,8 +507,11 @@ static void eauAlertSetStopping(id panel, BOOL val)
     
     if (ssize.width < wsize.width)
         wsize.width = ssize.width;
-    else if (wsize.width < METRICS_WIN_MIN_WIDTH)
+    if (wsize.width < METRICS_WIN_MIN_WIDTH)
         wsize.width = METRICS_WIN_MIN_WIDTH;
+    /* The share-of-screen cap must never cut a button off. */
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
 
     /* Whole pixels only (the height cap is a fraction of the screen):
        scrolling copies the visible text, and at a fractional offset cairo
@@ -518,12 +581,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
             NSRect srect;
             float width;
             
-            /* The title height is measured text, so snap the text area's
-               edges to whole pixels as well (see the window size above). */
             srect.origin.x = METRICS_TEXT_LEFT;
-            srect.origin.y = ceil(buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN);
+            srect.origin.y = buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN;
             srect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-            srect.size.height = floor(currentY - METRICS_TITLE_MESSAGE_GAP) - srect.origin.y;
+            srect.size.height = currentY - METRICS_TITLE_MESSAGE_GAP - srect.origin.y;
             [scroll setFrame: srect];
             
             if (!useControl(scroll))
@@ -551,6 +612,9 @@ static void eauAlertSetStopping(id panel, BOOL val)
                  options: NSStringDrawingUsesLineFragmentOrigin].size.height;
             [messageField setFrame: mrect];
             [scroll setDocumentView: messageField];
+            /* After the document is in: attaching it lays the scroll view
+               out again. */
+            eauSnapScrollTextToDevicePixels(scroll, content);
         }
         else
         {
@@ -779,28 +843,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
         return;
     }
     
-    // Handle Spacebar to activate focused button
+    // A focused button clicks itself on Space before the event gets here, so
+    // Space only reaches the panel when no button has the keyboard focus.
     if (keyChar == ' ')
     {
-        NSView *current = (NSView *)[self firstResponder];
-        if (current == defButton && useControl(defButton))
+        if (useControl(defButton))
         {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-        }
-        else if (current == altButton && useControl(altButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking alternate button");
-            [self buttonAction: altButton];
-        }
-        else if (current == othButton && useControl(othButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking other button");
-            [self buttonAction: othButton];
-        }
-        else if (useControl(defButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
             [self buttonAction: defButton];
         }
         return;
@@ -985,14 +1033,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             return YES;
         }
 
-        // Handle Spacebar for default button
-        if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
-        {
-            // NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-            return YES;
-        }
-
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
@@ -1035,14 +1075,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             if (keyChar == '\r' && useControl(defButton))
             {
                 // NSLog(@"Eau: sendEvent Enter pressed, clicking default button");
-                [self buttonAction: defButton];
-                return;  // Don't call super - we handled it
-            }
-            
-            // Handle Spacebar for default button
-            if (keyChar == ' ' && useControl(defButton))
-            {
-                // NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
                 [self buttonAction: defButton];
                 return;  // Don't call super - we handled it
             }
@@ -1529,6 +1561,11 @@ static void setKeyEquivalent(NSButton *button)
 // - Avoids KVC retain/release side effects on _window
 - (NSInteger) eau_runModal
 {
+    if (!EauThemeIsActive())
+    {
+        return [self eau_runModal];
+    }
+
     NSLog(@"Eau: NSAlert eau_runModal — messageText=\"%@\" informativeText=\"%@\"",
           [self messageText], [self informativeText]);
     NSLog(@"Eau: NSAlert caller stack: %@", [NSThread callStackSymbols]);
@@ -1622,6 +1659,16 @@ static void setKeyEquivalent(NSButton *button)
         // CRITICAL: Make the alert window key so it receives keyboard input immediately.
         // Without this, the alert appears but doesn't have focus - user must click it.
         NSDebugLog(@"NSAlert+Eau: Activating app and making alert window key for immediate input");
+        /* Lay the panel out and place it BEFORE it is first shown.  Resizing
+           or moving a panel that is already on screen leaves its pre-layout
+           picture behind on the composited screen (a ghost in the corner with
+           title and message on top of each other), because the area it
+           vacates is never damaged. */
+        if ([window isKindOfClass: [EauAlertPanel class]])
+        {
+            [(EauAlertPanel *)window sizePanelToFit];
+            [window center];
+        }
         [NSApp activateIgnoringOtherApps: YES];
         [window makeKeyAndOrderFront: nil];
         NSDebugLog(@"NSAlert+Eau: Alert window is now key: %d", [window isKeyWindow]);
@@ -1704,8 +1751,10 @@ static void setKeyEquivalent(NSButton *button)
 
             // NSLog(@"Eau: Clearing _window ivar on NSAlert (keeping associated object to prevent premature dealloc)");
             object_setIvar(self, windowIvar, nil);
-            // IMPORTANT: Do NOT release the associated object here.  The _window ivar
-            // in GNUstep's NSAlert is __weak, so the associated object with
+            // The ivar's own reference (see eau_setupPanel) goes with it.
+            objc_release(currentWindow);
+            // IMPORTANT: Do NOT release the associated object here.  Once the
+            // _window ivar is cleared, the associated object with
             // OBJC_ASSOCIATION_RETAIN_NONATOMIC is the ONLY strong reference keeping
             // the EauAlertPanel alive.  Releasing it here triggers -dealloc while the
             // window system (DPS/X11 backend) may still have pending operations or
@@ -1736,9 +1785,16 @@ static void setKeyEquivalent(NSButton *button)
 - (void) eau_setupPanel
 {
     // NSLog(@"Eau: eau_setupPanel called for NSAlert");
-    
+
     EauAlertPanel *panel;
     NSString *title;
+
+    /* Under another theme the alert is GNUstep's own GSAlertPanel again. */
+    if (!EauThemeIsActive())
+    {
+        [self eau_setupPanel];
+        return;
+    }
     
     @try {
     // NSLog(@"Eau: Creating EauAlertPanel");
@@ -1867,7 +1923,18 @@ static void setKeyEquivalent(NSButton *button)
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
-            object_setIvar(self, windowIvar, panel);
+            // NSAlert is not built with ARC and owns what _window points
+            // to: -dealloc releases it and -beginSheetModalForWindow:...
+            // destroys it once the sheet ends.  object_setIvar() does not
+            // retain into such an ivar, so the ivar is given its own
+            // reference; without it the sheet path freed the panel under the
+            // association below, and the alert crashed when deallocated.
+            __unsafe_unretained id previous = object_getIvar(self, windowIvar);
+            object_setIvar(self, windowIvar, objc_retain(panel));
+            if (previous != nil)
+            {
+                objc_release(previous);
+            }
             objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             // NSLog(@"Eau: Successfully set _window via ivar");
         }

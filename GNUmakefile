@@ -12,6 +12,8 @@ Eau_PRINCIPAL_CLASS = Eau
 
 Eau_OBJC_FILES = \
 		Eau.m\
+		EauActivation.m\
+		EauThemeSwitch.m\
 		EauMenuRelaunchManager.m\
 		EauMenuScrollManager.m\
 		EauMenuWindowFilter.m\
@@ -23,6 +25,7 @@ Eau_OBJC_FILES = \
 		Eau+Menu.m\
 		Eau+Slider.m\
 		Eau+ProgressIndicator.m\
+		EauRestartableTimer.m\
 		EauProgressView.m\
 		Eau+Scroller.m\
 		Eau+ColorWell.m\
@@ -68,7 +71,9 @@ Eau_OBJC_FILES = \
 		NSPopUpButton+Eau.m\
 		NSComboBox+Eau.m\
 		NSProgressIndicator+Eau.m\
-		GSDisplayServer+Eau.m
+		GSDisplayServer+Eau.m\
+		EauDrawer.m\
+		EauDrawerGeometry.m
 
 ADDITIONAL_TOOL_LIBS =
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions

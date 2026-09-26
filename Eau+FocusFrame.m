@@ -81,6 +81,24 @@ static void eauHideFocusRing(NSWindow *win)
     }
 }
 
+/* Called when another theme takes over: the overlay is Eau's view and has no
+ * business sitting on top of a window the rest of the run. */
+void EauRemoveFocusOverlayFromWindow(NSWindow *win)
+{
+  EauFocusOverlay *ov;
+
+  if (win == nil)
+    return;
+  ov = objc_getAssociatedObject(win, EauFocusOverlayKey);
+  if (ov == nil)
+    return;
+  [ov setRingPath: nil];
+  [ov setFocusedView: nil];
+  [ov removeFromSuperview];
+  objc_setAssociatedObject(win, EauFocusOverlayKey, nil,
+                           OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
 static EauFocusOverlay *eauOverlayForWindow(NSWindow *win)
 {
   EauFocusOverlay *ov = objc_getAssociatedObject(win, EauFocusOverlayKey);
@@ -272,19 +290,29 @@ static EauFocusOverlay *eauOverlayForWindow(NSWindow *win)
 
 - (void) eau_selectNextKeyView: (id)sender
 {
-  eauKeyboardFocusVisible = YES;
+  if (EauThemeIsActive())
+    eauKeyboardFocusVisible = YES;
   [self eau_selectNextKeyView: sender];
 }
 
 - (void) eau_selectPreviousKeyView: (id)sender
 {
-  eauKeyboardFocusVisible = YES;
+  if (EauThemeIsActive())
+    eauKeyboardFocusVisible = YES;
   [self eau_selectPreviousKeyView: sender];
 }
 
 - (void) eau_sendEvent: (NSEvent *)event
 {
-  NSEventType t = [event type];
+  NSEventType t;
+
+  if (!EauThemeIsActive())
+    {
+      [self eau_sendEvent: event];
+      return;
+    }
+
+  t = [event type];
   if (t == NSLeftMouseDown || t == NSRightMouseDown
       || t == NSOtherMouseDown || t == NSScrollWheel)
     {

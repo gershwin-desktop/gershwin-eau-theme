@@ -36,6 +36,10 @@
 #import <X11/Xlib.h>
 #import <X11/Xatom.h>
 #include <stdlib.h>
+#include <string.h>
+#import "EauDrawer.h"
+#import "EauDrawerGeometry.h"
+#import "AppearanceMetrics.h"
 
 static BOOL EAUIsDialogLikeWindow(NSWindow *window, int level)
 {
@@ -212,31 +216,157 @@ static void EAUEnsureWindowStates(Display *dpy,
     }
 }
 
+/*
+ * The window manager attaches a sheet to its parent's titlebar and a drawer
+ * to its parent's edge, moves them with the parent and slides them in and
+ * out, but only for windows whose ICCCM WM_WINDOW_ROLE says "sheet" or
+ * "drawer": WM_TRANSIENT_FOR, all that libs-gui sets, is also set for
+ * dialogs and child windows.  The role must be on the window before it is
+ * mapped, and a deferred window has no X window before it is first ordered
+ * in, so it is set on every order-in.  The drawer's edge and offsets are
+ * not passed on: the window manager reads them off where the drawer is put.
+ */
+static NSString *EAUAttachedRoleOfWindow(NSWindow *window)
+{
+  if ([[window parentWindow] attachedSheet] == window)
+    {
+      return @"sheet";
+    }
+  if (EauIsDrawerWindow(window))
+    {
+      return @"drawer";
+    }
+  return nil;
+}
+
+/* The drawer's two outer corners are rounded; the window manager cuts the
+ * outline (_WM_SHAPE_PATH) with a smooth edge and bends the shadow along. */
+static void EAUSetDrawerOutline(Display *dpy, Window xwin, NSWindow *window)
+{
+  static Atom pathAtom = None;
+  NSData *path = [EauDrawerGeometry shapePathForEdge: EauDrawerEdgeOfWindow(window)
+                                              radius: METRICS_DRAWER_CORNER_RADIUS_PX];
+  const int32_t *values = [path bytes];
+  NSUInteger count = [path length] / sizeof(int32_t);
+  long *items = calloc(count, sizeof(long));
+  NSUInteger i;
+
+  if (items == NULL)
+    {
+      return;
+    }
+  if (pathAtom == None)
+    {
+      pathAtom = XInternAtom(dpy, "_WM_SHAPE_PATH", False);
+    }
+  /* Xlib passes 32-bit items as long. */
+  for (i = 0; i < count; i++)
+    {
+      items[i] = values[i];
+    }
+  XChangeProperty(dpy, xwin, pathAtom, XA_INTEGER, 32, PropModeReplace,
+                  (unsigned char *)items, (int)count);
+  free(items);
+}
+
+/* Only a role this theme set is removed; any other belongs to the app. */
+static BOOL EAUIsAttachedRole(Display *dpy, Window xwin, Atom roleAtom)
+{
+  Atom actualType = None;
+  int actualFormat = 0;
+  unsigned long nitems = 0;
+  unsigned long bytesAfter = 0;
+  unsigned char *value = NULL;
+  BOOL ours = NO;
+
+  if (XGetWindowProperty(dpy, xwin, roleAtom, 0, 16, False, XA_STRING,
+                         &actualType, &actualFormat, &nitems, &bytesAfter,
+                         &value) == Success
+      && actualType == XA_STRING && value != NULL)
+    {
+      NSString *role = [[NSString alloc] initWithBytes: value
+                                                length: strnlen((char *)value, nitems)
+                                              encoding: NSISOLatin1StringEncoding];
+      ours = [role isEqualToString: @"sheet"] || [role isEqualToString: @"drawer"];
+    }
+  if (value != NULL)
+    {
+      XFree(value);
+    }
+  return ours;
+}
+
+static void EAUMarkAttachedWindow(GSDisplayServer *server, int win)
+{
+  static Atom roleAtom = None;
+  NSWindow *window = GSWindowWithNumber(win);
+  Display *dpy = (Display *)[server serverDevice];
+  Window xwin = (Window)(uintptr_t)[server windowDevice: win];
+  NSString *role;
+
+  if (window == nil || dpy == NULL || xwin == 0)
+    {
+      return;
+    }
+  if (roleAtom == None)
+    {
+      roleAtom = XInternAtom(dpy, "WM_WINDOW_ROLE", False);
+    }
+
+  role = EAUAttachedRoleOfWindow(window);
+  if (role != nil)
+    {
+      const char *value = [role UTF8String];
+
+      XChangeProperty(dpy, xwin, roleAtom, XA_STRING, 8, PropModeReplace,
+                      (const unsigned char *)value, (int)strlen(value));
+      if ([role isEqualToString: @"drawer"])
+        {
+          EAUSetDrawerOutline(dpy, xwin, window);
+        }
+    }
+  else if (EAUIsAttachedRole(dpy, xwin, roleAtom))
+    {
+      /* The same panel may later be run as an ordinary dialog. */
+      XDeleteProperty(dpy, xwin, roleAtom);
+    }
+}
+
+static void EAUSwizzle(Class serverClass, Class category, SEL origSel, SEL swizSel)
+{
+  Method origMethod = class_getInstanceMethod(serverClass, origSel);
+  Method swizMethod = class_getInstanceMethod(category, swizSel);
+  if (!origMethod || !swizMethod)
+    return;
+
+  /* Add our method to XGServer, then exchange implementations */
+  class_addMethod(serverClass, swizSel,
+                  method_getImplementation(swizMethod),
+                  method_getTypeEncoding(swizMethod));
+  Method addedMethod = class_getInstanceMethod(serverClass, swizSel);
+  method_exchangeImplementations(origMethod, addedMethod);
+}
+
 @implementation GSDisplayServer (EauPopupMenuFix)
 
 + (void) load
 {
-  static dispatch_once_t onceToken;
-  dispatch_once(&onceToken, ^{
-    Class cls = NSClassFromString(@"XGServer");
-    if (!cls)
-      return;
+  Class cls = NSClassFromString(@"XGServer");
+  if (!cls)
+    return;
 
-    SEL origSel = @selector(setwindowlevel::);
-    SEL swizSel = @selector(eau_setwindowlevel::);
+  EAUSwizzle(cls, self, @selector(setwindowlevel::), @selector(eau_setwindowlevel::));
+  EAUSwizzle(cls, self, @selector(orderwindow:::), @selector(eau_orderwindow:::));
+}
 
-    Method origMethod = class_getInstanceMethod(cls, origSel);
-    Method swizMethod = class_getInstanceMethod(self, swizSel);
-    if (!origMethod || !swizMethod)
-      return;
-
-    /* Add our method to XGServer, then exchange implementations */
-    class_addMethod(cls, swizSel,
-                    method_getImplementation(swizMethod),
-                    method_getTypeEncoding(swizMethod));
-    Method addedMethod = class_getInstanceMethod(cls, swizSel);
-    method_exchangeImplementations(origMethod, addedMethod);
-  });
+- (void) eau_orderwindow: (int)op : (int)otherWin : (int)winNum
+{
+  if (op != NSWindowOut)
+    {
+      EAUMarkAttachedWindow(self, winNum);
+    }
+  /* Call original (swizzled) */
+  [self eau_orderwindow: op : otherWin : winNum];
 }
 
 - (void) eau_setwindowlevel: (int)level : (int)win
