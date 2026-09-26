@@ -1,23 +1,31 @@
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
-#import "Eau.h"
+
+/*
+ * NSFont+GB.m - font resolution robustness, theme-independent
+ *
+ * Guards against two GNUstep/fontconfig integration gaps that any theme
+ * would otherwise hit: a resolved family that is not actually installed,
+ * and a resolved face at the wrong weight. Neither depends on which family
+ * a theme chooses to draw with.
+ */
 
 // Category on NSFont used for method swizzling
-@interface NSFont (EauSwizzling)
-+ (NSFont *)eau_menuBarFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_menuFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_systemFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_boldSystemFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_controlContentFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_userFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_userFixedPitchFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_titleBarFontOfSize:(CGFloat)fontSize;
-+ (NSFont *)eau_fontWithName:(NSString *)name size:(CGFloat)size;
-+ (NSFont *)eau_fontOrDefault:(NSFont *)font size:(CGFloat)size;
-+ (NSFont *)eau_fontOrDefault:(NSFont *)font size:(CGFloat)size weight:(NSInteger)weight;
+@interface NSFont (GBSwizzling)
++ (NSFont *)gb_menuBarFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_menuFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_systemFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_boldSystemFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_controlContentFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_userFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_userFixedPitchFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_titleBarFontOfSize:(CGFloat)fontSize;
++ (NSFont *)gb_fontWithName:(NSString *)name size:(CGFloat)size;
++ (NSFont *)gb_fontOrDefault:(NSFont *)font size:(CGFloat)size;
++ (NSFont *)gb_fontOrDefault:(NSFont *)font size:(CGFloat)size weight:(NSInteger)weight;
 @end
 
-@implementation NSFont (EauSwizzling)
+@implementation NSFont (GBSwizzling)
 
 // GNUstep resolves the "system font" to a fixed family name such as
 // Helvetica. On hosts where fontconfig cannot map that name the resulting
@@ -25,6 +33,10 @@
 // with no font".  We make text rendering resilient: whenever the resolved
 // font references a family that is not actually available on this system, we
 // log a warning and substitute any available sans-serif family instead.
+//
+// TODO: Upstream to GNUstep - the font backend should itself verify a
+// resolved family exists via fontconfig and fall back before handing out an
+// NSFont with no glyphs, instead of every caller needing this guard.
 
 // Memoized list of available font families.  The fontconfig family set does
 // not change during a run, and re-enumerating it on every call is expensive:
@@ -32,7 +44,7 @@
 // its font, so without memoizing, a menu rebuild spends its time in
 // fontconfig (FcFontSort/FcFontSetSort) instead of drawing - the source of
 // Menu.app's repeated CPU bursts while its menu bar is rebuilt.
-static NSArray *EauFontFamilies(void)
+static NSArray *GBFontFamilies(void)
 {
   static NSArray *families = nil;
   if (families == nil)
@@ -40,14 +52,14 @@ static NSArray *EauFontFamilies(void)
   return families;
 }
 
-static NSString *EauAvailableFamily(void)
+static NSString *GBAvailableFamily(void)
 {
   static NSArray *order = nil;
   if (order == nil)
     order = @[@"Inter", @"Nimbus Sans", @"DejaVu Sans", @"Liberation Sans",
               @"Arial", @"Helvetica", @"Clean", @"Luxi Sans", @"URW Gothic"];
 
-  NSArray *families = EauFontFamilies();
+  NSArray *families = GBFontFamilies();
   for (NSString *pattern in order)
     for (NSString *fam in families)
       if ([fam rangeOfString:pattern options:NSCaseInsensitiveSearch]
@@ -60,12 +72,12 @@ static NSString *EauAvailableFamily(void)
 // Memoized substitute font, resolved once per process.  Built via the
 // (never swizzled) NSFontManager family API so that building it can never
 // re-enter our own swizzled NSFont constructors and cause recursion.
-static NSFont *EauFallbackFont(void)
+static NSFont *GBFallbackFont(void)
 {
   static NSFont *fallback = nil;
   if (fallback == nil)
     {
-      NSString *family = EauAvailableFamily();
+      NSString *family = GBAvailableFamily();
       if (family != nil)
         fallback = [[NSFontManager sharedFontManager]
                      fontWithFamily:family traits:0 weight:5 size:13.0];
@@ -73,20 +85,25 @@ static NSFont *EauFallbackFont(void)
   return fallback;
 }
 
-+ (NSFont *)eau_fontOrDefault:(NSFont *)font size:(CGFloat)size
++ (NSFont *)gb_fontOrDefault:(NSFont *)font size:(CGFloat)size
 {
-  return [self eau_fontOrDefault: font size: size weight: 0];
+  return [self gb_fontOrDefault: font size: size weight: 0];
 }
 
-/* Like eau_fontOrDefault:size:, but when weight > 0 rebuilds the face from the
+/* Like gb_fontOrDefault:size:, but when weight > 0 rebuilds the face from the
  * resolved family at that weight instead of trusting the base font.  GNUstep
  * resolves the "system font" to whatever face fontconfig picks, which inside
  * the Menu process was the wrong weight (systemFontOfSize:11 came back
  * Inter-Bold, boldSystemFontOfSize:13 came back Inter-Medium).  The system
  * font contract is regular for systemFontOfSize: and bold for
  * boldSystemFontOfSize:, so those two entry points enforce weight 6 / 9 here
- * to restore it, while every other selector keeps its base face. */
-+ (NSFont *)eau_fontOrDefault:(NSFont *)font size:(CGFloat)size weight:(NSInteger)weight
+ * to restore it, while every other selector keeps its base face.
+ *
+ * TODO: Upstream to GNUstep - systemFontOfSize:/boldSystemFontOfSize: should
+ * guarantee the regular/bold weight contract themselves when resolving
+ * through fontconfig, instead of returning whatever weight fontconfig's
+ * closest match happens to pick. */
++ (NSFont *)gb_fontOrDefault:(NSFont *)font size:(CGFloat)size weight:(NSInteger)weight
 {
   // Cache the resolved font per (family, weight, size): a menu rebuild creates
   // one NSMenuItemCell per item and each one re-runs fontconfig matching
@@ -109,7 +126,7 @@ static NSFont *EauFallbackFont(void)
   // system, keep it (preserves bold/italic and the intended look).
   if (fontFamily != nil)
     {
-      NSArray *families = EauFontFamilies();
+      NSArray *families = GBFontFamilies();
       for (NSString *fam in families)
         if ([fam isEqualToString:fontFamily])
           {
@@ -142,14 +159,14 @@ static NSFont *EauFallbackFont(void)
       if (!warned)
         {
           warned = YES;
-          NSLog(@"Eau: requested UI font family '%@' is not available on this "
-                @"system; using '%@' instead.",
+          NSLog(@"GershwinBehaviors: requested UI font family '%@' is not "
+                @"available on this system; using '%@' instead.",
                 fontFamily ?: @"(system default)",
-                EauAvailableFamily() ?: @"(none)");
+                GBAvailableFamily() ?: @"(none)");
         }
 
-      NSString *family = EauAvailableFamily();
-      NSFont *usable = (family != nil) ? EauFallbackFont() : nil;
+      NSString *family = GBAvailableFamily();
+      NSFont *usable = (family != nil) ? GBFallbackFont() : nil;
       if (usable == nil && font != nil)
         usable = font;
 
@@ -175,78 +192,78 @@ static NSFont *EauFallbackFont(void)
   return resolved;
 }
 
-+ (NSFont *)eau_menuBarFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_menuBarFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_menuBarFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:14.0];
+  NSFont *base = [self gb_menuBarFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:14.0];
 }
 
-+ (NSFont *)eau_menuFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_menuFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_menuFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:14.0];
+  NSFont *base = [self gb_menuFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:14.0];
 }
 
-+ (NSFont *)eau_systemFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_systemFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_systemFontOfSize:fontSize];
+  NSFont *base = [self gb_systemFontOfSize:fontSize];
   /* The system font is non-bold by contract; enforce it so a fontconfig
    * mis-resolution cannot render regular text bold.  Weight 6 is the
    * platform's regular UI face (Inter-Medium on this system, matching what
    * a correct GNUstep resolves), not 5 (Inter-Regular). */
-  return [self eau_fontOrDefault: base size: fontSize weight: 6];
+  return [self gb_fontOrDefault: base size: fontSize weight: 6];
 }
 
-+ (NSFont *)eau_boldSystemFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_boldSystemFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_boldSystemFontOfSize:fontSize];
+  NSFont *base = [self gb_boldSystemFontOfSize:fontSize];
   /* The bold system font must be bold; enforce it so a fontconfig
    * mis-resolution cannot render the headline weight regular. */
-  return [self eau_fontOrDefault: base size: fontSize weight: 9];
+  return [self gb_fontOrDefault: base size: fontSize weight: 9];
 }
 
-+ (NSFont *)eau_controlContentFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_controlContentFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_controlContentFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:fontSize];
+  NSFont *base = [self gb_controlContentFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:fontSize];
 }
 
-+ (NSFont *)eau_userFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_userFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_userFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:fontSize];
+  NSFont *base = [self gb_userFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:fontSize];
 }
 
-+ (NSFont *)eau_userFixedPitchFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_userFixedPitchFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_userFixedPitchFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:fontSize];
+  NSFont *base = [self gb_userFixedPitchFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:fontSize];
 }
 
-+ (NSFont *)eau_fontWithName:(NSString *)name size:(CGFloat)size
++ (NSFont *)gb_fontWithName:(NSString *)name size:(CGFloat)size
 {
-  NSFont *base = [self eau_fontWithName:name size:size];
+  NSFont *base = [self gb_fontWithName:name size:size];
   if (base == nil)
     {
       // The requested font name does not resolve to anything on this system;
       // use the fallback sans-serif font so callers never receive nil.
-      NSFont *usable = EauAvailableFamily() ? EauFallbackFont() : nil;
+      NSFont *usable = GBAvailableFamily() ? GBFallbackFont() : nil;
       return usable ?: base;
     }
   return base;
 }
 
-+ (NSFont *)eau_titleBarFontOfSize:(CGFloat)fontSize
++ (NSFont *)gb_titleBarFontOfSize:(CGFloat)fontSize
 {
-  NSFont *base = [self eau_titleBarFontOfSize:fontSize];
-  return [self eau_fontOrDefault:base size:fontSize];
+  NSFont *base = [self gb_titleBarFontOfSize:fontSize];
+  return [self gb_fontOrDefault:base size:fontSize];
 }
 
 @end
 
 // Constructor to set up swizzling
 __attribute__((constructor))
-static void EauSwizzleFonts(void)
+static void GBSwizzleFonts(void)
 {
   Class fontClass = [NSFont class];
   if (fontClass == 0) return;
@@ -265,15 +282,15 @@ static void EauSwizzleFonts(void)
     sel_registerName("fontWithName:size:"),
   };
   SEL swzSwaps[] = {
-    @selector(eau_menuBarFontOfSize:),
-    @selector(eau_menuFontOfSize:),
-    @selector(eau_systemFontOfSize:),
-    @selector(eau_boldSystemFontOfSize:),
-    @selector(eau_controlContentFontOfSize:),
-    @selector(eau_userFontOfSize:),
-    @selector(eau_userFixedPitchFontOfSize:),
-    @selector(eau_titleBarFontOfSize:),
-    @selector(eau_fontWithName:size:),
+    @selector(gb_menuBarFontOfSize:),
+    @selector(gb_menuFontOfSize:),
+    @selector(gb_systemFontOfSize:),
+    @selector(gb_boldSystemFontOfSize:),
+    @selector(gb_controlContentFontOfSize:),
+    @selector(gb_userFontOfSize:),
+    @selector(gb_userFixedPitchFontOfSize:),
+    @selector(gb_titleBarFontOfSize:),
+    @selector(gb_fontWithName:size:),
   };
   int count = sizeof(origSwaps) / sizeof(origSwaps[0]);
   for (int i = 0; i < count; i++)

@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  *
- * NSTextView keyboard editing shortcuts for Eau theme
+ * NSTextView keyboard editing shortcuts, theme-independent Gershwin behavior
  * Makes Cmd+A/C/V/X/Z work in every text view and dialog field editor.
  */
 
@@ -28,6 +28,10 @@
  * menu state; a field editor is an NSTextView too, so search fields and
  * dialog inputs are covered as well.
  *
+ * TODO: Upstream to GNUstep - NSTextView's default keybinding table
+ * (interpretKeyEvents:) should map Cmd+A/C/V/X/Z to the standard editing
+ * actions so this does not need to be handled ahead of it.
+ *
  * Only act when this text view (or its window's field editor) is the first
  * responder, so we never steal Cmd+C from file operations in a viewer that
  * happens to contain an inactive text view.
@@ -35,7 +39,7 @@
 
 static void (*s_orig_keyDown)(id, SEL, NSEvent *) = NULL;
 
-static void s_eau_textView_keyDown(id self, SEL _cmd, NSEvent *event)
+static void s_gb_textView_keyDown(id self, SEL _cmd, NSEvent *event)
 {
   if ([event type] == NSKeyDown)
     {
@@ -105,6 +109,17 @@ static void s_eau_textView_keyDown(id self, SEL _cmd, NSEvent *event)
            && [self isFieldEditor])
          {
            id delegate = [self delegate];
+           /* The search field itself still implements eau_clearSearch
+            * (NSSearchField+Eau.m, owned by another task); gb_clearSearch is
+            * tried first so this keeps working once that file adopts the
+            * gb_ convention without a coordinated rename. Two literal
+            * @selector() calls (rather than one variable) so ARC can verify
+            * each performSelector: call's ownership at compile time. */
+           if (delegate && [delegate respondsToSelector: @selector(gb_clearSearch)])
+             {
+               [delegate performSelector: @selector(gb_clearSearch)];
+               return;
+             }
            if (delegate && [delegate respondsToSelector: @selector(eau_clearSearch)])
              {
                [delegate performSelector: @selector(eau_clearSearch)];
@@ -118,7 +133,7 @@ static void s_eau_textView_keyDown(id self, SEL _cmd, NSEvent *event)
 
 static void (*s_orig_mouseDown)(id, SEL, NSEvent *) = NULL;
 
-static void s_eau_textView_mouseDown(id self, SEL _cmd, NSEvent *event)
+static void s_gb_textView_mouseDown(id self, SEL _cmd, NSEvent *event)
 {
   if ([self isFieldEditor])
     {
@@ -157,7 +172,7 @@ static void s_eau_textView_mouseDown(id self, SEL _cmd, NSEvent *event)
 /* The field editor is created on demand and is an NSTextView, so swizzling
    NSTextView -keyDown: and -mouseDown: covers every editable control in the app. */
 __attribute__((constructor))
-static void eau_installTextViewKeyDown(void)
+static void gb_installTextViewKeyDown(void)
 {
   Class cls = objc_getClass("NSTextView");
   if (!cls) return;
@@ -165,12 +180,12 @@ static void eau_installTextViewKeyDown(void)
   if (m)
     {
       s_orig_keyDown = (void (*)(id, SEL, NSEvent *))method_getImplementation(m);
-      method_setImplementation(m, (IMP)s_eau_textView_keyDown);
+      method_setImplementation(m, (IMP)s_gb_textView_keyDown);
     }
   Method m2 = class_getInstanceMethod(cls, @selector(mouseDown:));
   if (m2)
     {
       s_orig_mouseDown = (void (*)(id, SEL, NSEvent *))method_getImplementation(m2);
-      method_setImplementation(m2, (IMP)s_eau_textView_mouseDown);
+      method_setImplementation(m2, (IMP)s_gb_textView_mouseDown);
     }
 }

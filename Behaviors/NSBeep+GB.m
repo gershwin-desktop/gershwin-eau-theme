@@ -3,18 +3,17 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * NSApplication beep override for Eau theme
+ * NSApplication beep override, theme-independent
  * Plays the configured alert sound instead of system beep
  */
 
 #import <AppKit/AppKit.h>
-#import "Eau.h"
-#import "EauSound.h"
+#import "GBSound.h"
 
-@implementation NSApplication (EauBeep)
+@implementation NSApplication (GBBeep)
 
 + (void)load {
-    NSDebugLog(@"NSApplication(EauBeep) +load");
+    NSDebugLog(@"NSApplication(GBBeep) +load");
 }
 
 
@@ -45,9 +44,9 @@
 
             if (alertSoundName) {
                 NSDebugLog(@"alertSound: %@", alertSoundName);
-                /* EauSound plays at the user's configured alert volume and
+                /* GBSound plays at the user's configured alert volume and
                  * reports failure so we can still fall back to the bell */
-                if (EauPlaySystemSound(alertSoundName)) {
+                if (GBPlaySystemSound(alertSoundName)) {
                     isPlaying = NO;
                     return;
                 }

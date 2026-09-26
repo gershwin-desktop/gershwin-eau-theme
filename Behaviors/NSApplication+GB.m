@@ -3,37 +3,39 @@
  *
  * SPDX-License-Identifier: BSD-2-Clause
  *
- * NSApplication category for Eau theme
+ * NSApplication category, theme-independent Gershwin behavior
  * Swizzles _lastWindowClosed to terminate by default when last window closes
- * TODO: Remove the need for this by supporting applications with no open windows in Menu
+ * TODO: Upstream to GNUstep - libs-gui should let an app opt out of window-less
+ * running (e.g. via NSApplicationDelegate) instead of Menu.app needing a
+ * window-less app kept alive by never creating its icon window.
  */
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
 
-@implementation NSApplication (EauApplication)
+@implementation NSApplication (GBApplication)
 
 + (void)load {
     Class cls = [self class];
     Method orig1 = class_getInstanceMethod(cls, @selector(_lastWindowClosed));
-    Method swiz1 = class_getInstanceMethod(cls, @selector(eau_lastWindowClosed));
+    Method swiz1 = class_getInstanceMethod(cls, @selector(gb_lastWindowClosed));
     if (orig1 && swiz1) {
         method_exchangeImplementations(orig1, swiz1);
     }
     Method orig2 = class_getInstanceMethod(cls, @selector(_appIconInit));
-    Method swiz2 = class_getInstanceMethod(cls, @selector(eau_appIconInit));
+    Method swiz2 = class_getInstanceMethod(cls, @selector(gb_appIconInit));
     if (orig2 && swiz2) {
         method_exchangeImplementations(orig2, swiz2);
     }
 }
 
 // Swizzled implementation that terminates by default when last window closes
-- (void)eau_lastWindowClosed
+- (void)gb_lastWindowClosed
 {
   NSString *appName = [[NSProcessInfo processInfo] processName];
   NSString *bundleName = [[[NSBundle mainBundle] infoDictionary] objectForKey:@"CFBundleExecutable"];
   NSString *bundlePath = [[NSBundle mainBundle] bundlePath];
-  
+
   // Check all possible variations
   if ([appName isEqualToString:@"GWorkspace"] ||
       [appName isEqualToString:@"Workspace"] ||
@@ -45,7 +47,7 @@
     {
       return;  // Don't terminate these apps
     }
-    
+
   if ([_delegate respondsToSelector:
     @selector(applicationShouldTerminateAfterLastWindowClosed:)])
     {
@@ -71,7 +73,7 @@
 
 // Swizzled implementation that prevents creation of NSIconWindow
 // https://github.com/gnustep/apps-gworkspace/issues/8
-- (void)eau_appIconInit
+- (void)gb_appIconInit
 {
   // Do nothing to prevent creation of app icon window
 }
