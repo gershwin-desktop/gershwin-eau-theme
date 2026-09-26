@@ -7,7 +7,6 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
-#import <dispatch/dispatch.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
 #import "AppearanceMetrics.h"
@@ -31,9 +30,6 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 @interface EauAlertPanel (Swizzles)
 - (id)eau_initWithoutGModel;
 - (id)eau_initWithoutGModelHelper __attribute__((objc_method_family(init)));
-- (NSInteger)eau_runModal;
-- (NSInteger)eau_runModalHelper;
-- (NSButton *)eau_getDefButton;
 @end
 
 #pragma mark - EauAlertPanel Implementation
@@ -91,6 +87,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // already destroyed, _windowNum is 0 and _terminateBackendWindow is
     // safely skipped.  Without this, _terminateBackendWindow in dealloc
     // tries to destroy the X11 window and crashes (segfault).
+    // TODO: Upstream to GNUstep - NSWindow dealloc (_terminateBackendWindow)
+    // should tolerate a back-end window that is already gone.
     [self setOneShot: YES];
     
     NSView *content = [self contentView];
@@ -228,46 +226,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
                  + (screenH - winH) / 2);
 
     return [self initWithContentRect: NSMakeRect(x, y, winW, winH)];
-}
-
-// Helper method to get the default button from GSAlertPanel
-// GSAlertPanel has an ivar 'defButton' that we need to access
-- (NSButton *) eau_getDefButton
-{
-    // Try to access the defButton ivar
-    Ivar defButtonIvar = class_getInstanceVariable([self class], "defButton");
-    if (defButtonIvar)
-    {
-        return object_getIvar(self, defButtonIvar);
-    }
-    return nil;
-}
-
-// Helper method that will be injected into GSAlertPanel's runModal
-// This ensures focus and pulsing work for legacy alert panels
-- (NSInteger) eau_runModalHelper
-{
-    NSDebugLog(@"Eau: eau_runModalHelper called for GSAlertPanel");
-    
-    // Get the default button from the ivar
-    NSButton *defBtn = [self eau_getDefButton];
-    
-    // Raise the window to ensure it gets input focus
-    [NSApp activateIgnoringOtherApps: YES];
-    [(NSPanel *)self orderFrontRegardless];
-    [(NSPanel *)self makeKeyAndOrderFront: self];
-    
-    // Ensure the default button has focus and pulsing
-    if (defBtn && [[defBtn superview] superview] != nil)
-    {
-        [(NSPanel *)self makeFirstResponder: defBtn];
-        // Set default button cell to enable pulsing animation
-        [(NSPanel *)self setDefaultButtonCell: [defBtn cell]];
-        NSDebugLog(@"Eau: GSAlertPanel set default button focus and pulsing for button: %@", defBtn);
-    }
-    
-    // Call the original runModal implementation
-    return [self eau_runModal];
 }
 
 - (void) dealloc
@@ -690,7 +648,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
     }
     
     @try {
-        // Bail out if no text was set (initialized but unused panel)
+        // Bail out if no text was set (initialized but unused panel).
+        // GershwinBehaviors suppresses empty NSAlerts, but the legacy
+        // NSRunAlertPanel family calls this method directly, so the panel
+        // has to guard itself as well.
         NSString *title = titleField ? [[titleField stringValue] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
         NSString *msg = messageField ? [[messageField stringValue] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
         if (([title length] == 0) && ([msg length] == 0))
@@ -763,6 +724,13 @@ static void eauAlertSetStopping(id panel, BOOL val)
     }
 }
 
+/* The panel's keyboard handling (Return/Space/Esc, Tab and arrow focus
+ * cycling, Cmd-C) stays here rather than in GershwinBehaviors: it is made of
+ * overrides on this NSPanel subclass driven by its own button ivars, and
+ * GSAlertPanel instances are morphed into this class, so a behavior-bundle
+ * swizzle on GSAlertPanel would never see them.
+ * TODO: Upstream to GNUstep - GSAlertPanel should map Esc to a Cancel button
+ * and cycle focus between its buttons itself. */
 - (void) keyDown: (NSEvent *)event
 {
     NSString *chars = [event characters];
@@ -1382,33 +1350,11 @@ static void setKeyEquivalent(NSButton *button)
 
 #pragma mark - NSAlert Category for Swizzling
 
-/* NSAlert (Eau) Category
- * 
- * Comprehensive NSAlert customization for the Eau theme.
- * 
- * WHAT THIS DOES:
- * - Swizzles NSAlert's _setupPanel to use EauAlertPanel for custom appearance
- * - Swizzles NSAlert's runModal to add focus management for text fields
- * - Ensures any text fields in alerts receive focus immediately when shown
- * - Sets up proper tab navigation between controls in the alert
- * - Configures default button for pulsating animation
- * 
- * WHY WE DO THIS:
- * - Users expect text fields in alerts to be immediately ready for input
- * - The cursor should blink in text fields without requiring a click
- * - Tab key should work to navigate between buttons and controls
- * - Default button should pulse to indicate it's the primary action
- * 
- * FOCUS MANAGEMENT STRATEGY:
- * When an alert appears, we search for editable text fields and set the first
- * one found as the initialFirstResponder. This ensures:
- * 1. The field editor activates automatically
- * 2. The cursor blinks immediately
- * 3. Keyboard input works without clicking
- * 4. Tab navigation is properly configured
- * 
- * If no text field exists, focus goes to the default button.
- */
+/* NSAlert (Eau): builds the themed EauAlertPanel for NSAlert and for the
+ * legacy NSRunAlertPanel family.  Running the alert modally (activation,
+ * focus, teardown) is theme-independent and lives in
+ * GershwinBehaviors.bundle (Behaviors/NSAlert+GB.m), which hands an
+ * EauAlertPanel back to us through -[Eau runModalForAlertPanel:result:]. */
 @implementation NSAlert (Eau)
 
 + (void) load
@@ -1460,37 +1406,6 @@ static void setKeyEquivalent(NSButton *button)
         // // NSLog(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
     }
     
-    // Swizzle NSAlert's runModal to ensure proper activation
-    SEL origRunModalSel = @selector(runModal);
-    SEL swizzledRunModalSel = @selector(eau_runModal);
-    
-    Method origRunModalMethod = class_getInstanceMethod(alertClass, origRunModalSel);
-    Method swizzledRunModalMethod = class_getInstanceMethod(alertClass, swizzledRunModalSel);
-    
-    if (origRunModalMethod && swizzledRunModalMethod)
-    {
-        BOOL didAddRunModal = class_addMethod(alertClass,
-                                              origRunModalSel,
-                                              method_getImplementation(swizzledRunModalMethod),
-                                              method_getTypeEncoding(swizzledRunModalMethod));
-        if (didAddRunModal)
-        {
-            class_replaceMethod(alertClass,
-                                swizzledRunModalSel,
-                                method_getImplementation(origRunModalMethod),
-                                method_getTypeEncoding(origRunModalMethod));
-        }
-        else
-        {
-            method_exchangeImplementations(origRunModalMethod, swizzledRunModalMethod);
-        }
-        NSDebugLog(@"Eau: NSAlert runModal swizzled successfully");
-    }
-    else
-    {
-        NSDebugLog(@"Eau: Warning - could not find runModal method to swizzle");
-    }
-    
     // Also swizzle GSAlertPanel's _initWithoutGModel to handle legacy alert functions
     // (NSRunAlertPanel, NSGetAlertPanel, etc.) which create GSAlertPanel directly
     Class gsAlertPanelClass = NSClassFromString(@"GSAlertPanel");
@@ -1520,214 +1435,6 @@ static void setKeyEquivalent(NSButton *button)
 
         // Note: GSAlertPanel runModal/sizePanelToFit swizzles are intentionally
         // disabled here to avoid crashes in legacy alert panels.
-    }
-}
-
-// Replacement for NSAlert's runModal method
-// - Ensures activation and key focus
-// - Preserves GNUstep lifecycle (setup, run modal, order out, destroy window)
-// - Avoids KVC retain/release side effects on _window
-- (NSInteger) eau_runModal
-{
-    NSLog(@"Eau: NSAlert eau_runModal — messageText=\"%@\" informativeText=\"%@\"",
-          [self messageText], [self informativeText]);
-    NSLog(@"Eau: NSAlert caller stack: %@", [NSThread callStackSymbols]);
-    @try {
-
-    if (![NSThread isMainThread])
-    {
-        __block NSInteger result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = [self eau_runModal];
-        });
-        return result;
-    }
-    
-    // Never show an alert that has no text (probably a bug in the app)
-    NSString *msgText = [[self messageText] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    NSString *infoText = [[self informativeText] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if ((msgText == nil || [msgText length] == 0) &&
-        (infoText == nil || [infoText length] == 0))
-      {
-        NSLog(@"Eau: NSAlert suppressed — both messageText and informativeText are empty/whitespace (probably a bug in the application)");
-        return NSAlertErrorReturn;
-      }
-
-    // Call _setupPanel - this invokes the Eau custom setup since methods were swizzled
-    // After swizzling: _setupPanel -> eau_setupPanel code, eau_setupPanel -> original code
-    [self performSelector: @selector(_setupPanel)];
-    
-    // Beep when alert is displayed (diagnostics)
-    NSApplication *eauApp = [NSApplication sharedApplication];
-    // NSLog(@"Eau: NSAlert about to beep - NSApp class: %@ respondsToSelector: %d",
-    //       NSStringFromClass([eauApp class]), (int)[eauApp respondsToSelector:@selector(beep)]);
-    if ([eauApp respondsToSelector:@selector(beep)]) {
-        [eauApp performSelector:@selector(beep)];
-    } else {
-        // NSLog(@"Eau: NSApp does not respond to -beep");
-    }
-    
-    // Get the _window ivar (NSAlert owns the panel instance)
-    NSWindow *window = nil;
-    @try {
-        window = [self valueForKey: @"_window"];
-    }
-    @catch (NSException *exception) {
-        Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-        if (windowIvar)
-        {
-            window = object_getIvar(self, windowIvar);
-        }
-    }
-    
-    if (window)
-    {
-        NSInteger result = NSAlertErrorReturn;
-
-        // FOCUS MANAGEMENT: Ensure any text fields in the alert receive focus immediately
-        // so the cursor blinks and keyboard input works without clicking.
-        NSView *contentView = [window contentView];
-        if (contentView)
-        {
-            NSArray *subviews = [contentView subviews];
-            NSTextField *firstTextField = nil;
-            
-            // Search for the first editable text field in the alert
-            for (NSView *view in subviews)
-            {
-                if ([view isKindOfClass:[NSTextField class]])
-                {
-                    NSTextField *textField = (NSTextField *)view;
-                    if ([textField isEditable])
-                    {
-                        firstTextField = textField;
-                        NSDebugLog(@"NSAlert+Eau: Found editable text field %p in alert", textField);
-                        break;
-                    }
-                }
-            }
-            
-            // Set initial first responder to enable immediate keyboard input
-            if (firstTextField)
-            {
-                NSDebugLog(@"NSAlert+Eau: Setting initial first responder to text field %p", firstTextField);
-                [window setInitialFirstResponder: firstTextField];
-            }
-            else
-            {
-                NSDebugLog(@"NSAlert+Eau: No editable text field found in alert");
-            }
-        }
-        
-        // CRITICAL: Make the alert window key so it receives keyboard input immediately.
-        // Without this, the alert appears but doesn't have focus - user must click it.
-        NSDebugLog(@"NSAlert+Eau: Activating app and making alert window key for immediate input");
-        [NSApp activateIgnoringOtherApps: YES];
-        [window makeKeyAndOrderFront: nil];
-        NSDebugLog(@"NSAlert+Eau: Alert window is now key: %d", [window isKeyWindow]);
-
-        if ([window isKindOfClass: [EauAlertPanel class]])
-        {
-            EauAlertPanel *panel = (EauAlertPanel *)window;
-            result = [panel runModal];
-        }
-        else
-        {
-            [NSApp activateIgnoringOtherApps: YES];
-            [window center];
-            [window orderFrontRegardless];
-            [window makeKeyAndOrderFront: nil];
-            
-            NSDebugLog(@"Eau: NSAlert running modal for window: %@", window);
-            [NSApp runModalForWindow: window];
-            if ([window respondsToSelector: @selector(result)])
-            {
-                result = [(EauAlertPanel *)window result];
-            }
-        }
-
-        [window orderOut: self];
-
-        // Store result via KVC if possible
-        @try {
-            [self setValue: @(result) forKey: @"_result"];
-        }
-        @catch (NSException *exception) {
-            // Ignore if ivar doesn't exist
-        }
-
-        // Defer cleanup to ensure NSAlert stays alive until it's done. 
-        // Using performSelector with modes ensures this runs even if we are still
-        // in a modal session (nested modals).
-        [self performSelector: @selector(eau_cleanupPanel)
-                   withObject: nil
-                   afterDelay: 0.1
-                      inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
-
-        return result;
-    }
-    
-    // Fallback: if window creation failed, return failure
-    // NSLog(@"Eau: NSAlert eau_runModal - window was nil, returning NSAlertFirstButtonReturn");
-    return NSAlertFirstButtonReturn;
-    }
-    @catch (NSException *exception) {
-        NSLog(@"Eau: FATAL EXCEPTION in eau_runModal: %@", exception);
-        // NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        // NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
-        return NSAlertErrorReturn;
-    }
-}
-
-// Cleanup helper to clear NSAlert's window after modal teardown.
-- (void)eau_cleanupPanel
-{
-    // NSLog(@"Eau: eau_cleanupPanel called for NSAlert %p", self);
-    Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-    if (windowIvar)
-    {
-        // Check current value
-        id currentWindow = object_getIvar(self, windowIvar);
-        if (currentWindow) {
-            // NSLog(@"Eau: Cleaning up window %p before release", currentWindow);
-            @try {
-                // Ensure pulse animation and delegate are cleared while window is still alive
-                if ([currentWindow respondsToSelector: @selector(setDefaultButtonCell:)]) {
-                    [currentWindow setDefaultButtonCell: nil];
-                }
-                if ([currentWindow respondsToSelector: @selector(setDelegate:)]) {
-                    [currentWindow setDelegate: nil];
-                }
-            } @catch (NSException *e) {
-                // NSLog(@"Eau: Exception during window cleanup: %@", e);
-            }
-
-            // NSLog(@"Eau: Clearing _window ivar on NSAlert (keeping associated object to prevent premature dealloc)");
-            object_setIvar(self, windowIvar, nil);
-            // IMPORTANT: Do NOT release the associated object here.  The _window ivar
-            // in GNUstep's NSAlert is __weak, so the associated object with
-            // OBJC_ASSOCIATION_RETAIN_NONATOMIC is the ONLY strong reference keeping
-            // the EauAlertPanel alive.  Releasing it here triggers -dealloc while the
-            // window system (DPS/X11 backend) may still have pending operations or
-            // references to the panel, causing a crash (segfault) after dealloc
-            // completes.  The associated object will be automatically released when
-            // NSAlert itself is deallocated, which is a safe time for the panel to die.
-            //
-            // The panel is fully inert at this point (no delegate, no animation, ordered
-            // out) so keeping it alive until NSAlert deallocates is safe and prevents
-            // the use-after-free crash.
-        }
-    }
-    else
-    {
-        // NSLog(@"Eau: _window ivar not found during cleanup, trying KVC");
-        @try {
-            [self setValue: nil forKey: @"_window"];
-            // Also keep the associated object here for the same reason as above.
-        }
-        @catch (NSException *exception) {
-            // Ignore if ivar doesn't exist
-        }
     }
 }
 
