@@ -11,29 +11,15 @@ t_AlertPanelScrolling_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 t_AlertPanelButtonRow_OBJC_FILES += ../NSAlert+Eau.m ../EauActivation.m
 t_AlertPanelButtonRow_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 
-t_EauMenuWindowFilter_OBJC_FILES += ../EauMenuWindowFilter.m
-t_EauMenuWindowFilter_TOOL_LIBS += -lX11
-
-# The unit under test is the theme's NSFont category, which swizzles on load.
-t_EauFontSubstitution_OBJC_FILES += ../NSFont+Eau.m ../EauActivation.m
-t_EauFontSubstitution_TOOL_LIBS += -lgnustep-gui -lgnustep-base
-
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
 
+# Runs against the theme bundle given with -GSTheme.  Space/Return on plain
+# buttons is behavior from GershwinBehaviors.bundle, which Eau loads as its
+# fallback when GSAppKitUserBundles does not name it.
 t_ButtonSpaceKey_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 
 # The theme under test is loaded at run time with -GSTheme.
 t_ProgressStripes_TOOL_LIBS += -lgnustep-gui -lgnustep-base
-t_MenuOverflowScale_OBJC_FILES += ../EauMenuScrollManager.m
-t_MenuOverflowScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base
-# Like the theme, the scroll manager is built with ARC
-../EauMenuScrollManager.m_FILE_FLAGS += -fobjc-arc
-
-# Like the theme, the relaunch manager is built with ARC; it runs inside the
-# test's own autorelease pool, as it does at theme activation.
-t_MenuPIDScanMemory_OBJC_FILES += ../EauMenuRelaunchManager.m
-t_MenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
-../EauMenuRelaunchManager.m_FILE_FLAGS += -fobjc-arc
 
 # Runs against the theme bundle given with -GSTheme.
 t_SliderDisabled_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc

@@ -166,7 +166,9 @@ static NSRect EauPixelAlignedImageRect(NSView *view, NSPoint origin, NSSize size
 
 /* GNUstep sizes the key equivalent column from its own rendering, which drops
    function keys entirely and spells modifiers differently from the symbols we
-   draw.  Reserve room for what is actually drawn, never less than before. */
+   draw.  Reserve room for what is actually drawn, never less than before.
+   TODO: Upstream to GNUstep - NSMenuItemCell should measure and draw function-key
+   and modifier-less key equivalents instead of dropping them. */
 - (CGFloat)eau_keyEquivalentWidth
 {
   CGFloat width = [self eau_keyEquivalentWidth];

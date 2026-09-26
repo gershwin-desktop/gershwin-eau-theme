@@ -565,6 +565,8 @@ static char kEauAppNameKey;
               // GNUstep sizeToFit ignores the frame width for wrapping
               // fields, so measure the wrapped size explicitly and cap the
               // width so multi-line text stays within the window.
+              // TODO: Upstream to GNUstep - -[NSControl sizeToFit] on a
+              // wrapping text field should wrap at its current frame width.
               {
                 NSDictionary *attrs =
                   [NSDictionary dictionaryWithObject: [NSFont systemFontOfSize: 12]

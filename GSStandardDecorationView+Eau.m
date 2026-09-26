@@ -444,6 +444,8 @@ static IMP _originalGSStandardOffsets = NULL;
 // and the WM's real frame is why a saved window rect drifted by a pixel on
 // every open/close cycle.  Zero the side/bottom borders so GNUstep's offsets
 // match the WM's real frame exactly.
+// TODO: Upstream to GNUstep - +offsets:forStyleMask: should follow the WM's
+// _NET_FRAME_EXTENTS instead of assuming a 1px border on every side.
 static void EAU_newGSStandardOffsets(id self, SEL _cmd, float *l, float *r,
                                      float *t, float *b, NSUInteger style)
 {

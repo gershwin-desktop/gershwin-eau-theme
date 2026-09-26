@@ -10,70 +10,8 @@ VERSION = 1
 Eau_INSTALL_DIR=$(GNUSTEP_LIBRARY)/Themes
 Eau_PRINCIPAL_CLASS = Eau
 
-Eau_OBJC_FILES = \
-		Eau.m\
-		EauActivation.m\
-		EauThemeSwitch.m\
-		EauMenuRelaunchManager.m\
-		EauMenuScrollManager.m\
-		EauMenuWindowFilter.m\
-		Eau+Drawings.m\
-		Eau+Button.m\
-		Eau+FocusFrame.m\
-		Eau+WindowDecoration.m\
-		Eau+TitleBarButtons.m\
-		Eau+Menu.m\
-		Eau+Slider.m\
-		Eau+ProgressIndicator.m\
-		EauRestartableTimer.m\
-		EauProgressView.m\
-		Eau+Scroller.m\
-		Eau+ColorWell.m\
-		Eau+Stepper.m\
-		Eau+Segmented.m\
-		Eau+Browser.m\
-		Eau+Table.m\
-		Eau+TabView.m\
-		Eau+ResizeZones.m\
-		EauGrowBoxCell.m\
-		EauGrowBoxView.m\
-		GSStandardDecorationView+Eau.m\
-		GSInfoPanel+Eau.m\
-		NSApplication+Eau.m\
-		NSWindow+Eau.m\
-		NSSegmentedCell+Eau.m\
-		NSTableView+Eau.m\
-		NSTableHeaderCell+Eau.m\
-		EauWindowButton.m\
-		EauWindowButtonCell.m\
-		EauTitleBarButton.m\
-		EauTitleBarButtonCell.m\
-		EauScrollerKnobCell.m\
-		EauScrollerKnobSlotCell.m\
-		EauScrollerArrowCell.m\
-		NSAlert+Eau.m\
-		NSBrowserCell+Eau.m\
-		NSSearchField+Eau.m\
-		NSSearchFieldCell+Eau.m\
-		NSBeep+Eau.m\
-		EauSound.m\
-		GWDialog+Eau.m\
-		NSCell+Eau.m\
-		NSButtonCell+Eau.m\
-		NSButton+Eau.m\
-		NSTextFieldCell+Eau.m\
-		NSTextView+Eau.m\
-		NSFont+Eau.m\
-		NSMenuItemCell+Eau.m\
-		NSMenuView+Eau.m\
-		NSMenu+Eau.m\
-		NSBox+Eau.m\
-		NSPopUpButton+Eau.m\
-		NSComboBox+Eau.m\
-		NSProgressIndicator+Eau.m\
-		GSDisplayServer+Eau.m\
-		EauDrawer.m\
-		EauDrawerGeometry.m
+# Wildcard so moving code between Eau and Behaviors/ needs no list edit.
+Eau_OBJC_FILES = $(sort $(wildcard *.m))
 
 ADDITIONAL_TOOL_LIBS =
 ADDITIONAL_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions

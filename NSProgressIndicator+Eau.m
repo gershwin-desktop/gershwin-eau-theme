@@ -9,7 +9,6 @@
 
 #import "Eau.h"
 #import "EauProgressView.h"
-#import "EauSound.h"
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
@@ -25,6 +24,21 @@ static char EauProgressStartKey;
 /* Bars that finish quickly are routine UI feedback; only operations long
  * enough that the user may have looked away get the completion sound. */
 #define EAU_COMPLETION_SOUND_MIN_SECONDS 5.0
+
+/* Sound playback is behavior and lives in GershwinBehaviors.bundle; Eau does
+ * not link it, so it is looked up at run time and the bar stays silent when
+ * the bundle is absent.  The trigger stays here because it rides on the
+ * value setters Eau already swizzles to drive the hosted view. */
+@interface NSObject (EauSystemSound)
++ (BOOL) playSystemSound: (NSString *)name;
+@end
+
+static void EauPlayCompletionSound(void)
+{
+  Class behaviors = NSClassFromString(@"GBBehaviors");
+  if ([behaviors respondsToSelector: @selector(playSystemSound:)])
+    [behaviors playSystemSound: @"Glass"];
+}
 
 static BOOL EauProgressIndicatorHostsView(NSProgressIndicator *indicator)
 {
@@ -304,7 +318,7 @@ static void EauSwizzle(Class cls, SEL original, SEL swizzled)
       [self setEauFullProgressAnnounced: YES];
       [self setEauProgressStart: 0.0];
       if (ranLongEnough)
-        EauPlaySystemSound(@"Glass");
+        EauPlayCompletionSound();
     }
 }
 

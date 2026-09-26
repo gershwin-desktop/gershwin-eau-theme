@@ -181,8 +181,9 @@ void EauRestoreOverriddenMethods(void)
       [self updateWindow: window];
     }
 
-  /* An application whose menu bar Eau keeps off the screen has no window to
-   * find its menu views through. */
+  /* An application whose menu bar is kept off the screen (Menu.app shows it;
+   * Behaviors/GSTheme+GBMenu.m hides the in-app bar) has no window to find
+   * its menu views through. */
   [self remeasureMenuView: [[app mainMenu] menuRepresentation] depth: 0];
 
   /* Marking views for display is not enough here.  Other observers of this

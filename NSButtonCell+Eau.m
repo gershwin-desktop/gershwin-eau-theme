@@ -17,6 +17,7 @@
 #import "NSButtonCell+Eau.h"
 #import "Eau+Button.h"
 #import "AppearanceMetrics.h"
+#import "Behaviors/NSButtonCell+GB.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
@@ -90,6 +91,20 @@
 @end
 
 @implementation Eau(NSButtonCell)
+
+/* A Return key equivalent is what makes a button the default one, so this is
+ * where the cell learns to draw with the default-button colour.  GSTheme's own
+ * implementation still runs first and hands the cell the common_ret image,
+ * which -setImage: below hides. */
+- (void) setKeyEquivalent: (NSString *)key forButtonCell: (NSButtonCell *)cell
+{
+  [super setKeyEquivalent: key forButtonCell: cell];
+  if ([key isEqualToString: @"\r"])
+    {
+      [cell setIsDefaultButton: @YES];
+    }
+}
+
 // Override image method using GSTheme method swizzling pattern
 - (NSImage *) _overrideNSButtonCellMethod_image
 {
@@ -302,14 +317,14 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
  * Finding the window that should adopt this cell as its default button is the
  * button's job, not the cell's: -[NSButtonCell controlView] stays nil until the
  * cell has been drawn once, so a cell cannot reliably reach its window at the
- * moment the return image arrives.  -[NSButton eauBecomeWindowDefaultButton]
- * does it from the view side, where the window is directly known. */
+ * moment the return image arrives.  -[NSButton gb_becomeWindowDefaultButton]
+ * in GershwinBehaviors does it from the view side, where the window is known. */
 - (void) enablePulsing
 {
   /* -EAUimage runs from the drawing path, so for a cell that was decoded with
    * the return image still in place this is reached on every single draw.  Do
-   * the one-off wiring once: -safelyMakeButtonSelectedAndHighlighted marks the
-   * button for display, and redrawing from inside a draw would spin. */
+   * the one-off wiring once: -gb_adoptReturnKeyEquivalent marks the button
+   * for display, and redrawing from inside a draw would spin. */
   if ([objc_getAssociatedObject(self, kEAUPulsingKey) boolValue])
     {
       return;
@@ -320,7 +335,13 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   NSDebugLog(@"NSButtonCell+Eau: enablePulsing called for button cell %p", self);
 
   [self setIsDefaultButton:@YES];
-  [self safelyMakeButtonSelectedAndHighlighted];
+
+  /* Answering Return is behavior, so GershwinBehaviors does the keyboard side;
+   * the theme only knows that the cell shows the (hidden) return arrow. */
+  if ([self respondsToSelector: @selector(gb_adoptReturnKeyEquivalent)])
+    {
+      [self gb_adoptReturnKeyEquivalent];
+    }
 }
 
 // When highlighted, if this cell has a return icon image set internally, compute
@@ -434,72 +455,6 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
       size.width = METRICS_BUTTON_MIN_WIDTH;
     }
   return size;
-}
-
-// Safely make the button selected and highlighted with extensive error handling
-- (void) safelyMakeButtonSelectedAndHighlighted
-{
-  NSDebugLog(@"NSButtonCell+Eau: safelyMakeButtonSelectedAndHighlighted called for button cell %p", self);
-  
-  // DON'T set the cell as highlighted permanently - this interferes with pressed state detection
-  // The default button appearance will come from the pulsing animation instead
-  NSDebugLog(@"NSButtonCell+Eau: Skipping setHighlighted to allow proper pressed state detection");
-  
-  // DON'T set setShowsFirstResponder to avoid interfering with text field focus
-    
-  // Try to get the control view safely
-  NSView *controlView = nil;
-  if ([self respondsToSelector:@selector(controlView)]) {
-    controlView = [self controlView];
-    NSDebugLog(@"NSButtonCell+Eau: Found control view %p for button cell %p", controlView, self);
-  } else {
-    NSDebugLog(@"NSButtonCell+Eau: Button cell %p does not respond to controlView selector", self);
-  }
-  
-  if (controlView && [controlView isKindOfClass:[NSButton class]]) {
-    NSButton *button = (NSButton *)controlView;
-    NSDebugLog(@"NSButtonCell+Eau: Control view is NSButton %p for cell %p", button, self);
-    
-    // Make the button highlighted with crash protection but without taking focus
-    
-    // Set as key equivalent for Enter/Return key handling but don't take focus
-    NSDebugLog(@"NSButtonCell+Eau: Setting button %p properties for Return key handling", button);
-    
-    // Try to set as key equivalent if possible
-    if ([button respondsToSelector:@selector(setKeyEquivalent:)]) {
-      NSDebugLog(@"NSButtonCell+Eau: Setting button %p key equivalent to return", button);
-      [button setKeyEquivalent:@"\r"];
-    }
-    
-    // DON'T force the button cell to be highlighted - this interferes with pressed state detection
-    // The default button appearance will come from the pulsing animation instead
-    NSDebugLog(@"NSButtonCell+Eau: Skipping setHighlighted to preserve pressed state detection");
-    
-    // Force the button to redraw to show changes
-    NSDebugLog(@"NSButtonCell+Eau: Marking button %p as needing display", button);
-    [button setNeedsDisplay:YES];
-    
-    // Make this button the first responder ONLY if the current first responder is already a button
-    NSWindow *window = [button window];
-    if (window) {
-      NSResponder *currentFirstResponder = [window firstResponder];
-      NSDebugLog(@"NSButtonCell+Eau: Current first responder: %p (class: %@)", currentFirstResponder, [currentFirstResponder class]);
-      
-      if (currentFirstResponder && [currentFirstResponder isKindOfClass:[NSButton class]]) {
-        NSDebugLog(@"NSButtonCell+Eau: Current first responder is a button, making default button %p first responder", button);
-        [window makeFirstResponder:button];
-      } else {
-        NSDebugLog(@"NSButtonCell+Eau: Current first responder is not a button (%@), preserving focus", [currentFirstResponder class]);
-      }
-    } else {
-      NSDebugLog(@"NSButtonCell+Eau: No window found for button %p", button);
-    }
-    
-    NSDebugLog(@"NSButtonCell+Eau: Successfully configured button %p with conditional focus", button);
-  
-  } else {
-    NSDebugLog(@"NSButtonCell+Eau: Control view %p is not an NSButton or is nil for cell %p", controlView, self);
-  }
 }
 
 @end

@@ -11,47 +11,11 @@
 // number of pixels, usually in the range [4.0, 16.0].
 #define EAU_MENU_ITEM_PADDING 10.0
 
-@protocol GSGNUstepMenuClient <NSObject>
-- (oneway void)activateMenuItemAtPath:(NSArray *)indexPath
-                            forWindow:(NSNumber *)windowId;
-// Async push: Menu.app asks the client to send its current menu.
-- (oneway void)requestMenuUpdateForWindow:(NSNumber *)windowId;
-// Sync pull: Menu.app asks for fresh enabled/state data right before a submenu opens.
-- (bycopy id)validateMenuStateForWindow:(NSNumber *)windowId;
-// Async push: Menu.app asks the client to send its application-level menu.
-- (oneway void)requestApplicationMenuUpdate;
-@end
+// Loads GershwinBehaviors.bundle when GSAppKitUserBundles did not.
+extern void EauEnsureBehaviorsLoaded(void);
 
-@protocol GSGNUstepMenuServer <NSObject>
-- (oneway void)updateMenuForWindow:(bycopy NSNumber *)windowId
-                          menuData:(bycopy NSDictionary *)menuData
-                        clientName:(bycopy NSString *)clientName;
-- (oneway void)unregisterWindow:(bycopy NSNumber *)windowId
-                       clientName:(bycopy NSString *)clientName;
-// Lightweight: patches only enabled/state on the existing NSMenu without rebuilding.
-- (oneway void)updateMenuEnabledStatesForWindow:(bycopy NSNumber *)windowId
-                                       menuData:(bycopy NSDictionary *)menuData
-                                     clientName:(bycopy NSString *)clientName;
-// Application-level (frontmost-app) menu, keyed by clientName, not window.
-- (oneway void)updateMenuForApplication:(bycopy NSDictionary *)menuData
-                             clientName:(bycopy NSString *)clientName;
-- (oneway void)unregisterApplication:(bycopy NSString *)clientName;
-- (oneway void)updateApplicationMenuEnabledStates:(bycopy NSDictionary *)menuData
-                                        clientName:(bycopy NSString *)clientName;
-@end
-
-@interface Eau: GSTheme <GSGNUstepMenuClient>
+@interface Eau: GSTheme
 {
-    NSMutableDictionary *menuByWindowId;
-    NSString *menuClientName;
-    NSConnection *menuClientConnection;
-    NSPort *menuClientReceivePort;
-    NSConnection *menuServerConnection;
-    id menuServerProxy;
-    BOOL menuServerAvailable;
-    BOOL menuServerConnected;
-    BOOL menuIntegrationRunning;
-    NSTimer *menuClientVerifyTimer;
     NSColorList *editableSystemColors;
 }
 + (NSColor *) controlStrokeColor;
@@ -73,7 +37,9 @@ NSColor *EauSafeCalibratedRGB(NSColor *c);
  * process.  Every swizzled method therefore asks this before doing anything
  * Eau-specific and otherwise chains straight to the implementation it
  * replaced, so another theme can take over without Eau's behaviour leaking
- * into it.  Set by -[Eau activate], cleared by -[Eau deactivate]. */
+ * into it.  Set by -[Eau activate], cleared by -[Eau deactivate].
+ * Swizzles in GershwinBehaviors.bundle (Behaviors/) are theme-independent and
+ * deliberately do not ask. */
 BOOL EauThemeIsActive(void);
 
 /* Set by -[Eau activate] and -[Eau deactivate]; nothing else has any business
