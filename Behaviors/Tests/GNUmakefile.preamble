@@ -1,0 +1,8 @@
+ADDITIONAL_INCLUDE_DIRS += -I..
+
+# Only the pure geometry is linked: the runtime part swizzles AppKit in
+# +load and needs a running menu tracking loop.
+t_GBMenuSafeTriangle_OBJC_FILES += ../GBMenuSafeTriangleGeometry.m
+
+# Testing.h uses retain/release, so no ARC here; the geometry needs none.
+ADDITIONAL_OBJCFLAGS += -Wno-deprecated
