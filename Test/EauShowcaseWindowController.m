@@ -583,7 +583,7 @@ static NSView *NewPane(NSRect bounds)
 }
 
 /* ---------------------------------------------------------------- */
-#pragma mark - Sample alert / sheet (also used by the Sheets & Alerts stub)
+#pragma mark - Sample alert / sheets (Sheets & Alerts section)
 
 - (NSAlert *)sampleAlert
 {
@@ -607,6 +607,18 @@ static NSView *NewPane(NSRect bounds)
                           modalDelegate: nil
                          didEndSelector: NULL
                             contextInfo: NULL];
+}
+
+// A save panel is the other common sheet, and unlike an alert it is
+// resizable and much larger than most parent windows' content.
+- (void)showSaveSheet: (id)sender
+{
+  [[NSSavePanel savePanel] beginSheetForDirectory: nil
+                                             file: @"Untitled"
+                                   modalForWindow: _window
+                                    modalDelegate: nil
+                                   didEndSelector: NULL
+                                      contextInfo: NULL];
 }
 
 /* ---------------------------------------------------------------- */
@@ -1061,8 +1073,8 @@ static NSView *NewPane(NSRect bounds)
   [note setBezeled: NO];
   [note setDrawsBackground: NO];
   [note setFont: METRICS_FONT_SYSTEM_REGULAR_11];
-  [note setStringValue: @"Stub for a themed sheet transition, done as a separate task. "
-    @"These buttons already exercise the real NSAlert/sheet paths it will attach to."];
+  [note setStringValue: @"A sheet hangs from the window's titlebar and slides out; "
+    @"the window manager does this for windows the theme marks as sheets."];
   EauShowcaseExcludeFromScan(note);
   [form addRowWithLabel: @"Sheets & Alerts:" controls: @[ note ]];
 
@@ -1071,6 +1083,9 @@ static NSView *NewPane(NSRect bounds)
 
   [form addRowWithLabel: @"Sheet (Attached):" controls: @[
     ShowcaseButton(@"Show Sheet", self, @selector(showSheet:), NSRegularControlSize) ]];
+
+  [form addRowWithLabel: @"Save Panel (Sheet):" controls: @[
+    ShowcaseButton(@"Show Save Sheet", self, @selector(showSaveSheet:), NSRegularControlSize) ]];
 
   return pane;
 }
