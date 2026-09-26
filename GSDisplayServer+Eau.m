@@ -37,6 +37,9 @@
 #import <X11/Xatom.h>
 #include <stdlib.h>
 #include <string.h>
+#import "EauDrawer.h"
+#import "EauDrawerGeometry.h"
+#import "AppearanceMetrics.h"
 
 static BOOL EAUIsDialogLikeWindow(NSWindow *window, int level)
 {
@@ -214,12 +217,14 @@ static void EAUEnsureWindowStates(Display *dpy,
 }
 
 /*
- * The window manager hangs a sheet from its parent's titlebar, moves it
- * with the parent and slides it in and out, but only for windows whose
- * ICCCM WM_WINDOW_ROLE is "sheet": WM_TRANSIENT_FOR, all that libs-gui sets
- * for a sheet, is also set for child windows and drawers.  The role must be
- * on the window before it is mapped, and a deferred sheet has no X window
- * before it is first ordered in, so it is set on every order-in.
+ * The window manager attaches a sheet to its parent's titlebar and a drawer
+ * to its parent's edge, moves them with the parent and slides them in and
+ * out, but only for windows whose ICCCM WM_WINDOW_ROLE says "sheet" or
+ * "drawer": WM_TRANSIENT_FOR, all that libs-gui sets, is also set for
+ * dialogs and child windows.  The role must be on the window before it is
+ * mapped, and a deferred window has no X window before it is first ordered
+ * in, so it is set on every order-in.  The drawer's edge and offsets are
+ * not passed on: the window manager reads them off where the drawer is put.
  */
 static NSString *EAUAttachedRoleOfWindow(NSWindow *window)
 {
@@ -227,7 +232,41 @@ static NSString *EAUAttachedRoleOfWindow(NSWindow *window)
     {
       return @"sheet";
     }
+  if (EauIsDrawerWindow(window))
+    {
+      return @"drawer";
+    }
   return nil;
+}
+
+/* The drawer's two outer corners are rounded; the window manager cuts the
+ * outline (_WM_SHAPE_PATH) with a smooth edge and bends the shadow along. */
+static void EAUSetDrawerOutline(Display *dpy, Window xwin, NSWindow *window)
+{
+  static Atom pathAtom = None;
+  NSData *path = [EauDrawerGeometry shapePathForEdge: EauDrawerEdgeOfWindow(window)
+                                              radius: METRICS_DRAWER_CORNER_RADIUS_PX];
+  const int32_t *values = [path bytes];
+  NSUInteger count = [path length] / sizeof(int32_t);
+  long *items = calloc(count, sizeof(long));
+  NSUInteger i;
+
+  if (items == NULL)
+    {
+      return;
+    }
+  if (pathAtom == None)
+    {
+      pathAtom = XInternAtom(dpy, "_WM_SHAPE_PATH", False);
+    }
+  /* Xlib passes 32-bit items as long. */
+  for (i = 0; i < count; i++)
+    {
+      items[i] = values[i];
+    }
+  XChangeProperty(dpy, xwin, pathAtom, XA_INTEGER, 32, PropModeReplace,
+                  (unsigned char *)items, (int)count);
+  free(items);
 }
 
 /* Only a role this theme set is removed; any other belongs to the app. */
@@ -248,7 +287,7 @@ static BOOL EAUIsAttachedRole(Display *dpy, Window xwin, Atom roleAtom)
       NSString *role = [[NSString alloc] initWithBytes: value
                                                 length: strnlen((char *)value, nitems)
                                               encoding: NSISOLatin1StringEncoding];
-      ours = [role isEqualToString: @"sheet"];
+      ours = [role isEqualToString: @"sheet"] || [role isEqualToString: @"drawer"];
     }
   if (value != NULL)
     {
@@ -281,6 +320,10 @@ static void EAUMarkAttachedWindow(GSDisplayServer *server, int win)
 
       XChangeProperty(dpy, xwin, roleAtom, XA_STRING, 8, PropModeReplace,
                       (const unsigned char *)value, (int)strlen(value));
+      if ([role isEqualToString: @"drawer"])
+        {
+          EAUSetDrawerOutline(dpy, xwin, window);
+        }
     }
   else if (EAUIsAttachedRole(dpy, xwin, roleAtom))
     {

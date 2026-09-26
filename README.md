@@ -52,6 +52,34 @@ The window manager's side of the contract is described in `SHEETS.md` of
 gershwin-windowmanager. The showcase (`Test/`, Window > Showcase, "Sheets &
 Alerts") opens an alert sheet and a save panel sheet.
 
+## Drawers and the window manager
+
+libs-gui shows an `NSDrawer` in a borderless `GSDrawerWindow` that it moves
+after its parent from a timer and slides by resizing it in blocking steps,
+the opening ones before the window is even shown. Under Gershwin the window
+manager attaches the drawer to its parent instead (moves, resizes, wobble,
+stacking below the parent, the slide out from under the edge; see
+`DRAWERS.md` of gershwin-windowmanager), and the theme (`EauDrawer.m`,
+`EauDrawerGeometry.m`):
+
+- sets the ICCCM `WM_WINDOW_ROLE` (`STRING`) = `drawer` in the swizzled
+  `XGServer -orderwindow:::`, like `sheet` for sheets. Nothing else is passed
+  on: the window manager reads the edge, the leading and trailing offsets and
+  the thickness off where the drawer is put next to its parent;
+- places the drawer flush against its parent's edge, as thick as its content
+  plus `METRICS_DRAWER_MARGIN` on both sides (libs-gui made it as wide as a
+  window can be), and always gives it its open frame; the slide steps are
+  dropped, the window manager slides the finished drawer;
+- draws the drawer in `-drawWindowBackground:view:`: a shade darker than the
+  window, finely textured along its length, with the window's shadow on the
+  seam and a rim round the outer sides; the content box is inset by the
+  margin and draws nothing;
+- rounds the two outer corners with `_WM_SHAPE_PATH`
+  (`METRICS_DRAWER_CORNER_RADIUS`), which the window manager cuts with a
+  smooth edge.
+
+The showcase's "Drawers" section opens one.
+
 ## Developers
 
 ### Method Swizzling Pattern
