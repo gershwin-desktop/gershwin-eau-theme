@@ -29,7 +29,7 @@ static void GBSetKeyboardFocusVisible(BOOL visible, NSWindow *window)
 @interface NSWindow (GBFocusRing)
 - (void) gb_selectNextKeyView: (id)sender;
 - (void) gb_selectPreviousKeyView: (id)sender;
-- (void) gb_sendEvent: (NSEvent *)event;
+- (void) gb_focusRingSendEvent: (NSEvent *)event;
 @end
 
 @implementation NSWindow (GBFocusRing)
@@ -51,7 +51,7 @@ static void GBSetKeyboardFocusVisible(BOOL visible, NSWindow *window)
       method_exchangeImplementations(orig, swiz);
     }
   Method sm = class_getInstanceMethod(cls, @selector(sendEvent:));
-  Method sSwiz = class_getInstanceMethod(cls, @selector(gb_sendEvent:));
+  Method sSwiz = class_getInstanceMethod(cls, @selector(gb_focusRingSendEvent:));
   if (sm != NULL && sSwiz != NULL)
     method_exchangeImplementations(sm, sSwiz);
 }
@@ -68,7 +68,7 @@ static void GBSetKeyboardFocusVisible(BOOL visible, NSWindow *window)
   [self gb_selectPreviousKeyView: sender];
 }
 
-- (void) gb_sendEvent: (NSEvent *)event
+- (void) gb_focusRingSendEvent: (NSEvent *)event
 {
   NSEventType t = [event type];
   if (t == NSLeftMouseDown || t == NSRightMouseDown
@@ -92,7 +92,7 @@ static void GBSetKeyboardFocusVisible(BOOL visible, NSWindow *window)
             }
         }
     }
-  [self gb_sendEvent: event];
+  [self gb_focusRingSendEvent: event];
 }
 
 @end
