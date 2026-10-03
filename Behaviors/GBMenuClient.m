@@ -992,6 +992,12 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
   [NSApp sendAction:action to:target from:menuItem];
 }
 
+- (bycopy id)refreshedMenuDataForWindow:(NSNumber *)windowId
+{
+  /* NSMenu items are not created on demand, so there is nothing to refresh. */
+  return nil;
+}
+
 - (oneway void)activateMenuItemAtPath:(NSArray *)indexPath forWindow:(NSNumber *)windowId
 {
   NSDebugLog(@"GBMenuClient: activateMenuItemAtPath called - indexPath: %@, windowId: %@", indexPath, windowId);

@@ -14,6 +14,8 @@
 - (bycopy id)validateMenuStateForWindow:(NSNumber *)windowId;
 // Async push: Menu.app asks the client to send its application-level menu.
 - (oneway void)requestApplicationMenuUpdate;
+// Sync pull of submenus that are filled when used; nil because AppKit menus are not.
+- (bycopy id)refreshedMenuDataForWindow:(NSNumber *)windowId;
 @end
 
 @protocol GSGNUstepMenuServer <NSObject>
