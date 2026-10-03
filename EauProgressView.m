@@ -20,6 +20,7 @@
                     withBounds: (NSRect)bounds
                       withClip: (NSRect)rect
                        atCount: (int)count
+                  stripeOffset: (CGFloat)stripeOffset
                       forValue: (double)val;
 @end
 
@@ -42,10 +43,10 @@
 /* Slight tilt so the highlight reads as a moving diagonal. */
 #define EAU_PROGRESS_SHEEN_ANGLE -8.0
 
-/* Indeterminate pattern frames advanced per animation cycle: the theme
- * picks the stripe image from the count we hand it, so it keeps moving at
- * about one 48 px tile per second, matching the wave speed. */
-#define EAU_PROGRESS_INDETERMINATE_FRAMES_PER_CYCLE 12
+/* Distance the indeterminate stripes travel per animation cycle: one 48 px
+ * tile per second, matching the wave speed.  Handed to the theme as a
+ * continuous offset so the stripes glide instead of stepping. */
+#define EAU_PROGRESS_INDETERMINATE_STRIPE_TRAVEL 96.0
 #define EAU_PROGRESS_CORNER_RADIUS 3.0
 #define EAU_PROGRESS_TRACK_INSET 1.0
 
@@ -368,16 +369,15 @@
 
   /* 1. The classic theme bar, painted exactly as the theme paints it: track,
    * glossy fill, indeterminate pattern, border, and fill-edge divider.  The
-   * count for the indeterminate pattern frames comes from our sweep so the
-   * stripe keeps moving. */
+   * stripe offset comes from our sweep so the stripes keep moving. */
   if (_indicator != nil)
     {
-      int count = (int)(_animationPhase
-                        * EAU_PROGRESS_INDETERMINATE_FRAMES_PER_CYCLE);
       [[GSTheme theme] drawProgressIndicator: _indicator
                                   withBounds: bounds
                                     withClip: bounds
-                                     atCount: count
+                                     atCount: 0
+                                stripeOffset: _animationPhase
+                                  * EAU_PROGRESS_INDETERMINATE_STRIPE_TRAVEL
                                     forValue: [self _progressFraction]];
     }
 

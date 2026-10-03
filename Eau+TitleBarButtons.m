@@ -9,16 +9,47 @@
 BOOL EauTitleBarButtonStyleIsOrb(void)
 {
     static BOOL isOrb = NO;
-    static dispatch_once_t onceToken;
-    dispatch_once(&onceToken, ^{
+    static BOOL resolved = NO;
+    if (!resolved) {
         NSString *style = [[NSUserDefaults standardUserDefaults]
                            stringForKey:@"EauTitleBarButtonStyle"];
         isOrb = [style isEqualToString:@"orb"];
-    });
+        resolved = YES;
+    }
     return isOrb;
 }
 
 @implementation Eau (TitleBarButtons)
+
+#pragma mark - What the window manager asks
+
+/* The orb style puts the three buttons at the left of the bar and draws them
+ * with the title, so the window manager must not put its own along the edges.
+ * In the other style the buttons are the window manager's to draw. */
+- (BOOL)drawsTitlebarButtons
+{
+    return EauTitleBarButtonStyleIsOrb();
+}
+
+/* Where each button sits, counted from the bottom left of the bar, and empty
+ * for a button this window does not have. */
+- (NSRect)titlebarButtonRectForButton:(NSInteger)button
+                        titlebarWidth:(CGFloat)width
+                            styleMask:(NSUInteger)styleMask
+{
+    switch (button) {
+        case 0:
+            return (styleMask & NSClosableWindowMask)
+                     ? [self closeButtonRectForTitlebarWidth:width] : NSZeroRect;
+        case 1:
+            return (styleMask & NSMiniaturizableWindowMask)
+                     ? [self minimizeButtonRectForTitlebarWidth:width] : NSZeroRect;
+        case 2:
+            return (styleMask & NSResizableWindowMask)
+                     ? [self maximizeButtonRectForTitlebarWidth:width] : NSZeroRect;
+    }
+    return NSZeroRect;
+}
 
 #pragma mark - Geometry Queries
 
@@ -121,7 +152,7 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
 
     // Draw title text centered in title area
     if (title && [title length] > 0) {
-        [self drawTitleText:title inRect:titleRect active:active];
+        [self drawTitleText:title inRect:titleRect centeredOver:rect active:active];
     }
 }
 
@@ -551,7 +582,7 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
     return color;
 }
 
-- (void)drawTitleText:(NSString *)title inRect:(NSRect)rect active:(BOOL)active
+- (void)drawTitleText:(NSString *)title inRect:(NSRect)rect centeredOver:(NSRect)fullTitlebarRect active:(BOOL)active
 {
     static NSFont *titleFont = nil;
     static NSColor *activeColor = nil;
@@ -578,23 +609,27 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
     };
     NSSize titleSize = [title sizeWithAttributes:measureAttrs];
 
-    // Calculate gap between centered title and nearest button edge
-    CGFloat centeredX = rect.origin.x + rect.size.width / 2.0 - titleSize.width / 2.0;
-    CGFloat minX = rect.origin.x;
-    CGFloat maxX = NSMaxX(rect) - titleSize.width;
-    CGFloat titleLeft = MAX(minX, MIN(centeredX, maxX));
-    CGFloat leftGap = titleLeft - rect.origin.x;
-    CGFloat rightGap = NSMaxX(rect) - (titleLeft + titleSize.width);
+    // Calculate allowed area: titleRect inset by minGap on both sides
+    CGFloat minGap = 24.0 * GSWScaleFactor();
+    NSRect allowedArea = NSInsetRect(rect, minGap, 0);
+
+    // Center over the full titlebar width
+    CGFloat fullMidX = NSMidX(fullTitlebarRect);
+    CGFloat centeredX = fullMidX - titleSize.width / 2.0;
+
+    // Clamp into allowed area
+    CGFloat allowedMinX = NSMinX(allowedArea);
+    CGFloat allowedMaxX = NSMaxX(allowedArea) - titleSize.width;
+    CGFloat titleX = MAX(allowedMinX, MIN(centeredX, allowedMaxX));
 
     // Create paragraph style with appropriate truncation
     NSMutableParagraphStyle *p = [centerStyle mutableCopy];
-    CGFloat minGap = 24.0 * GSWScaleFactor();
-    if (leftGap < minGap || rightGap < minGap) {
-        // Use middle ellipsis when gap to nearest button is less than 24px (scaled)
-        [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
-    } else {
-        // No truncation needed when there's enough breathing room
+    if (titleSize.width <= NSWidth(allowedArea)) {
+        // Text fits in allowed area: draw untruncated at clamped position
         [p setLineBreakMode:NSLineBreakByClipping];
+    } else {
+        // Text doesn't fit: use middle ellipsis
+        [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
     }
 
     NSDictionary *drawAttrs = @{
@@ -603,10 +638,14 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
         NSParagraphStyleAttributeName: p
     };
 
-    // Center vertically
-    NSRect drawRect = rect;
-    drawRect.origin.y = NSMidY(rect) - titleSize.height / 2.0;
-    drawRect.size.height = titleSize.height;
+    // A title that fits keeps its own width at the clamped position; one that
+    // does not gets the whole allowed area, so the middle ellipsis can apply.
+    NSRect drawRect = NSMakeRect(titleX, NSMidY(rect) - titleSize.height / 2.0,
+                                 titleSize.width, titleSize.height);
+    if (titleSize.width > NSWidth(allowedArea)) {
+        drawRect.origin.x = NSMinX(allowedArea);
+        drawRect.size.width = NSWidth(allowedArea);
+    }
 
     [title drawInRect:drawRect withAttributes:drawAttrs];
 }
