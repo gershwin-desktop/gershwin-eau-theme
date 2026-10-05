@@ -78,7 +78,7 @@ int main(void)
       EauAlertPanel *panel = panelWithButtonTitles(
         [NSArray arrayWithObjects: @"OK", @"Cancel", nil]);
 
-      PASS([[panel contentView] frame].size.width == METRICS_WIN_MIN_WIDTH,
+      PASS([[panel contentView] frame].size.width == METRICS_ALERT_MIN_WIDTH,
         "a panel with short buttons keeps the standard width");
     }
 

@@ -211,8 +211,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // where the alert appears near the bottom-left corner before -center
     // repositions it.  Use visibleFrame to stay within the usable screen area.
     NSScreen *screen = [NSScreen mainScreen];
-    CGFloat winW = METRICS_WIN_MIN_WIDTH;
-    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat winW = METRICS_ALERT_MIN_WIDTH;
+    CGFloat winH = METRICS_ALERT_MIN_HEIGHT;
     CGFloat screenW = [screen visibleFrame].size.width;
     CGFloat screenH = [screen visibleFrame].size.height;
     CGFloat x = ([screen visibleFrame].origin.x
@@ -259,8 +259,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     //
     // Compute a centered initial frame the same way EauAlertPanel.init does.
     NSScreen *screen = [NSScreen mainScreen];
-    CGFloat winW = METRICS_WIN_MIN_WIDTH;
-    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat winW = METRICS_ALERT_MIN_WIDTH;
+    CGFloat winH = METRICS_ALERT_MIN_HEIGHT;
     CGFloat screenW = [screen visibleFrame].size.width;
     CGFloat screenH = [screen visibleFrame].size.height;
     CGFloat x = ([screen visibleFrame].origin.x
@@ -427,7 +427,7 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     }
 
     // Start with minimum width, widened to whatever the buttons need
-    wsize.width = METRICS_WIN_MIN_WIDTH;
+    wsize.width = METRICS_ALERT_MIN_WIDTH;
     if (wsize.width < buttonRowWidth)
         wsize.width = buttonRowWidth;
     textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
@@ -489,9 +489,9 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
         wsize.height = ssize.height;
         needsScroll = couldNeedScroll;
     }
-    else if (wsize.height < METRICS_WIN_MIN_HEIGHT)
+    else if (wsize.height < METRICS_ALERT_MIN_HEIGHT)
     {
-        wsize.height = METRICS_WIN_MIN_HEIGHT;
+        wsize.height = METRICS_ALERT_MIN_HEIGHT;
     }
     
     if (needsScroll)
@@ -499,8 +499,8 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     
     if (ssize.width < wsize.width)
         wsize.width = ssize.width;
-    if (wsize.width < METRICS_WIN_MIN_WIDTH)
-        wsize.width = METRICS_WIN_MIN_WIDTH;
+    if (wsize.width < METRICS_ALERT_MIN_WIDTH)
+        wsize.width = METRICS_ALERT_MIN_WIDTH;
     /* The share-of-screen cap must never cut a button off. */
     if (wsize.width < buttonRowWidth)
         wsize.width = buttonRowWidth;

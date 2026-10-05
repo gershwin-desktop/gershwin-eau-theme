@@ -12,9 +12,17 @@
 
 #import <AppKit/AppKit.h>
 
-// Window dimensions
-static const float METRICS_WIN_MIN_WIDTH = 500.0;
-static const float METRICS_WIN_MIN_HEIGHT = 100.0;
+// Window dimensions. 32 px so a user can shrink a window to almost
+// nothing; nothing else reads this while resizing (the window manager
+// honours only the hints the application itself set, and GNUstep's own
+// default minimum is just the window chrome), so the operative readers
+// are applications' initial sizing and their own minima. The TWO alert
+// panel bases below keep the alert builder's own numbers (NSAlert+Eau.m
+// sizes every alert from them); they are NOT window minima.
+static const float METRICS_WIN_MIN_WIDTH = 32.0;
+static const float METRICS_WIN_MIN_HEIGHT = 32.0;
+static const float METRICS_ALERT_MIN_WIDTH = 500.0;
+static const float METRICS_ALERT_MIN_HEIGHT = 100.0;
 // Max dialog height before a scroll view is used for the message text
 static const float METRICS_WIN_MAX_HEIGHT = 350.0;
 
