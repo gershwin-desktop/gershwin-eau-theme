@@ -133,6 +133,42 @@ static BOOL EAUIsSwitchOrRadioImage(NSImage *image)
     || [name hasPrefix: @"NSHighlightedRadio"];
 }
 
+/* A disabled switch or radio button draws its box and its mark at half
+ * strength.  AppKit does that for a disabled cell's image, but -setButtonType:
+ * turns the flag off for these two types, so the theme draws a half strength
+ * copy instead.  A copy of the image itself, with its own transparency kept:
+ * washing the rectangle of the image with a color would tint the surface
+ * around the box too, and that is not the window background inside a box, a
+ * tab or a table. */
+static NSImage *EAUHalfStrengthImage(NSImage *image)
+{
+  static NSMutableDictionary *cache = nil;
+  NSValue *key = [NSValue valueWithNonretainedObject: image];
+  NSImage *dimmed;
+
+  @synchronized ([NSButtonCell class])
+    {
+      if (cache == nil)
+        cache = [[NSMutableDictionary alloc] init];
+      dimmed = [cache objectForKey: key];
+      if (dimmed == nil)
+        {
+          NSSize size = [image size];
+
+          dimmed = [[NSImage alloc] initWithSize: size];
+          [dimmed lockFocus];
+          [image drawInRect: NSMakeRect(0, 0, size.width, size.height)
+                   fromRect: NSZeroRect
+                  operation: NSCompositeCopy
+                   fraction: 0.5];
+          [dimmed unlockFocus];
+          [cache setObject: dimmed forKey: key];
+          RELEASE(dimmed);
+        }
+    }
+  return dimmed;
+}
+
 @implementation NSButtonCell(EauTheme)
 
 /* Per-cell flags.  These used to be global sets of raw cell pointers, which
@@ -415,6 +451,25 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
     }
   }
 
+  // A disabled switch or radio button is drawn with half strength copies of
+  // its images (see EAUHalfStrengthImage); the cell gets its own images back
+  // right after the draw.
+  NSImage *originalImage = nil, *originalAlternate = nil;
+  BOOL dimmedImages = NO;
+  if (![self isEnabled] && [self imagePosition] != NSNoImage
+      && EAUIsSwitchOrRadioImage([self image]))
+    {
+      /* The alternate image is read from the cell's instance variable: the
+       * accessor is overridden by the theme for the return button images and
+       * must not be called from here. */
+      originalImage = RETAIN([self image]);
+      originalAlternate = RETAIN([self valueForKey: @"_altImage"]);
+      [self setImage: EAUHalfStrengthImage(originalImage)];
+      if (EAUIsSwitchOrRadioImage(originalAlternate))
+        [self setValue: EAUHalfStrengthImage(originalAlternate) forKey: @"_altImage"];
+      dimmedImages = YES;
+    }
+
   // Call original implementation (swizzled). Keep this one guarded: it runs on
   // AppKit's display path, so an exception here must not escape into the draw
   // loop, and must not skip the imagePosition restore below (which would leave
@@ -425,31 +480,18 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   @catch (NSException *e) {
     NSDebugLog(@"NSButtonCell+Eau: ERROR in EAU_drawInteriorWithFrame (original): %@", e);
   }
+
+  if (dimmedImages)
+    {
+      [self setImage: originalImage];
+      [self setValue: originalAlternate forKey: @"_altImage"];
+      RELEASE(originalImage);
+      RELEASE(originalAlternate);
+    }
   if (shouldRemoveImagePosition) {
     [self setImagePosition: oldPos];
 
   }
-
-  /* A disabled switch or radio button drew its box and its mark in full
-   * colour with only the title beside them greyed.  AppKit draws a cell's
-   * image at half strength when the cell is disabled and its image dims when
-   * disabled, but -setButtonType: turns that flag off for NSSwitchButton and
-   * NSRadioButton, so their images are never dimmed.  So the image is washed
-   * afterwards with the window's own background at half strength, which
-   * greys the box and the mark together, the way the title is greyed. */
-  if (![self isEnabled] && [self imagePosition] != NSNoImage
-      && EAUIsSwitchOrRadioImage([self image]))
-    {
-      NSRect imageRect = [self imageRectForBounds: cellFrame];
-      NSColor *wash = [[[NSColor windowBackgroundColor]
-                         colorUsingColorSpaceName: NSCalibratedRGBColorSpace]
-                        colorWithAlphaComponent: 0.55];
-      if (wash != nil && !NSIsEmptyRect(imageRect))
-        {
-          [wash set];
-          NSRectFillUsingOperation(imageRect, NSCompositeSourceOver);
-        }
-    }
 }
 
 // Ensure the cell is never narrower than its title text plus bezel padding,
