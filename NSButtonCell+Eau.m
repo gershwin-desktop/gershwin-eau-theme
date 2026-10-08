@@ -12,13 +12,14 @@
  * most applications will not do this, so we handle it here. 
  */
 
+#import "Eau.h"
 #import "NSCell+Eau.h"
 #import "NSButtonCell+Eau.h"
 #import "Eau+Button.h"
 #import "AppearanceMetrics.h"
+#import "Behaviors/NSButtonCell+GB.h"
 #import <Foundation/Foundation.h>
 #import <AppKit/AppKit.h>
-#import <dispatch/dispatch.h>
 #import <objc/runtime.h>
 
 // Prevent the specific "return" images from ever being drawn by intercepting common draw methods.
@@ -37,10 +38,6 @@
 
     Class cls = [self class];
     Method orig, swiz;
-
-    orig = class_getInstanceMethod(cls, @selector(drawAtPoint:));
-    swiz = class_getInstanceMethod(cls, @selector(EAU_drawAtPoint:));
-    if (orig && swiz) method_exchangeImplementations(orig, swiz);
 
     orig = class_getInstanceMethod(cls, @selector(drawInRect:));
     swiz = class_getInstanceMethod(cls, @selector(EAU_drawInRect:));
@@ -64,18 +61,9 @@
   return [base isEqualToString:@"common_ret"] || [base isEqualToString:@"common_retH"];
 }
 
-- (void)EAU_drawAtPoint:(NSPoint)point
-{
-  if ([self EAU_isReturnImage]) {
-    NSDebugLog(@"NSImage: Suppressing drawAtPoint for %@", [self name]);
-    return;
-  }
-  [self EAU_drawAtPoint:point];
-}
-
 - (void)EAU_drawInRect:(NSRect)rect
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect for %@", [self name]);
     return;
   }
@@ -84,7 +72,7 @@
 
 - (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect:fromRect:operation:fraction: for %@", [self name]);
     return;
   }
@@ -93,7 +81,7 @@
 
 - (void)EAU_drawInRect:(NSRect)rect fromRect:(NSRect)srcRect operation:(NSCompositingOperation)op fraction:(CGFloat)delta respectFlipped:(BOOL)respectFlipped hints:(NSDictionary *)hints
 {
-  if ([self EAU_isReturnImage]) {
+  if (EauThemeIsActive() && [self EAU_isReturnImage]) {
     NSDebugLog(@"NSImage: Suppressing drawInRect:respectFlipped:hints: for %@", [self name]);
     return;
   }
@@ -103,6 +91,20 @@
 @end
 
 @implementation Eau(NSButtonCell)
+
+/* A Return key equivalent is what makes a button the default one, so this is
+ * where the cell learns to draw with the default-button colour.  GSTheme's own
+ * implementation still runs first and hands the cell the common_ret image,
+ * which -setImage: below hides. */
+- (void) setKeyEquivalent: (NSString *)key forButtonCell: (NSButtonCell *)cell
+{
+  [super setKeyEquivalent: key forButtonCell: cell];
+  if ([key isEqualToString: @"\r"])
+    {
+      [cell setIsDefaultButton: @YES];
+    }
+}
+
 // Override image method using GSTheme method swizzling pattern
 - (NSImage *) _overrideNSButtonCellMethod_image
 {
@@ -117,6 +119,55 @@
   return [xself EAUalternateImage];
 }
 @end
+
+/* The images a switch or a radio button is drawn with, by the names AppKit
+ * and the theme give them. */
+static BOOL EAUIsSwitchOrRadioImage(NSImage *image)
+{
+  NSString *name = [image name];
+  if (name == nil)
+    return NO;
+  return [name hasPrefix: @"GSSwitch"] || [name hasPrefix: @"NSSwitch"]
+    || [name hasPrefix: @"NSHighlightedSwitch"]
+    || [name hasPrefix: @"GSRadio"] || [name hasPrefix: @"NSRadio"]
+    || [name hasPrefix: @"NSHighlightedRadio"];
+}
+
+/* A disabled switch or radio button draws its box and its mark at half
+ * strength.  AppKit does that for a disabled cell's image, but -setButtonType:
+ * turns the flag off for these two types, so the theme draws a half strength
+ * copy instead.  A copy of the image itself, with its own transparency kept:
+ * washing the rectangle of the image with a color would tint the surface
+ * around the box too, and that is not the window background inside a box, a
+ * tab or a table. */
+static NSImage *EAUHalfStrengthImage(NSImage *image)
+{
+  static NSMutableDictionary *cache = nil;
+  NSValue *key = [NSValue valueWithNonretainedObject: image];
+  NSImage *dimmed;
+
+  @synchronized ([NSButtonCell class])
+    {
+      if (cache == nil)
+        cache = [[NSMutableDictionary alloc] init];
+      dimmed = [cache objectForKey: key];
+      if (dimmed == nil)
+        {
+          NSSize size = [image size];
+
+          dimmed = [[NSImage alloc] initWithSize: size];
+          [dimmed lockFocus];
+          [image drawInRect: NSMakeRect(0, 0, size.width, size.height)
+                   fromRect: NSZeroRect
+                  operation: NSCompositeCopy
+                   fraction: 0.5];
+          [dimmed unlockFocus];
+          [cache setObject: dimmed forKey: key];
+          RELEASE(dimmed);
+        }
+    }
+  return dimmed;
+}
 
 @implementation NSButtonCell(EauTheme)
 
@@ -142,6 +193,13 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   // (METRICS_BUTTON_MIN_WIDTH), giving the pill shape enough horizontal room.
   orig = class_getInstanceMethod(cls, @selector(cellSize));
   swiz = class_getInstanceMethod(cls, @selector(EAU_cellSize));
+  if (orig && swiz) method_exchangeImplementations(orig, swiz);
+
+  // Swizzle -setImage: rather than overriding it in this category: a category
+  // method replaces -[NSButtonCell setImage:], whose image position update
+  // buttons created in code rely on to show their image at all.
+  orig = class_getInstanceMethod(cls, @selector(setImage:));
+  swiz = class_getInstanceMethod(cls, @selector(EAU_setImage:));
   if (orig && swiz) method_exchangeImplementations(orig, swiz);
 }
 
@@ -202,9 +260,9 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 }
 
 // Intercept setImage to handle common_ret/common_retH images
-- (void) setImage:(NSImage *)image
+- (void) EAU_setImage:(NSImage *)image
 {
-  if (image) {
+  if (EauThemeIsActive() && image) {
     NSString *imageName = [image name];
     NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
@@ -231,7 +289,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
     }
   }
   
-  [super setImage:image];
+  [self EAU_setImage:image];
 }
 
 // Handle common_ret/common_retH alternate images
@@ -273,7 +331,7 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 // Intercept setAlternateImage to handle common_ret/common_retH images
 - (void) EAU_setAlternateImage:(NSImage *)alternateImage
 {
-  if (alternateImage) {
+  if (EauThemeIsActive() && alternateImage) {
     NSString *imageName = [alternateImage name];
     NSString *baseName = imageName ? [imageName stringByDeletingPathExtension] : nil;
     
@@ -308,14 +366,14 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
  * Finding the window that should adopt this cell as its default button is the
  * button's job, not the cell's: -[NSButtonCell controlView] stays nil until the
  * cell has been drawn once, so a cell cannot reliably reach its window at the
- * moment the return image arrives.  -[NSButton eauBecomeWindowDefaultButton]
- * does it from the view side, where the window is directly known. */
+ * moment the return image arrives.  -[NSButton gb_becomeWindowDefaultButton]
+ * in GershwinBehaviors does it from the view side, where the window is known. */
 - (void) enablePulsing
 {
   /* -EAUimage runs from the drawing path, so for a cell that was decoded with
    * the return image still in place this is reached on every single draw.  Do
-   * the one-off wiring once: -safelyMakeButtonSelectedAndHighlighted marks the
-   * button for display, and redrawing from inside a draw would spin. */
+   * the one-off wiring once: -gb_adoptReturnKeyEquivalent marks the button
+   * for display, and redrawing from inside a draw would spin. */
   if ([objc_getAssociatedObject(self, kEAUPulsingKey) boolValue])
     {
       return;
@@ -326,7 +384,13 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   NSDebugLog(@"NSButtonCell+Eau: enablePulsing called for button cell %p", self);
 
   [self setIsDefaultButton:@YES];
-  [self safelyMakeButtonSelectedAndHighlighted];
+
+  /* Answering Return is behavior, so GershwinBehaviors does the keyboard side;
+   * the theme only knows that the cell shows the (hidden) return arrow. */
+  if ([self respondsToSelector: @selector(gb_adoptReturnKeyEquivalent)])
+    {
+      [self gb_adoptReturnKeyEquivalent];
+    }
 }
 
 // When highlighted, if this cell has a return icon image set internally, compute
@@ -359,6 +423,18 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 {
   BOOL shouldRemoveImagePosition = NO;
 
+  if (!EauThemeIsActive())
+    {
+      [self EAU_drawInteriorWithFrame:cellFrame inView:controlView];
+      return;
+    }
+
+  // The bezel draws the whole face of a disclosure button; interfaces still
+  // carry a placeholder title for them that must not show.
+  if ([self bezelStyle] == NSDisclosureBezelStyle
+    || [self bezelStyle] == NSRoundedDisclosureBezelStyle)
+    return;
+
   NSCellImagePosition oldPos = [self imagePosition];
 
   if ([self EAUhasSuppressedReturnImage] && oldPos != NSNoImage) {
@@ -375,6 +451,25 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
     }
   }
 
+  // A disabled switch or radio button is drawn with half strength copies of
+  // its images (see EAUHalfStrengthImage); the cell gets its own images back
+  // right after the draw.
+  NSImage *originalImage = nil, *originalAlternate = nil;
+  BOOL dimmedImages = NO;
+  if (![self isEnabled] && [self imagePosition] != NSNoImage
+      && EAUIsSwitchOrRadioImage([self image]))
+    {
+      /* The alternate image is read from the cell's instance variable: the
+       * accessor is overridden by the theme for the return button images and
+       * must not be called from here. */
+      originalImage = RETAIN([self image]);
+      originalAlternate = RETAIN([self valueForKey: @"_altImage"]);
+      [self setImage: EAUHalfStrengthImage(originalImage)];
+      if (EAUIsSwitchOrRadioImage(originalAlternate))
+        [self setValue: EAUHalfStrengthImage(originalAlternate) forKey: @"_altImage"];
+      dimmedImages = YES;
+    }
+
   // Call original implementation (swizzled). Keep this one guarded: it runs on
   // AppKit's display path, so an exception here must not escape into the draw
   // loop, and must not skip the imagePosition restore below (which would leave
@@ -385,6 +480,14 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
   @catch (NSException *e) {
     NSDebugLog(@"NSButtonCell+Eau: ERROR in EAU_drawInteriorWithFrame (original): %@", e);
   }
+
+  if (dimmedImages)
+    {
+      [self setImage: originalImage];
+      [self setValue: originalAlternate forKey: @"_altImage"];
+      RELEASE(originalImage);
+      RELEASE(originalAlternate);
+    }
   if (shouldRemoveImagePosition) {
     [self setImagePosition: oldPos];
 
@@ -398,6 +501,11 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 - (NSSize) EAU_cellSize
 {
   NSSize size = [self EAU_cellSize]; // call original (swizzled)
+
+  /* The pill shape and its minimum width belong to Eau; another theme sizes
+   * its own buttons. */
+  if (!EauThemeIsActive())
+    return size;
 
   // Width needed for the title as actually rendered (using the cell's font)
   // plus horizontal bezel margins.  GNUstep's cellSize already adds border
@@ -423,72 +531,6 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
       size.width = METRICS_BUTTON_MIN_WIDTH;
     }
   return size;
-}
-
-// Safely make the button selected and highlighted with extensive error handling
-- (void) safelyMakeButtonSelectedAndHighlighted
-{
-  NSDebugLog(@"NSButtonCell+Eau: safelyMakeButtonSelectedAndHighlighted called for button cell %p", self);
-  
-  // DON'T set the cell as highlighted permanently - this interferes with pressed state detection
-  // The default button appearance will come from the pulsing animation instead
-  NSDebugLog(@"NSButtonCell+Eau: Skipping setHighlighted to allow proper pressed state detection");
-  
-  // DON'T set setShowsFirstResponder to avoid interfering with text field focus
-    
-  // Try to get the control view safely
-  NSView *controlView = nil;
-  if ([self respondsToSelector:@selector(controlView)]) {
-    controlView = [self controlView];
-    NSDebugLog(@"NSButtonCell+Eau: Found control view %p for button cell %p", controlView, self);
-  } else {
-    NSDebugLog(@"NSButtonCell+Eau: Button cell %p does not respond to controlView selector", self);
-  }
-  
-  if (controlView && [controlView isKindOfClass:[NSButton class]]) {
-    NSButton *button = (NSButton *)controlView;
-    NSDebugLog(@"NSButtonCell+Eau: Control view is NSButton %p for cell %p", button, self);
-    
-    // Make the button highlighted with crash protection but without taking focus
-    
-    // Set as key equivalent for Enter/Return key handling but don't take focus
-    NSDebugLog(@"NSButtonCell+Eau: Setting button %p properties for Return key handling", button);
-    
-    // Try to set as key equivalent if possible
-    if ([button respondsToSelector:@selector(setKeyEquivalent:)]) {
-      NSDebugLog(@"NSButtonCell+Eau: Setting button %p key equivalent to return", button);
-      [button setKeyEquivalent:@"\r"];
-    }
-    
-    // DON'T force the button cell to be highlighted - this interferes with pressed state detection
-    // The default button appearance will come from the pulsing animation instead
-    NSDebugLog(@"NSButtonCell+Eau: Skipping setHighlighted to preserve pressed state detection");
-    
-    // Force the button to redraw to show changes
-    NSDebugLog(@"NSButtonCell+Eau: Marking button %p as needing display", button);
-    [button setNeedsDisplay:YES];
-    
-    // Make this button the first responder ONLY if the current first responder is already a button
-    NSWindow *window = [button window];
-    if (window) {
-      NSResponder *currentFirstResponder = [window firstResponder];
-      NSDebugLog(@"NSButtonCell+Eau: Current first responder: %p (class: %@)", currentFirstResponder, [currentFirstResponder class]);
-      
-      if (currentFirstResponder && [currentFirstResponder isKindOfClass:[NSButton class]]) {
-        NSDebugLog(@"NSButtonCell+Eau: Current first responder is a button, making default button %p first responder", button);
-        [window makeFirstResponder:button];
-      } else {
-        NSDebugLog(@"NSButtonCell+Eau: Current first responder is not a button (%@), preserving focus", [currentFirstResponder class]);
-      }
-    } else {
-      NSDebugLog(@"NSButtonCell+Eau: No window found for button %p", button);
-    }
-    
-    NSDebugLog(@"NSButtonCell+Eau: Successfully configured button %p with conditional focus", button);
-  
-  } else {
-    NSDebugLog(@"NSButtonCell+Eau: Control view %p is not an NSButton or is nil for cell %p", controlView, self);
-  }
 }
 
 @end

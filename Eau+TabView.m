@@ -267,6 +267,8 @@
 // GNUstep's NSTabViewItem has no enabled state, which Disk Utility needs to
 // disable tabs whose operation is unavailable for the current selection.
 // Default is enabled so existing apps are unaffected.
+// TODO: Upstream to GNUstep - NSTabViewItem should have setEnabled:/isEnabled,
+// honoured by NSTabView's drawing and tab selection.
 @implementation NSTabViewItem (EauEnabled)
 static const char kEauTabEnabledKey;
 - (void)setEnabled:(BOOL)flag

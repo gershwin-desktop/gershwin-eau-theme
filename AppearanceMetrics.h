@@ -12,9 +12,17 @@
 
 #import <AppKit/AppKit.h>
 
-// Window dimensions
-static const float METRICS_WIN_MIN_WIDTH = 500.0;
-static const float METRICS_WIN_MIN_HEIGHT = 100.0;
+// Window dimensions. 32 px so a user can shrink a window to almost
+// nothing; nothing else reads this while resizing (the window manager
+// honours only the hints the application itself set, and GNUstep's own
+// default minimum is just the window chrome), so the operative readers
+// are applications' initial sizing and their own minima. The TWO alert
+// panel bases below keep the alert builder's own numbers (NSAlert+Eau.m
+// sizes every alert from them); they are NOT window minima.
+static const float METRICS_WIN_MIN_WIDTH = 32.0;
+static const float METRICS_WIN_MIN_HEIGHT = 32.0;
+static const float METRICS_ALERT_MIN_WIDTH = 500.0;
+static const float METRICS_ALERT_MIN_HEIGHT = 100.0;
 // Max dialog height before a scroll view is used for the message text
 static const float METRICS_WIN_MAX_HEIGHT = 350.0;
 
@@ -133,6 +141,15 @@ static inline void GSWScaleFactorInvalidate(void) {
 // Window corner radii for rounded corners
 static const float METRICS_TITLEBAR_CORNER_RADIUS = 7.0;  // Optically matches Menu app corner radius
 static const float METRICS_WINDOW_BOTTOM_CORNER_RADIUS = 0.0;
+
+// Drawers (NSDrawer) sit behind their window's edge.  Their content is inset
+// from every edge of the drawer by the drawer margin; the two outer corners
+// (away from the window) are rounded; the window casts an inner shadow onto
+// the drawer along the seam.
+static const float METRICS_DRAWER_MARGIN = 6.0;
+static const float METRICS_DRAWER_CORNER_RADIUS = 5.0;
+static const float METRICS_DRAWER_SEAM_SHADOW = 6.0;
+#define METRICS_DRAWER_CORNER_RADIUS_PX (METRICS_DRAWER_CORNER_RADIUS * GSWScaleFactor())
 static const float METRICS_TITLEBAR_HEIGHT = 22.0;
 // TODO: Remove the following 2 lines once WindowManager has been updated
 static const float METRICS_TITLEBAR_EDGE_BUTTON_WIDTH = 22.0;      // TODO: Remove

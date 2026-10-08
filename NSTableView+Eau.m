@@ -1,4 +1,5 @@
 #import "NSTableView+Eau.h"
+#import "Eau.h"
 #import <objc/runtime.h>
 #import <GNUstepGUI/GSTheme.h>
 
@@ -30,7 +31,7 @@
   // Call the original initialization
   self = [self eau_initWithFrame: frameRect];
   
-  if (self)
+  if (self && EauThemeIsActive())
     {
       // Enable alternating row background colors by default in Eau theme
       [self setUsesAlternatingRowBackgroundColors: YES];

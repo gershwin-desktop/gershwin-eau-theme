@@ -6,6 +6,10 @@
                  withColor: (NSColor*)backgroundColor;
 @end
 
+@interface Eau (EauSliderPrivate)
+- (NSColor *) fadedForDisabled: (NSColor *)color;
+@end
+
 @implementation Eau (EauSlider)
 - (void) drawSliderBorderAndBackground: (NSBorderType)aType
 				 frame: (NSRect)cellFrame
@@ -29,6 +33,15 @@
       NSColor* strokeDark = [strokeBaseColor shadowWithLevel: 0.5];
       NSColor* strokeDark2 = [strokeBaseColor shadowWithLevel: 0.4];
       NSColor* strokeLight2 = [strokeBaseColor highlightWithLevel: 0.1];
+      /* A disabled slider was drawn exactly like an enabled one, so a
+       * setting that could not be changed looked as if it could. */
+      if (![cell isEnabled])
+        {
+          strokeLight = [self fadedForDisabled: strokeLight];
+          strokeDark = [self fadedForDisabled: strokeDark];
+          strokeDark2 = [self fadedForDisabled: strokeDark2];
+          strokeLight2 = [self fadedForDisabled: strokeLight2];
+        }
 
       //// Gradient Declarations
       NSGradient* strokeGradient = [[NSGradient alloc] initWithStartingColor: strokeDark endingColor: strokeLight];
@@ -79,6 +92,28 @@
                                              green: 0.9
                                               blue: 0.9
                                              alpha: 1];
+  if (![cell isEnabled])
+    {
+      /* The bezel strokes every knob in the full control stroke colour;
+       * a disabled knob is drawn faded as a whole instead. */
+      CGFloat radius = MIN(NSWidth(r), NSHeight(r)) / 2;
+      NSRect circle = NSMakeRect(NSMidX(r) - radius, NSMinY(r),
+                                 radius * 2, radius * 2);
+      NSBezierPath *knob =
+        [NSBezierPath bezierPathWithOvalInRect: NSInsetRect(circle, 0.5, 0.5)];
+      [[self fadedForDisabled: color] setFill];
+      [knob fill];
+      [[self fadedForDisabled: [Eau controlStrokeColor]] setStroke];
+      [knob stroke];
+      return;
+    }
   [self drawCircularBezel:r  withColor: color];
+}
+
+/* Halfway to the window's background: still there, clearly not usable. */
+- (NSColor *) fadedForDisabled: (NSColor *)color
+{
+  return [color blendedColorWithFraction: 0.55
+                                 ofColor: [NSColor windowBackgroundColor]];
 }
 @end

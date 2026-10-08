@@ -1,6 +1,7 @@
 #import "Eau.h"
 #import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
+#import "EauDrawer.h"
 
 @interface Eau(EauWindowDecoration)
 
@@ -27,6 +28,10 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
 - (void) drawWindowBackground: (NSRect) frame view: (NSView*) view
 {
+  if (EauDrawDrawerBackground(view, frame))
+    {
+      return;
+    }
   NSColor* backgroundColor = [[view window] backgroundColor];
   [backgroundColor setFill];
   NSRectFill(frame);
@@ -149,7 +154,20 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
       BOOL useMiddleEllipsis = (leftGap < minGap || rightGap < minGap);
 
       if (useMiddleEllipsis) {
-        // Draw with middle ellipsis — no centering, just fill the available rect
+        /* Too close to a button: keep the title centered over the whole
+         * titlebar but clamped minGap away from the buttons; only a title too
+         * wide for that area is middle-truncated across all of it. */
+        NSRect allowedArea = NSInsetRect(workRect, minGap, 0);
+
+        // Center over the full titlebar width
+        CGFloat fullMidX = NSMidX(titleRect);
+        CGFloat centeredX = fullMidX - titleSize.width / 2.0;
+
+        // Clamp into allowed area
+        CGFloat allowedMinX = NSMinX(allowedArea);
+        CGFloat allowedMaxX = NSMaxX(allowedArea) - titleSize.width;
+        CGFloat titleX = MAX(allowedMinX, MIN(centeredX, allowedMaxX));
+
         NSMutableParagraphStyle *p = [[titleTextAttributes[attrIndex] objectForKey:NSParagraphStyleAttributeName] mutableCopy];
         [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
         [p setAlignment:NSCenterTextAlignment];
@@ -157,9 +175,14 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
         NSMutableDictionary *truncAttrs = [titleTextAttributes[attrIndex] mutableCopy];
         [truncAttrs setObject:p forKey:NSParagraphStyleAttributeName];
 
-        workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
-        workRect.size.height = titleSize.height;
-        [title drawInRect:workRect withAttributes:truncAttrs];
+        NSRect drawRect = NSMakeRect(titleX, NSMidY(workRect) - titleSize.height / 2,
+                                     titleSize.width, titleSize.height);
+        if (titleSize.width > NSWidth(allowedArea))
+          {
+            drawRect.origin.x = NSMinX(allowedArea);
+            drawRect.size.width = NSWidth(allowedArea);
+          }
+        [title drawInRect:drawRect withAttributes:truncAttrs];
       } else {
         if (titleSize.width <= workRect.size.width)
           {
