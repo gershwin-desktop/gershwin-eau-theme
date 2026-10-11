@@ -17,6 +17,8 @@
 - (void)gb_setMenu:(NSMenu *)m forWindow:(NSWindow *)w;
 @end
 
+static NSString *const GBMenuServerName = @"io.github.gershwin-desktop.MenuServer";
+static NSString *const GBMenuClientNamePrefix = @"io.github.gershwin-desktop.MenuClient";
 static BOOL gForceExternalMenuByEnv = NO;
 static BOOL gPendingMenuUpdate = NO;
 static NSWindow *gPendingMenuWindow = nil;
@@ -175,7 +177,7 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
   if (menuClientName == nil)
     {
       pid_t pid = [[NSProcessInfo processInfo] processIdentifier];
-      menuClientName = [[NSString alloc] initWithFormat:@"org.gnustep.Gershwin.MenuClient.%d", pid];
+      menuClientName = [[NSString alloc] initWithFormat:@"%@.%d", GBMenuClientNamePrefix, pid];
     }
   return menuClientName;
 }
@@ -316,7 +318,7 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
       return menuServerAvailable;
     }
 
-  NSConnection *connection = [NSConnection connectionWithRegisteredName:@"org.gnustep.Gershwin.MenuServer"
+  NSConnection *connection = [NSConnection connectionWithRegisteredName:GBMenuServerName
                                                                    host:nil];
   if (connection == nil)
     {

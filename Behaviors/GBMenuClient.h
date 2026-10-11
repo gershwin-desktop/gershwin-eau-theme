@@ -37,7 +37,7 @@
 @end
 
 /* Registers this app as MenuClient.<pid> over Distributed Objects, connects
- * to org.gnustep.Gershwin.MenuServer and keeps Menu.app's copy of the menus
+ * to io.github.gershwin-desktop.MenuServer and keeps Menu.app's copy of the menus
  * in sync.  It used to live on the Eau theme object; as a singleton it works
  * under any theme.  Started when the bundle finishes loading, which is inside
  * -[NSApplication _init] (before the theme loads and before any main menu
