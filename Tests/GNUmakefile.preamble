@@ -42,3 +42,6 @@ t_EauDrawerGeometry_TOOL_LIBS += -lgnustep-base
 t_ButtonHover_OBJC_FILES += ../EauButtonHover.m
 t_ButtonHover_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
 ../EauButtonHover.m_FILE_FLAGS += -fobjc-arc
+
+# Runs against the theme bundle given with -GSTheme.
+t_GrowBoxUnparentedView_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc

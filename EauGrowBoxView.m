@@ -8,37 +8,62 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 
 @implementation EauGrowBoxView
 
-- (instancetype)initWithFrame:(NSRect)frameRect
+/* The grow box follows its superview only.  It used to observe the frame
+ * changes of every view in the process (object nil): a view that is not in
+ * any window, such as a matrix being sized before it is added to a panel,
+ * then ran through the handler, whose ARC bookkeeping on the foreign
+ * notification object released it once too often. */
+- (void)_stopObserving
 {
-  self = [super initWithFrame:frameRect];
-  if (self)
-    {
-      // Register for subview notifications to stay on top
-      [[NSNotificationCenter defaultCenter] addObserver:self
-                                               selector:@selector(_contentViewDidAddSubview:)
-                                                   name:@"NSViewDidAddSubviewNotification"
-                                                 object:nil];
-      // Register for frame changes to reposition on resize
-      [[NSNotificationCenter defaultCenter] addObserver:self
-                                               selector:@selector(_contentViewFrameDidChange:)
-                                                   name:NSViewFrameDidChangeNotification
-                                                 object:nil];
-    }
-  return self;
+  [[NSNotificationCenter defaultCenter] removeObserver:self];
+}
+
+- (void)_startObservingSuperview
+{
+  NSView *parent = [self superview];
+
+  [self _stopObserving];
+  // A grow box outside a window has nothing to stay on top of or to follow
+  if (parent == nil || [self window] == nil)
+    return;
+
+  // Stay on top when views are added to the content view
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(_contentViewDidAddSubview:)
+                                               name:@"NSViewDidAddSubviewNotification"
+                                             object:parent];
+  // Reposition on resize
+  [[NSNotificationCenter defaultCenter] addObserver:self
+                                           selector:@selector(_contentViewFrameDidChange:)
+                                               name:NSViewFrameDidChangeNotification
+                                             object:parent];
+}
+
+- (void)viewDidMoveToSuperview
+{
+  [super viewDidMoveToSuperview];
+  [self _startObservingSuperview];
+}
+
+- (void)viewDidMoveToWindow
+{
+  [super viewDidMoveToWindow];
+  [self _startObservingSuperview];
 }
 
 - (void)dealloc
 {
-  [[NSNotificationCenter defaultCenter] removeObserver:self];
+  [self _stopObserving];
 }
 
 // Called when any view adds a subview - check if it's our parent and re-raise
 - (void)_contentViewDidAddSubview:(NSNotification *)notification
 {
-  NSView *parentView = [notification object];
+  NSView *parentView = [self superview];
 
-  // Only care about our superview (the content view)
-  if (parentView == [self superview])
+  // Registered for our superview only; a notification that arrives while
+  // the box is being moved away is stale
+  if (parentView != nil)
     {
       // Get the subview that was added
       NSView *addedView = [[notification userInfo] objectForKey:@"NSView"];
@@ -58,12 +83,12 @@ static const NSInteger EauGrowBoxViewTag = 0xEA0B0;
 // Called when superview's frame changes - reposition to stay in bottom-right
 - (void)_contentViewFrameDidChange:(NSNotification *)notification
 {
-  NSView *changedView = [notification object];
+  NSView *contentView = [self superview];
 
-  // Only care about our superview
-  if (changedView == [self superview])
+  // Registered for our superview only; a notification that arrives while
+  // the box is being moved away is stale
+  if (contentView != nil)
     {
-      NSView *contentView = [self superview];
       NSRect contentBounds = [contentView bounds];
       CGFloat size = [self frame].size.width;
 

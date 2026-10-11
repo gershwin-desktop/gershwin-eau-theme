@@ -6,7 +6,7 @@ include $(GNUSTEP_MAKEFILES)/common.make
 TEST_TOOL_NAME = t_AlertPanelScrolling t_ButtonSpaceKey \
 	t_ProgressStripes t_AlertPanelButtonRow t_SliderDisabled \
 	t_RestartableTimer t_EauMetricsChecker t_EauShowcaseSectionRegistry \
-	t_EauDrawerGeometry t_ButtonHover
+	t_EauDrawerGeometry t_ButtonHover t_GrowBoxUnparentedView
 
 ADDITIONAL_CPPFLAGS += -I$(GNUSTEP_MAKEFILES)/TestFramework
 
@@ -20,6 +20,7 @@ t_EauMetricsChecker_OBJC_FILES = t_EauMetricsChecker.m
 t_EauShowcaseSectionRegistry_OBJC_FILES = t_EauShowcaseSectionRegistry.m
 t_EauDrawerGeometry_OBJC_FILES = t_EauDrawerGeometry.m
 t_ButtonHover_OBJC_FILES = t_ButtonHover.m
+t_GrowBoxUnparentedView_OBJC_FILES = t_GrowBoxUnparentedView.m
 
 -include GNUmakefile.preamble
 include $(GNUSTEP_MAKEFILES)/test-tool.make
