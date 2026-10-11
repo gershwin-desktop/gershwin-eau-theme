@@ -25,6 +25,11 @@ t_GBMenuPIDScanMemory_OBJC_FILES += ../GBMenuRelaunchManager.m
 t_GBMenuPIDScanMemory_TOOL_LIBS += -lgnustep-base
 ../GBMenuRelaunchManager.m_FILE_FLAGS += -fobjc-arc
 
+# Like the bundle, the index path resolver is built with ARC.
+t_GBMenuIndexPath_OBJC_FILES += ../GBMenuIndexPath.m
+t_GBMenuIndexPath_TOOL_LIBS += -lgnustep-gui -lgnustep-base
+../GBMenuIndexPath.m_FILE_FLAGS += -fobjc-arc
+
 # Testing.h uses retain/release, so no ARC for the test tools themselves;
 # units that the bundle builds with ARC get it per file above.
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
