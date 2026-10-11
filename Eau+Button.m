@@ -1,6 +1,7 @@
 #import "Eau.h"
 #import "Eau+Button.h"
 #import "AppearanceMetrics.h"
+#import "EauButtonHover.h"
 
 
 NSString * const kEauIsDefaultButton = @"kEauIsDefaultButton";
@@ -424,6 +425,17 @@ NSString * const kEauIsDefaultButton = @"kEauIsDefaultButton";
 			  state: (GSThemeControlState) state
 {
   NSColor	*color = [self buttonColorInCell: cell forState: state];
+
+  /* Pressed and disabled keep their own look; only a button at rest and
+   * enabled answers the pointer. */
+  if ((state == GSThemeNormalState || state == GSThemeFirstResponderState)
+      && [view isKindOfClass: [NSButton class]]
+      && [(NSButton *)view isEnabled])
+    {
+      EauTrackPointerForView(view);
+      if (EauPointerIsInside(view, frame))
+        color = EauHoverColor(color);
+    }
 
   switch (style)
     {
