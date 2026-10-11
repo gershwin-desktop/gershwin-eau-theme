@@ -33,3 +33,9 @@ t_GBMenuIndexPath_TOOL_LIBS += -lgnustep-gui -lgnustep-base
 # Testing.h uses retain/release, so no ARC for the test tools themselves;
 # units that the bundle builds with ARC get it per file above.
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
+
+# The whole menu client, built with ARC like the bundle; the test never sends
+# it -init, so it does not register with a running Menu.app.
+t_GBMenuFirstResponder_OBJC_FILES += ../GBMenuClient.m ../GBMenuRelaunchManager.m ../GBMenuIndexPath.m
+t_GBMenuFirstResponder_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
+../GBMenuClient.m_FILE_FLAGS += -fobjc-arc
