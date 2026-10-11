@@ -10,6 +10,7 @@
 #import <Foundation/NSConnection.h>
 #import <Foundation/NSPortNameServer.h>
 #import "GBMenuRelaunchManager.h"
+#import "GBMenuIndexPath.h"
 
 /* The original -[GSTheme setMenu:forWindow:], reachable under this name once
  * GSTheme+GBMenu.m has exchanged the two implementations. */
@@ -493,39 +494,6 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
   return [NSString stringWithFormat:@"menuitem:%@:%@", windowId ?: @0, path ?: @"0"];
 }
 
-- (NSMenuItem *)_menuItemForIndexPath:(NSArray *)indexPath inMenu:(NSMenu *)menu
-{
-  if (menu == nil || indexPath == nil || [indexPath count] == 0)
-    {
-      return nil;
-    }
-
-  NSMenu *currentMenu = menu;
-  NSMenuItem *currentItem = nil;
-
-  for (NSUInteger i = 0; i < [indexPath count]; i++)
-    {
-      NSNumber *indexNumber = [indexPath objectAtIndex:i];
-      NSInteger index = [indexNumber integerValue];
-      if (index < 0 || index >= [currentMenu numberOfItems])
-        {
-          return nil;
-        }
-
-      currentItem = [currentMenu itemAtIndex:index];
-      if (i < [indexPath count] - 1)
-        {
-          if (![currentItem hasSubmenu])
-            {
-              return nil;
-            }
-          currentMenu = [currentItem submenu];
-        }
-    }
-
-  return currentItem;
-}
-
 - (void)_menuClientConnectionDidDie:(NSNotification *)notification
 {
   NSDebugLog(@"GBMenuClient: Menu client connection died");
@@ -964,7 +932,7 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
         }
     }
 
-  NSMenuItem *menuItem = [self _menuItemForIndexPath:indexPath inMenu:menu];
+  NSMenuItem *menuItem = GBMenuItemForIndexPath(menu, indexPath);
   if (menuItem == nil)
     {
       NSLog(@"GBMenuClient: dropping menu action: no item at %@ in the menu of window %@", indexPath, windowId);
