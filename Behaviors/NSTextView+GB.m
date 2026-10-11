@@ -56,12 +56,18 @@ static void s_gb_textView_keyDown(id self, SEL _cmd, NSEvent *event)
           if ((k == NSTabCharacter || k == NSBackTabCharacter) && [self isFieldEditor])
             {
               NSWindow *win = [self window];
-              if (win != nil)
+              id owner = [(NSTextView *)self delegate];
+              if (win != nil && [owner isKindOfClass: [NSView class]])
                 {
+                  /* Navigate from the control, never from the field editor:
+                   * the editor sits in no key view loop of its own (its next
+                   * key view is nil, which wrapped Tab to the first control),
+                   * and its previous key view is the temporary clip view that
+                   * ending the edit deallocates, which crashed Shift-Tab. */
                   if (k == NSTabCharacter)
-                    [win selectNextKeyView: self];
+                    [win selectKeyViewFollowingView: owner];
                   else
-                    [win selectPreviousKeyView: self];
+                    [win selectKeyViewPrecedingView: owner];
                   return;
                 }
             }
