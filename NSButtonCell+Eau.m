@@ -295,11 +295,10 @@ static const void *kEAUPulsingKey = &kEAUPulsingKey;
 // Handle common_ret/common_retH alternate images
 - (NSImage *) EAUalternateImage
 {
-  NSImage *originalImage = nil;
-
-  if ([self respondsToSelector:@selector(alternateImage)]) {
-    originalImage = ((NSButtonCell *)self).alternateImage;
-  }
+  // The theme installs this method as -[NSButtonCell alternateImage], so
+  // asking the cell for its alternate image would call us again forever;
+  // read the cell's own storage instead (what -alternateImage returns).
+  NSImage *originalImage = _altImage;
 
   if (originalImage)
     {
