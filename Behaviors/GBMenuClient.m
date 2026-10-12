@@ -960,6 +960,11 @@ static BOOL GBEnvironmentContainsAppMenuToken(void)
     }
 
   [NSApp sendAction:action to:target from:menuItem];
+
+  /* -sendAction:to:from: posts no NSMenuDidSendActionNotification. */
+  dispatch_async(dispatch_get_main_queue(), ^{
+    [self _pushMenuEnabledStates];
+  });
 }
 
 - (bycopy id)refreshedMenuDataForWindow:(NSNumber *)windowId
