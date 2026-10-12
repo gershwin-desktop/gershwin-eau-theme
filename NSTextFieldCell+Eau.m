@@ -30,6 +30,15 @@
                          inView: (NSView*)controlView;
 @end
 
+/* Implemented in libs-gui's NSCell.m */
+@interface NSCell (EauTruncation)
+- (BOOL) _shouldShortenStringForRect: (NSRect)titleRect
+                                size: (NSSize)titleSize
+                              length: (NSUInteger)length;
+- (NSAttributedString*) _resizeAttributedString: (NSAttributedString*)attrstring
+                                         forRect: (NSRect)titleRect;
+@end
+
 @implementation Eau(NSTextFieldCell)
 - (void) _overrideNSTextFieldCellMethod_drawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView {
   NSDebugLog(@"_overrideNSTextFieldCellMethod_drawInteriorWithFrame:inView:");
@@ -123,7 +132,17 @@
          well).*/ 
       _cell.type = NSTextCellType;
       titleRect = [self titleRectForBounds: cellFrame];
-      [[self _drawAttributedString] drawInRect: titleRect];
+      NSAttributedString *text = [self _drawAttributedString];
+      /* Honour the truncating line break modes like NSCell does: text too
+       * long for the field is shortened with an ellipsis at the head, in
+       * the middle or at the tail, instead of being clipped. */
+      if ([self _shouldShortenStringForRect: titleRect
+                                       size: [text size]
+                                     length: [text length]])
+        {
+          text = [self _resizeAttributedString: text forRect: titleRect];
+        }
+      [text drawInRect: titleRect];
 
     }
 /*_cell.type = NSTextCellType;
@@ -239,41 +258,68 @@ titleRect.size.height += 2;
 
 @end
 
-// Make bezeled: NO the default for NSTextField (labels are the common case).
-// Apps wanting an input field call setBezeled: YES explicitly.
-// Make bezeled: NO the default for NSTextField (labels are the common case).
-// Apps wanting an input field call setBezeled: YES explicitly.
-@interface NSTextField (EauBezelDefault)
-- (id)initEauWithFrame:(NSRect)frameRect;
-- (id)initEauWithCoder:(NSCoder *)aDecoder;
+// A text field the user can type into keeps the bezel and the white
+// background that AppKit gives it; one that cannot be edited is a label or a
+// read-only value and has neither.  What an app builds in code is editable
+// until it says otherwise, so the change is made when it does: an
+// application that sets bezeled or drawsBackground itself afterwards keeps
+// what it chose, and a field made editable again gets back what this took
+// from it.  Fields loaded from a nib are left as the nib has them.
+@interface NSTextField (EauEditableBezel)
+- (void)eauSetEditable:(BOOL)flag;
 @end
 
-@implementation NSTextField (EauBezelDefault)
+static const char EauBezelRemovedKey;
+static const char EauBackgroundRemovedKey;
 
-- (id)initEauWithFrame:(NSRect)frameRect
-{
-  self = [self initEauWithFrame:frameRect];
-  if (self != nil)
-    {
-      [self setBezeled: NO];
-    }
-  return self;
-}
+@implementation NSTextField (EauEditableBezel)
 
-- (id)initEauWithCoder:(NSCoder *)aDecoder
+- (void)eauSetEditable:(BOOL)flag
 {
-  self = [self initEauWithCoder:aDecoder];
-  if (self != nil)
+  [self eauSetEditable:flag];
+  if (!EauThemeIsActive())
     {
-      [self setBezeled: NO];
+      return;
     }
-  return self;
+  if (flag == NO)
+    {
+      if ([self isBezeled])
+        {
+          [self setBezeled: NO];
+          objc_setAssociatedObject(self, &EauBezelRemovedKey, @YES,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+      /* Only the plain white of an input field; a colour the app chose
+       * for a read-only field stays. */
+      if ([self drawsBackground]
+          && [[self backgroundColor] isEqual: [NSColor textBackgroundColor]])
+        {
+          [self setDrawsBackground: NO];
+          objc_setAssociatedObject(self, &EauBackgroundRemovedKey, @YES,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
+  else
+    {
+      if (objc_getAssociatedObject(self, &EauBezelRemovedKey) != nil)
+        {
+          [self setBezeled: YES];
+          objc_setAssociatedObject(self, &EauBezelRemovedKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+      if (objc_getAssociatedObject(self, &EauBackgroundRemovedKey) != nil)
+        {
+          [self setDrawsBackground: YES];
+          objc_setAssociatedObject(self, &EauBackgroundRemovedKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
 }
 
 @end
 
 __attribute__((constructor))
-static void initNSTextFieldBezelDefault(void)
+static void initNSTextFieldEditableBezel(void)
 {
   Class cls = [NSTextField class];
   if (!cls)
@@ -281,17 +327,10 @@ static void initNSTextFieldBezelDefault(void)
       return;
     }
 
-  Method origInit = class_getInstanceMethod(cls, @selector(initWithFrame:));
-  Method swzInit = class_getInstanceMethod(cls, @selector(initEauWithFrame:));
-  if (origInit && swzInit)
+  Method orig = class_getInstanceMethod(cls, @selector(setEditable:));
+  Method swz = class_getInstanceMethod(cls, @selector(eauSetEditable:));
+  if (orig && swz)
     {
-      method_exchangeImplementations(origInit, swzInit);
-    }
-
-  Method origCoder = class_getInstanceMethod(cls, @selector(initWithCoder:));
-  Method swzCoder = class_getInstanceMethod(cls, @selector(initEauWithCoder:));
-  if (origCoder && swzCoder)
-    {
-      method_exchangeImplementations(origCoder, swzCoder);
+      method_exchangeImplementations(orig, swz);
     }
 }

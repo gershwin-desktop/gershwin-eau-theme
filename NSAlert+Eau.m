@@ -7,7 +7,6 @@
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
-#import <dispatch/dispatch.h>
 #import "NSAlert+Eau.h"
 #import "Eau.h"
 #import "AppearanceMetrics.h"
@@ -27,13 +26,25 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 - (void)beep;
 @end
 
+/* Answered by GershwinBehaviors.bundle (GBAutoSheet.m) when present: a
+ * synchronous alert about a window becomes a sheet on it, and must then not
+ * first be shown centered.  Looked up at run time; Eau does not link it. */
+@interface NSObject (EauAutoSheet)
++ (BOOL) willRunModalWindowAsSheet: (NSWindow *)window;
+@end
+
+static BOOL EauAlertWillRunAsSheet(NSWindow *panel)
+{
+  Class behaviors = NSClassFromString(@"GBBehaviors");
+  if ([behaviors respondsToSelector: @selector(willRunModalWindowAsSheet:)])
+    return [behaviors willRunModalWindowAsSheet: panel];
+  return NO;
+}
+
 // Private category to declare swizzled selectors so the compiler knows about them
 @interface EauAlertPanel (Swizzles)
 - (id)eau_initWithoutGModel;
 - (id)eau_initWithoutGModelHelper __attribute__((objc_method_family(init)));
-- (NSInteger)eau_runModal;
-- (NSInteger)eau_runModalHelper;
-- (NSButton *)eau_getDefButton;
 @end
 
 #pragma mark - EauAlertPanel Implementation
@@ -43,6 +54,26 @@ static NSScrollView *makeScrollViewWithRect(NSRect rect);
 // that shares the same ivar layout but lacks a dedicated _isStoppingModal ivar.
 static const void *kEAUAlertIsStoppingKey = &kEAUAlertIsStoppingKey;
 static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
+
+/* Manual retain/release for libs-gui's MRC-owned NSAlert _window ivar.
+ * Tests/ also builds this file without ARC, hence both spellings. */
+static inline id EauRetainUnmanaged(id obj)
+{
+#if __has_feature(objc_arc)
+    return (__bridge id)(__bridge_retained void *)obj;
+#else
+    return [obj retain];
+#endif
+}
+
+static inline void EauReleaseUnmanaged(id obj)
+{
+#if __has_feature(objc_arc)
+    (void)(__bridge_transfer id)(__bridge void *)obj;
+#else
+    [obj release];
+#endif
+}
 
 static BOOL eauAlertIsStopping(id panel)
 {
@@ -91,6 +122,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // already destroyed, _windowNum is 0 and _terminateBackendWindow is
     // safely skipped.  Without this, _terminateBackendWindow in dealloc
     // tries to destroy the X11 window and crashes (segfault).
+    // TODO: Upstream to GNUstep - NSWindow dealloc (_terminateBackendWindow)
+    // should tolerate a back-end window that is already gone.
     [self setOneShot: YES];
     
     NSView *content = [self contentView];
@@ -178,8 +211,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // where the alert appears near the bottom-left corner before -center
     // repositions it.  Use visibleFrame to stay within the usable screen area.
     NSScreen *screen = [NSScreen mainScreen];
-    CGFloat winW = METRICS_WIN_MIN_WIDTH;
-    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat winW = METRICS_ALERT_MIN_WIDTH;
+    CGFloat winH = METRICS_ALERT_MIN_HEIGHT;
     CGFloat screenW = [screen visibleFrame].size.width;
     CGFloat screenH = [screen visibleFrame].size.height;
     CGFloat x = ([screen visibleFrame].origin.x
@@ -202,6 +235,14 @@ static void eauAlertSetStopping(id panel, BOOL val)
 // (eauAlertIsStopping / eauAlertSetStopping) so the instance sizes match.
 - (id) eau_initWithoutGModelHelper
 {
+    /* This method is swizzled onto GSAlertPanel as -_initWithoutGModel, so
+       under another theme it has to hand the panel back to GNUstep's own
+       builder, which the swizzle parked under -eau_initWithoutGModel. */
+    if (!EauThemeIsActive())
+    {
+        return [self eau_initWithoutGModel];
+    }
+
     // Do NOT call the original GSAlertPanel _initWithoutGModel — we're building
     // an EauAlertPanel from scratch instead.
 
@@ -218,8 +259,8 @@ static void eauAlertSetStopping(id panel, BOOL val)
     //
     // Compute a centered initial frame the same way EauAlertPanel.init does.
     NSScreen *screen = [NSScreen mainScreen];
-    CGFloat winW = METRICS_WIN_MIN_WIDTH;
-    CGFloat winH = METRICS_WIN_MIN_HEIGHT;
+    CGFloat winW = METRICS_ALERT_MIN_WIDTH;
+    CGFloat winH = METRICS_ALERT_MIN_HEIGHT;
     CGFloat screenW = [screen visibleFrame].size.width;
     CGFloat screenH = [screen visibleFrame].size.height;
     CGFloat x = ([screen visibleFrame].origin.x
@@ -228,46 +269,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
                  + (screenH - winH) / 2);
 
     return [self initWithContentRect: NSMakeRect(x, y, winW, winH)];
-}
-
-// Helper method to get the default button from GSAlertPanel
-// GSAlertPanel has an ivar 'defButton' that we need to access
-- (NSButton *) eau_getDefButton
-{
-    // Try to access the defButton ivar
-    Ivar defButtonIvar = class_getInstanceVariable([self class], "defButton");
-    if (defButtonIvar)
-    {
-        return object_getIvar(self, defButtonIvar);
-    }
-    return nil;
-}
-
-// Helper method that will be injected into GSAlertPanel's runModal
-// This ensures focus and pulsing work for legacy alert panels
-- (NSInteger) eau_runModalHelper
-{
-    NSDebugLog(@"Eau: eau_runModalHelper called for GSAlertPanel");
-    
-    // Get the default button from the ivar
-    NSButton *defBtn = [self eau_getDefButton];
-    
-    // Raise the window to ensure it gets input focus
-    [NSApp activateIgnoringOtherApps: YES];
-    [(NSPanel *)self orderFrontRegardless];
-    [(NSPanel *)self makeKeyAndOrderFront: self];
-    
-    // Ensure the default button has focus and pulsing
-    if (defBtn && [[defBtn superview] superview] != nil)
-    {
-        [(NSPanel *)self makeFirstResponder: defBtn];
-        // Set default button cell to enable pulsing animation
-        [(NSPanel *)self setDefaultButtonCell: [defBtn cell]];
-        NSDebugLog(@"Eau: GSAlertPanel set default button focus and pulsing for button: %@", defBtn);
-    }
-    
-    // Call the original runModal implementation
-    return [self eau_runModal];
 }
 
 - (void) dealloc
@@ -324,6 +325,41 @@ static void eauAlertSetStopping(id panel, BOOL val)
     return button;
 }
 
+/* Scrolling copies the visible text by the scroll distance, and only a text
+ * area whose edges sit on whole device pixels gets a whole-pixel copy; at a
+ * fractional edge cairo resamples the text on every scroll step and it
+ * blurs a little more each time.  Whole points are not enough: at a scale
+ * factor such as 1.1 a point is not a whole number of pixels.  So the text
+ * area is moved inward onto device pixels by shifting the scroll view. */
+static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
+                                           NSView *content)
+{
+    NSRect frame = [scroll frame];
+
+    /* Where the text area really lands: the border and the scroller are
+       laid out by the scroll view itself. */
+    NSClipView *clip = [scroll contentView];
+    NSRect device = [clip convertRect: [clip bounds] toView: nil];
+    NSRect snapped;
+    snapped.origin.x = ceil(device.origin.x);
+    snapped.origin.y = ceil(device.origin.y);
+    snapped.size.width = floor(NSMaxX(device)) - snapped.origin.x;
+    snapped.size.height = floor(NSMaxY(device)) - snapped.origin.y;
+
+    /* Device pixels per point; convertSize: would drop the sign of a
+       shrink, so the differences are divided by it instead. */
+    NSSize scale = [content convertSize: NSMakeSize(1.0, 1.0) toView: nil];
+    NSSize move = NSMakeSize((snapped.origin.x - device.origin.x) / scale.width,
+                             (snapped.origin.y - device.origin.y) / scale.height);
+    NSSize grow = NSMakeSize((snapped.size.width - device.size.width) / scale.width,
+                             (snapped.size.height - device.size.height) / scale.height);
+    frame.origin.x += move.width;
+    frame.origin.y += move.height;
+    frame.size.width += grow.width;
+    frame.size.height += grow.height;
+    [scroll setFrame: frame];
+}
+
 - (void) sizePanelToFit
 {
     // NSLog(@"Eau: sizePanelToFit called");
@@ -342,6 +378,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     BOOL couldNeedScroll;
     NSUInteger mask = [self styleMask];
     float textAreaWidth;
+    float buttonRowWidth;
     float titleHeight = 0.0;
     float messageHeight = 0.0;
     
@@ -354,23 +391,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
     ssize = bounds.size;
     ssize.width = METRICS_SIZE_SCALE * ssize.width;
     ssize.height = METRICS_SIZE_SCALE_HEIGHT * ssize.height;
-    
-    // Start with minimum width
-    wsize.width = METRICS_WIN_MIN_WIDTH;
-    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-    
-    // Calculate title size
-    if (useControl(titleField))
-    {
-        NSRect rect = [titleField frame];
-        // Constrain title to available width and let it wrap if needed
-        NSSize titleSize = [[titleField attributedStringValue]
-                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
-                            options: NSStringDrawingUsesLineFragmentOrigin].size;
-        titleHeight = titleSize.height;
-        rect.size = titleSize;
-        [titleField setFrame: rect];
-    }
     
     // Count buttons and calculate button area size
     bsize.width = METRICS_BUTTON_MIN_WIDTH;
@@ -391,6 +411,38 @@ static void eauAlertSetStopping(id panel, BOOL val)
                 bsize.height = rect.size.height;
             numberOfButtons++;
         }
+    }
+    
+    /* Every button is drawn as wide as the widest one, so the row only fits if
+       the panel is at least as wide as the whole row plus its side margins.
+       Measure it before the text, so the text wraps to the final width. */
+    buttonRowWidth = 0.0;
+    if (numberOfButtons > 0)
+    {
+        /* Rounded up: the panel width is floored to whole pixels further
+           down, and half a pixel less already clips the leftmost button. */
+        buttonRowWidth = ceil(2 * METRICS_CONTENT_SIDE_MARGIN
+            + numberOfButtons * bsize.width
+            + (numberOfButtons - 1) * METRICS_BUTTON_VERT_INTERSPACE);
+    }
+
+    // Start with minimum width, widened to whatever the buttons need
+    wsize.width = METRICS_ALERT_MIN_WIDTH;
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
+    textAreaWidth = wsize.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
+    
+    // Calculate title size
+    if (useControl(titleField))
+    {
+        NSRect rect = [titleField frame];
+        // Constrain title to available width and let it wrap if needed
+        NSSize titleSize = [[titleField attributedStringValue]
+                            boundingRectWithSize: NSMakeSize(textAreaWidth, 1e6)
+                            options: NSStringDrawingUsesLineFragmentOrigin].size;
+        titleHeight = titleSize.height;
+        rect.size = titleSize;
+        [titleField setFrame: rect];
     }
     
     // Message field sizing with word wrap
@@ -437,9 +489,9 @@ static void eauAlertSetStopping(id panel, BOOL val)
         wsize.height = ssize.height;
         needsScroll = couldNeedScroll;
     }
-    else if (wsize.height < METRICS_WIN_MIN_HEIGHT)
+    else if (wsize.height < METRICS_ALERT_MIN_HEIGHT)
     {
-        wsize.height = METRICS_WIN_MIN_HEIGHT;
+        wsize.height = METRICS_ALERT_MIN_HEIGHT;
     }
     
     if (needsScroll)
@@ -447,8 +499,11 @@ static void eauAlertSetStopping(id panel, BOOL val)
     
     if (ssize.width < wsize.width)
         wsize.width = ssize.width;
-    else if (wsize.width < METRICS_WIN_MIN_WIDTH)
-        wsize.width = METRICS_WIN_MIN_WIDTH;
+    if (wsize.width < METRICS_ALERT_MIN_WIDTH)
+        wsize.width = METRICS_ALERT_MIN_WIDTH;
+    /* The share-of-screen cap must never cut a button off. */
+    if (wsize.width < buttonRowWidth)
+        wsize.width = buttonRowWidth;
 
     /* Whole pixels only (the height cap is a fraction of the screen):
        scrolling copies the visible text, and at a fractional offset cairo
@@ -518,12 +573,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
             NSRect srect;
             float width;
             
-            /* The title height is measured text, so snap the text area's
-               edges to whole pixels as well (see the window size above). */
             srect.origin.x = METRICS_TEXT_LEFT;
-            srect.origin.y = ceil(buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN);
+            srect.origin.y = buttonAreaHeight + METRICS_CONTENT_BOTTOM_MARGIN;
             srect.size.width = bounds.size.width - METRICS_TEXT_LEFT - METRICS_CONTENT_SIDE_MARGIN;
-            srect.size.height = floor(currentY - METRICS_TITLE_MESSAGE_GAP) - srect.origin.y;
+            srect.size.height = currentY - METRICS_TITLE_MESSAGE_GAP - srect.origin.y;
             [scroll setFrame: srect];
             
             if (!useControl(scroll))
@@ -551,6 +604,9 @@ static void eauAlertSetStopping(id panel, BOOL val)
                  options: NSStringDrawingUsesLineFragmentOrigin].size.height;
             [messageField setFrame: mrect];
             [scroll setDocumentView: messageField];
+            /* After the document is in: attaching it lays the scroll view
+               out again. */
+            eauSnapScrollTextToDevicePixels(scroll, content);
         }
         else
         {
@@ -690,7 +746,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
     }
     
     @try {
-        // Bail out if no text was set (initialized but unused panel)
+        // Bail out if no text was set (initialized but unused panel).
+        // GershwinBehaviors suppresses empty NSAlerts, but the legacy
+        // NSRunAlertPanel family calls this method directly, so the panel
+        // has to guard itself as well.
         NSString *title = titleField ? [[titleField stringValue] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
         NSString *msg = messageField ? [[messageField stringValue] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]] : @"";
         if (([title length] == 0) && ([msg length] == 0))
@@ -711,24 +770,22 @@ static void eauAlertSetStopping(id panel, BOOL val)
         //       [self frame].origin.x, [self frame].origin.y,
         //       [self frame].size.width, [self frame].size.height);
     
-    // Ensure we're the key window and can handle events
-    [self center];
-    
-        // NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER center frame=%@ OSorigin=(%.0f,%.0f) size=(%.0f,%.0f)",
-        //       NSStringFromRect([self frame]),
-        //       [self frame].origin.x, [self frame].origin.y,
-        //       [self frame].size.width, [self frame].size.height);
-    
     // Float above all other windows (alert takes priority)
     [self setLevel: NSScreenSaverWindowLevel];
 
-    // Raise the window to ensure it gets input focus
-    [NSApp activateIgnoringOtherApps: YES];
-    [self orderFrontRegardless];
-        // NSLog(@"[EauTrace] EauAlertPanel runModal: AFTER orderFrontRegardless frame=%@",
-        //       NSStringFromRect([self frame]));
-    [self makeKeyAndOrderFront: self];
-    
+    /* An alert about to become a sheet is shown by its modal session, in
+     * place; centering and raising it here would flash it up mid-screen. */
+    if (!EauAlertWillRunAsSheet(self))
+    {
+        // Ensure we're the key window and can handle events
+        [self center];
+
+        // Raise the window to ensure it gets input focus
+        [NSApp activateIgnoringOtherApps: YES];
+        [self orderFrontRegardless];
+        [self makeKeyAndOrderFront: self];
+    }
+
     // Make sure the default button has focus for Enter key handling
     if (useControl(defButton))
     {
@@ -763,6 +820,13 @@ static void eauAlertSetStopping(id panel, BOOL val)
     }
 }
 
+/* The panel's keyboard handling (Return/Space/Esc, Tab and arrow focus
+ * cycling, Cmd-C) stays here rather than in GershwinBehaviors: it is made of
+ * overrides on this NSPanel subclass driven by its own button ivars, and
+ * GSAlertPanel instances are morphed into this class, so a behavior-bundle
+ * swizzle on GSAlertPanel would never see them.
+ * TODO: Upstream to GNUstep - GSAlertPanel should map Esc to a Cancel button
+ * and cycle focus between its buttons itself. */
 - (void) keyDown: (NSEvent *)event
 {
     NSString *chars = [event characters];
@@ -779,28 +843,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
         return;
     }
     
-    // Handle Spacebar to activate focused button
+    // A focused button clicks itself on Space before the event gets here, so
+    // Space only reaches the panel when no button has the keyboard focus.
     if (keyChar == ' ')
     {
-        NSView *current = (NSView *)[self firstResponder];
-        if (current == defButton && useControl(defButton))
+        if (useControl(defButton))
         {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-        }
-        else if (current == altButton && useControl(altButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking alternate button");
-            [self buttonAction: altButton];
-        }
-        else if (current == othButton && useControl(othButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking other button");
-            [self buttonAction: othButton];
-        }
-        else if (useControl(defButton))
-        {
-            // NSLog(@"Eau: keyDown Spacebar pressed, clicking default button");
             [self buttonAction: defButton];
         }
         return;
@@ -985,14 +1033,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
             return YES;
         }
 
-        // Handle Spacebar for default button
-        if ([chars isEqualToString: @" "] && modifiers == 0 && useControl(defButton))
-        {
-            // NSLog(@"Eau: performKeyEquivalent Spacebar pressed, clicking default button");
-            [self buttonAction: defButton];
-            return YES;
-        }
-
         // Handle Escape for cancel button
         if ([chars isEqualToString: @"\e"] && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
         {
@@ -1039,14 +1079,6 @@ static void eauAlertSetStopping(id panel, BOOL val)
                 return;  // Don't call super - we handled it
             }
             
-            // Handle Spacebar for default button
-            if (keyChar == ' ' && useControl(defButton))
-            {
-                // NSLog(@"Eau: sendEvent Spacebar pressed, clicking default button");
-                [self buttonAction: defButton];
-                return;  // Don't call super - we handled it
-            }
-            
             // Handle Escape for cancel button
             if (keyChar == 0x1B && useControl(altButton) && [[altButton title] isEqualToString: @"Cancel"])
             {
@@ -1071,7 +1103,10 @@ static void eauAlertSetStopping(id panel, BOOL val)
         NSString *msg = messageField ? [messageField stringValue] : @"";
         NSLog(@"Eau: EauAlertPanel shown non-modally — title=\"%@\" message=\"%@\"", ttl, msg);
     }
-    [self center];
+    /* A modal session raises its panel with this; one attached as a sheet
+     * stays where GershwinBehaviors placed it. */
+    if ([self sheetParent] == nil)
+      [self center];
     [super orderFrontRegardless];
 }
 
@@ -1382,33 +1417,11 @@ static void setKeyEquivalent(NSButton *button)
 
 #pragma mark - NSAlert Category for Swizzling
 
-/* NSAlert (Eau) Category
- * 
- * Comprehensive NSAlert customization for the Eau theme.
- * 
- * WHAT THIS DOES:
- * - Swizzles NSAlert's _setupPanel to use EauAlertPanel for custom appearance
- * - Swizzles NSAlert's runModal to add focus management for text fields
- * - Ensures any text fields in alerts receive focus immediately when shown
- * - Sets up proper tab navigation between controls in the alert
- * - Configures default button for pulsating animation
- * 
- * WHY WE DO THIS:
- * - Users expect text fields in alerts to be immediately ready for input
- * - The cursor should blink in text fields without requiring a click
- * - Tab key should work to navigate between buttons and controls
- * - Default button should pulse to indicate it's the primary action
- * 
- * FOCUS MANAGEMENT STRATEGY:
- * When an alert appears, we search for editable text fields and set the first
- * one found as the initialFirstResponder. This ensures:
- * 1. The field editor activates automatically
- * 2. The cursor blinks immediately
- * 3. Keyboard input works without clicking
- * 4. Tab navigation is properly configured
- * 
- * If no text field exists, focus goes to the default button.
- */
+/* NSAlert (Eau): builds the themed EauAlertPanel for NSAlert and for the
+ * legacy NSRunAlertPanel family.  Running the alert modally (activation,
+ * focus, teardown) is theme-independent and lives in
+ * GershwinBehaviors.bundle (Behaviors/NSAlert+GB.m), which hands an
+ * EauAlertPanel back to us through -[Eau runModalForAlertPanel:result:]. */
 @implementation NSAlert (Eau)
 
 + (void) load
@@ -1460,37 +1473,6 @@ static void setKeyEquivalent(NSButton *button)
         // // NSLog(@"Eau: Warning - could not find _setupPanel method to swizzle - FORCED LOG");
     }
     
-    // Swizzle NSAlert's runModal to ensure proper activation
-    SEL origRunModalSel = @selector(runModal);
-    SEL swizzledRunModalSel = @selector(eau_runModal);
-    
-    Method origRunModalMethod = class_getInstanceMethod(alertClass, origRunModalSel);
-    Method swizzledRunModalMethod = class_getInstanceMethod(alertClass, swizzledRunModalSel);
-    
-    if (origRunModalMethod && swizzledRunModalMethod)
-    {
-        BOOL didAddRunModal = class_addMethod(alertClass,
-                                              origRunModalSel,
-                                              method_getImplementation(swizzledRunModalMethod),
-                                              method_getTypeEncoding(swizzledRunModalMethod));
-        if (didAddRunModal)
-        {
-            class_replaceMethod(alertClass,
-                                swizzledRunModalSel,
-                                method_getImplementation(origRunModalMethod),
-                                method_getTypeEncoding(origRunModalMethod));
-        }
-        else
-        {
-            method_exchangeImplementations(origRunModalMethod, swizzledRunModalMethod);
-        }
-        NSDebugLog(@"Eau: NSAlert runModal swizzled successfully");
-    }
-    else
-    {
-        NSDebugLog(@"Eau: Warning - could not find runModal method to swizzle");
-    }
-    
     // Also swizzle GSAlertPanel's _initWithoutGModel to handle legacy alert functions
     // (NSRunAlertPanel, NSGetAlertPanel, etc.) which create GSAlertPanel directly
     Class gsAlertPanelClass = NSClassFromString(@"GSAlertPanel");
@@ -1523,222 +1505,21 @@ static void setKeyEquivalent(NSButton *button)
     }
 }
 
-// Replacement for NSAlert's runModal method
-// - Ensures activation and key focus
-// - Preserves GNUstep lifecycle (setup, run modal, order out, destroy window)
-// - Avoids KVC retain/release side effects on _window
-- (NSInteger) eau_runModal
-{
-    NSLog(@"Eau: NSAlert eau_runModal — messageText=\"%@\" informativeText=\"%@\"",
-          [self messageText], [self informativeText]);
-    NSLog(@"Eau: NSAlert caller stack: %@", [NSThread callStackSymbols]);
-    @try {
-
-    if (![NSThread isMainThread])
-    {
-        __block NSInteger result;
-        dispatch_sync(dispatch_get_main_queue(), ^{
-            result = [self eau_runModal];
-        });
-        return result;
-    }
-    
-    // Never show an alert that has no text (probably a bug in the app)
-    NSString *msgText = [[self messageText] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    NSString *infoText = [[self informativeText] stringByTrimmingCharactersInSet: [NSCharacterSet whitespaceAndNewlineCharacterSet]];
-    if ((msgText == nil || [msgText length] == 0) &&
-        (infoText == nil || [infoText length] == 0))
-      {
-        NSLog(@"Eau: NSAlert suppressed — both messageText and informativeText are empty/whitespace (probably a bug in the application)");
-        return NSAlertErrorReturn;
-      }
-
-    // Call _setupPanel - this invokes the Eau custom setup since methods were swizzled
-    // After swizzling: _setupPanel -> eau_setupPanel code, eau_setupPanel -> original code
-    [self performSelector: @selector(_setupPanel)];
-    
-    // Beep when alert is displayed (diagnostics)
-    NSApplication *eauApp = [NSApplication sharedApplication];
-    // NSLog(@"Eau: NSAlert about to beep - NSApp class: %@ respondsToSelector: %d",
-    //       NSStringFromClass([eauApp class]), (int)[eauApp respondsToSelector:@selector(beep)]);
-    if ([eauApp respondsToSelector:@selector(beep)]) {
-        [eauApp performSelector:@selector(beep)];
-    } else {
-        // NSLog(@"Eau: NSApp does not respond to -beep");
-    }
-    
-    // Get the _window ivar (NSAlert owns the panel instance)
-    NSWindow *window = nil;
-    @try {
-        window = [self valueForKey: @"_window"];
-    }
-    @catch (NSException *exception) {
-        Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-        if (windowIvar)
-        {
-            window = object_getIvar(self, windowIvar);
-        }
-    }
-    
-    if (window)
-    {
-        NSInteger result = NSAlertErrorReturn;
-
-        // FOCUS MANAGEMENT: Ensure any text fields in the alert receive focus immediately
-        // so the cursor blinks and keyboard input works without clicking.
-        NSView *contentView = [window contentView];
-        if (contentView)
-        {
-            NSArray *subviews = [contentView subviews];
-            NSTextField *firstTextField = nil;
-            
-            // Search for the first editable text field in the alert
-            for (NSView *view in subviews)
-            {
-                if ([view isKindOfClass:[NSTextField class]])
-                {
-                    NSTextField *textField = (NSTextField *)view;
-                    if ([textField isEditable])
-                    {
-                        firstTextField = textField;
-                        NSDebugLog(@"NSAlert+Eau: Found editable text field %p in alert", textField);
-                        break;
-                    }
-                }
-            }
-            
-            // Set initial first responder to enable immediate keyboard input
-            if (firstTextField)
-            {
-                NSDebugLog(@"NSAlert+Eau: Setting initial first responder to text field %p", firstTextField);
-                [window setInitialFirstResponder: firstTextField];
-            }
-            else
-            {
-                NSDebugLog(@"NSAlert+Eau: No editable text field found in alert");
-            }
-        }
-        
-        // CRITICAL: Make the alert window key so it receives keyboard input immediately.
-        // Without this, the alert appears but doesn't have focus - user must click it.
-        NSDebugLog(@"NSAlert+Eau: Activating app and making alert window key for immediate input");
-        [NSApp activateIgnoringOtherApps: YES];
-        [window makeKeyAndOrderFront: nil];
-        NSDebugLog(@"NSAlert+Eau: Alert window is now key: %d", [window isKeyWindow]);
-
-        if ([window isKindOfClass: [EauAlertPanel class]])
-        {
-            EauAlertPanel *panel = (EauAlertPanel *)window;
-            result = [panel runModal];
-        }
-        else
-        {
-            [NSApp activateIgnoringOtherApps: YES];
-            [window center];
-            [window orderFrontRegardless];
-            [window makeKeyAndOrderFront: nil];
-            
-            NSDebugLog(@"Eau: NSAlert running modal for window: %@", window);
-            [NSApp runModalForWindow: window];
-            if ([window respondsToSelector: @selector(result)])
-            {
-                result = [(EauAlertPanel *)window result];
-            }
-        }
-
-        [window orderOut: self];
-
-        // Store result via KVC if possible
-        @try {
-            [self setValue: @(result) forKey: @"_result"];
-        }
-        @catch (NSException *exception) {
-            // Ignore if ivar doesn't exist
-        }
-
-        // Defer cleanup to ensure NSAlert stays alive until it's done. 
-        // Using performSelector with modes ensures this runs even if we are still
-        // in a modal session (nested modals).
-        [self performSelector: @selector(eau_cleanupPanel)
-                   withObject: nil
-                   afterDelay: 0.1
-                      inModes: [NSArray arrayWithObjects: NSDefaultRunLoopMode, NSModalPanelRunLoopMode, nil]];
-
-        return result;
-    }
-    
-    // Fallback: if window creation failed, return failure
-    // NSLog(@"Eau: NSAlert eau_runModal - window was nil, returning NSAlertFirstButtonReturn");
-    return NSAlertFirstButtonReturn;
-    }
-    @catch (NSException *exception) {
-        NSLog(@"Eau: FATAL EXCEPTION in eau_runModal: %@", exception);
-        // NSLog(@"Eau: Exception reason: %@", [exception reason]);
-        // NSLog(@"Eau: Exception stack: %@", [exception callStackSymbols]);
-        return NSAlertErrorReturn;
-    }
-}
-
-// Cleanup helper to clear NSAlert's window after modal teardown.
-- (void)eau_cleanupPanel
-{
-    // NSLog(@"Eau: eau_cleanupPanel called for NSAlert %p", self);
-    Ivar windowIvar = class_getInstanceVariable([self class], "_window");
-    if (windowIvar)
-    {
-        // Check current value
-        id currentWindow = object_getIvar(self, windowIvar);
-        if (currentWindow) {
-            // NSLog(@"Eau: Cleaning up window %p before release", currentWindow);
-            @try {
-                // Ensure pulse animation and delegate are cleared while window is still alive
-                if ([currentWindow respondsToSelector: @selector(setDefaultButtonCell:)]) {
-                    [currentWindow setDefaultButtonCell: nil];
-                }
-                if ([currentWindow respondsToSelector: @selector(setDelegate:)]) {
-                    [currentWindow setDelegate: nil];
-                }
-            } @catch (NSException *e) {
-                // NSLog(@"Eau: Exception during window cleanup: %@", e);
-            }
-
-            // NSLog(@"Eau: Clearing _window ivar on NSAlert (keeping associated object to prevent premature dealloc)");
-            object_setIvar(self, windowIvar, nil);
-            // IMPORTANT: Do NOT release the associated object here.  The _window ivar
-            // in GNUstep's NSAlert is __weak, so the associated object with
-            // OBJC_ASSOCIATION_RETAIN_NONATOMIC is the ONLY strong reference keeping
-            // the EauAlertPanel alive.  Releasing it here triggers -dealloc while the
-            // window system (DPS/X11 backend) may still have pending operations or
-            // references to the panel, causing a crash (segfault) after dealloc
-            // completes.  The associated object will be automatically released when
-            // NSAlert itself is deallocated, which is a safe time for the panel to die.
-            //
-            // The panel is fully inert at this point (no delegate, no animation, ordered
-            // out) so keeping it alive until NSAlert deallocates is safe and prevents
-            // the use-after-free crash.
-        }
-    }
-    else
-    {
-        // NSLog(@"Eau: _window ivar not found during cleanup, trying KVC");
-        @try {
-            [self setValue: nil forKey: @"_window"];
-            // Also keep the associated object here for the same reason as above.
-        }
-        @catch (NSException *exception) {
-            // Ignore if ivar doesn't exist
-        }
-    }
-}
-
 // Replacement for NSAlert's _setupPanel method
 // Builds a themed EauAlertPanel and assigns it to NSAlert's _window ivar.
 - (void) eau_setupPanel
 {
     // NSLog(@"Eau: eau_setupPanel called for NSAlert");
-    
+
     EauAlertPanel *panel;
     NSString *title;
+
+    /* Under another theme the alert is GNUstep's own GSAlertPanel again. */
+    if (!EauThemeIsActive())
+    {
+        [self eau_setupPanel];
+        return;
+    }
     
     @try {
     // NSLog(@"Eau: Creating EauAlertPanel");
@@ -1867,8 +1648,20 @@ static void setKeyEquivalent(NSButton *button)
         Ivar windowIvar = class_getInstanceVariable([self class], "_window");
         if (windowIvar)
         {
-            object_setIvar(self, windowIvar, panel);
-            objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, panel, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            // libs-gui (MRC) owns _window: it DESTROYs it after runModal and
+            // beginSheet, and in -dealloc. The ivar is unretained as far as
+            // ARC and object_setIvar are concerned, so hand it its own +1.
+            // A panel left over from an earlier setup is parked on the alert
+            // instead of released, since releasing a just-used panel may
+            // crash (see gb_cleanupPanel in GershwinBehaviors).
+            id previous = object_getIvar(self, windowIvar);
+            if (previous != nil)
+            {
+                objc_setAssociatedObject(self, kEAUAlertWindowRetainKey, previous,
+                                         OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+                EauReleaseUnmanaged(previous);
+            }
+            object_setIvar(self, windowIvar, EauRetainUnmanaged(panel));
             // NSLog(@"Eau: Successfully set _window via ivar");
         }
         else

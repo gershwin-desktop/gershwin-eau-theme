@@ -20,6 +20,7 @@
                     withBounds: (NSRect)bounds
                       withClip: (NSRect)rect
                        atCount: (int)count
+                  stripeOffset: (CGFloat)stripeOffset
                       forValue: (double)val;
 @end
 
@@ -42,10 +43,10 @@
 /* Slight tilt so the highlight reads as a moving diagonal. */
 #define EAU_PROGRESS_SHEEN_ANGLE -8.0
 
-/* Indeterminate pattern frames advanced per animation cycle: the theme
- * picks the stripe image from the count we hand it, so it keeps moving at
- * about one 48 px tile per second, matching the wave speed. */
-#define EAU_PROGRESS_INDETERMINATE_FRAMES_PER_CYCLE 12
+/* Distance the indeterminate stripes travel per animation cycle: one 48 px
+ * tile per second, matching the wave speed.  Handed to the theme as a
+ * continuous offset so the stripes glide instead of stepping. */
+#define EAU_PROGRESS_INDETERMINATE_STRIPE_TRAVEL 96.0
 #define EAU_PROGRESS_CORNER_RADIUS 3.0
 #define EAU_PROGRESS_TRACK_INSET 1.0
 
@@ -368,16 +369,15 @@
 
   /* 1. The classic theme bar, painted exactly as the theme paints it: track,
    * glossy fill, indeterminate pattern, border, and fill-edge divider.  The
-   * count for the indeterminate pattern frames comes from our sweep so the
-   * stripe keeps moving. */
+   * stripe offset comes from our sweep so the stripes keep moving. */
   if (_indicator != nil)
     {
-      int count = (int)(_animationPhase
-                        * EAU_PROGRESS_INDETERMINATE_FRAMES_PER_CYCLE);
       [[GSTheme theme] drawProgressIndicator: _indicator
                                   withBounds: bounds
                                     withClip: bounds
-                                     atCount: count
+                                     atCount: 0
+                                stripeOffset: _animationPhase
+                                  * EAU_PROGRESS_INDETERMINATE_STRIPE_TRAVEL
                                     forValue: [self _progressFraction]];
     }
 
@@ -387,10 +387,17 @@
    * inside the bar.  A determinate bar that has reached full progress is
    * done, so it shows a still fill with no ripple. */
   if (_animated && _animationTimer != nil
+      && !NSIsEmptyRect(NSInsetRect(bounds, EAU_PROGRESS_TRACK_INSET,
+                                    EAU_PROGRESS_TRACK_INSET))
       && (_indeterminate || [self _progressFraction] < 1.0
           || _animatesWhenFinished))
     {
       [NSGraphicsContext saveGraphicsState];
+      /* A band is a gradient with no end across its whole direction, so
+       * without a clip it paints the entire window.  A bar too small for
+       * its track, whose path is empty, must not lose the clip: the view's
+       * own bounds are clipped first and the bar is only skipped above. */
+      NSRectClip(bounds);
       [[self _trackPath] addClip];
       if (!_indeterminate)
         {
@@ -410,7 +417,28 @@
     }
 }
 
+/* The waves are painted into an image of exactly the bar's size and that image
+ * is what lands in the window.  Painting the bands straight into the window
+ * relied on the clip alone to keep them in the bar, and where it did not hold
+ * (a bar at a fractional scale factor) bands showed up outside it, over
+ * whatever was beside the bar.  Nothing in an image can be outside it. */
 - (void) _drawWavesInRect: (NSRect)coverageRect
+{
+  NSSize size = coverageRect.size;
+  if (size.width <= 0 || size.height <= 0)
+    return;
+
+  NSImage *waves = [[NSImage alloc] initWithSize: size];
+  [waves lockFocus];
+  [self _paintBandsInRect: NSMakeRect(0, 0, size.width, size.height)];
+  [waves unlockFocus];
+  [waves drawInRect: coverageRect
+           fromRect: NSMakeRect(0, 0, size.width, size.height)
+          operation: NSCompositeSourceOver
+           fraction: 1.0];
+}
+
+- (void) _paintBandsInRect: (NSRect)coverageRect
 {
   CGFloat coverageWidth = NSWidth(coverageRect);
   CGFloat spacing = EAU_PROGRESS_WAVE_SPACING;
@@ -447,9 +475,13 @@
       [transform translateXBy: -center.x yBy: -center.y];
       [transform concat];
 
-      [[self _sheenGradient] drawFromPoint: NSMakePoint(NSMinX(bandRect), NSMidY(bandRect))
-                                   toPoint: NSMakePoint(NSMaxX(bandRect), NSMidY(bandRect))
-                                   options: 0];
+      /* The band is a shape of its own, as high as the bar and as wide as the
+       * band.  Painting the gradient between two points instead fills a strip
+       * that has no end across its direction, and a clip that fails for any
+       * reason then lets the flare cross the whole window; here the most that
+       * can be painted is the band itself. */
+      [[self _sheenGradient] drawInBezierPath: [NSBezierPath bezierPathWithRect: bandRect]
+                                        angle: 0.0];
       [NSGraphicsContext restoreGraphicsState];
     }
 }
