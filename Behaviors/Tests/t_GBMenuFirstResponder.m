@@ -176,6 +176,18 @@ int main(void)
   PASS([[[[pushed objectForKey: @"items"] objectAtIndex: 4]
           objectForKey: @"state"] integerValue] == NSOnState,
        "new state of the item is pushed to Menu.app");
+
+  /* The same item chosen in Menu.app: the state must follow there too. */
+  ASSIGN(server->lastStates, nil);
+  [client activateMenuItemAtPath: @[E, @4] forWindow: wid];
+  spin();
+  PASS(!view->mode, "item chosen in Menu.app reached the first responder");
+  pushed = [[[server->lastStates objectForKey: @"items"]
+              objectAtIndex: e] objectForKey: @"submenu"];
+  PASS(pushed != nil
+       && [[[[pushed objectForKey: @"items"] objectAtIndex: 4]
+              objectForKey: @"state"] integerValue] == NSOffState,
+       "new state of an item chosen in Menu.app is pushed to Menu.app");
   [client setValue: nil forKey: @"menuServerProxy"];
 
   /* Clicking Menu.app may take the key window away from the app; the main
