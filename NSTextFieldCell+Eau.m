@@ -15,17 +15,6 @@
 @interface NSTextFieldCell (EauTheme)
 - (void) EAUdrawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView;
 - (void) EAUdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView;
-- (void) EAUselectWithFrame: (NSRect)aRect
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-                  length: (NSInteger)selLength;
-- (void) EAUeditWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-                 event: (NSEvent*)theEvent;
 - (void) _EAUdrawEditorWithFrame: (NSRect)cellFrame
                          inView: (NSView*)controlView;
 @end
@@ -59,34 +48,6 @@
   [xself _EAUdrawEditorWithFrame:cellFrame inView:controlView];
 }
 
-- (void) _overrrideNSTextFieldCellMethod_selectWithFrame: (NSRect)aRect
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-		  length: (NSInteger)selLength {
-  NSDebugLog(@"_overrrideNSTextFieldCellMethod_selectWithFrame::::::");
-  NSTextFieldCell *xself = (NSTextFieldCell*)self;
-  [xself selectWithFrame:aRect
-		  inView:controlView
-		  editor:textObject
-		delegate:anObject
-		   start:selStart
-		  length:selLength];
-}
-- (void) _overrideNSTextFieldCellMethod_editWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-		event: (NSEvent*)theEvent {
-  NSDebugLog(@"_overrideNSTextFieldCellMethod_editWithFrame:");
-  NSTextFieldCell *xself = (NSTextFieldCell*)self;
-  [xself editWithFrame:aRect
-		inView:controlView
-		editor:textObject
-	      delegate:anObject
-		 event:theEvent];
-}
 
 @end
 
@@ -153,60 +114,7 @@ titleRect.size.height += 2;
 
 }
 
-// The cell needs to be asjusted also when is selected or edited
 
-
-- (void) EAUselectWithFrame: (NSRect)aRect
-
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-                  length: (NSInteger)selLength
-{
-	[self setDrawsBackground: NO];
-	[self setBackgroundColor: [NSColor clearColor]];
-	if (![self isMemberOfClass:[NSSearchFieldCell class]])
-	{
-		NSRect drawingRect = [self drawingRectForBounds: aRect];
-		drawingRect.origin.x -= 4;
-		drawingRect.size.width -= 0;
-		drawingRect.origin.y -= 6;
-		drawingRect.size.height += 11;
-		[super selectWithFrame:drawingRect inView:controlView editor:textObject delegate:anObject start:selStart length:selLength];
-	}
-	else
-	{
-		[super selectWithFrame:aRect inView:controlView editor:textObject delegate:anObject start:selStart length:selLength];
-	}
-	[textObject setDrawsBackground: NO];
-	[textObject setBackgroundColor: [NSColor clearColor]];
-}
-
-- (void) EAUeditWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-                 event: (NSEvent*)theEvent
-{
-	[self setDrawsBackground: NO];
-	[self setBackgroundColor: [NSColor clearColor]];
-	if (![self isMemberOfClass:[NSSearchFieldCell class]])
-	{
-		NSRect drawingRect = [self drawingRectForBounds: aRect];
-		drawingRect.origin.x += 4;
-		drawingRect.size.width -= 0; //it was 6. Same in the selectWithFrame:::::: method
-		drawingRect.origin.y -= 6;
-		drawingRect.size.height += 11;
-		[super editWithFrame:drawingRect inView:controlView editor:textObject delegate:anObject event:theEvent];
-	}
-	else
-	{
-		[super editWithFrame:aRect inView:controlView editor:textObject delegate:anObject event:theEvent];
-	}
-	[textObject setDrawsBackground: NO];
-	[textObject setBackgroundColor: [NSColor clearColor]];
-}
 
 - (void) _EAUdrawEditorWithFrame: (NSRect)cellFrame
                          inView: (NSView*)controlView
