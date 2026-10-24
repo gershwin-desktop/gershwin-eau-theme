@@ -96,34 +96,6 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
       NSDebugLog(@"Eau: >>> initWithBundle after super init, self=%p", self);
       NSDebugLog(@"Eau: Initializing theme with bundle: %@", bundle);
 
-      // Ensure alternating row background color is visible in Eau theme
-      // Note: System color list may be read-only, so we wrap in try-catch
-      NSDebugLog(@"Eau: >>> About to check system color list");
-      @try
-        {
-          NSColorList *systemColors = [NSColorList colorListNamed: @"System"];
-          NSDebugLog(@"Eau: >>> System color list: %p, isEditable: %d",
-                 systemColors, systemColors ? [systemColors isEditable] : -1);
-          if (systemColors != nil && [systemColors isEditable])
-            {
-              NSDebugLog(@"Eau: >>> Setting alternateRowBackgroundColor");
-              // Light gray with a touch of blue
-              [systemColors setColor: [NSColor colorWithCalibratedRed: 0.94
-                                                                 green: 0.95
-                                                                  blue: 0.97
-                                                                 alpha: 1.0]
-                               forKey: @"alternateRowBackgroundColor"];
-              NSDebugLog(@"Eau: >>> alternateRowBackgroundColor set successfully");
-            }
-          else
-            {
-              NSDebugLog(@"Eau: >>> Skipping color list modification (nil or not editable)");
-            }
-        }
-      @catch (NSException *exception)
-        {
-          NSDebugLog(@"Eau: Could not set alternating row color: %@", [exception reason]);
-        }
       NSDebugLog(@"Eau: >>> initWithBundle EXIT");
     }
   return self;
