@@ -184,11 +184,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     } @catch (NSException *e) {
         // NSLog(@"Eau: Exception loading button images: %@", e);
     }
-    /* Only the headline is bold; buttons always use the regular font.  The
-     * default button is still marked as such by cell/button-behavior, not by
-     * its font weight. */
-    [defButton setFont: METRICS_FONT_SYSTEM_REGULAR_13];
-    
+
     altButton = [self _makeButtonWithRect: NSZeroRect tag: NSAlertAlternateReturn];
     othButton = [self _makeButtonWithRect: NSZeroRect tag: NSAlertOtherReturn];
     
@@ -320,7 +316,12 @@ static void eauAlertSetStopping(id panel, BOOL val)
     [button setTarget: self];
     [button setAction: @selector(buttonAction:)];
     [button setTag: tag];
-    [button setFont: [NSFont systemFontOfSize: 0]];
+    /* Only the headline is bold; every button, the default one included,
+     * uses the same regular metrics font.  The default size (0) would follow
+     * per-app font size defaults instead, and an NSUserFontSize of 3 left in
+     * many apps' domains made the non-default buttons unreadable while the
+     * default button, which named its size, still looked right. */
+    [button setFont: METRICS_FONT_SYSTEM_REGULAR_13];
     NSDebugLog(@"Eau: Created button with tag %ld, target: %@, action: %@", tag, [button target], NSStringFromSelector([button action]));
     return button;
 }

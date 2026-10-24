@@ -11,6 +11,9 @@ t_AlertPanelScrolling_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 t_AlertPanelButtonRow_OBJC_FILES += ../NSAlert+Eau.m ../EauActivation.m
 t_AlertPanelButtonRow_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
 
+t_AlertPanelButtonFont_OBJC_FILES += ../NSAlert+Eau.m ../EauActivation.m
+t_AlertPanelButtonFont_TOOL_LIBS += -lgnustep-gui -lgnustep-base -ldispatch
+
 ADDITIONAL_OBJCFLAGS += -Wno-deprecated
 
 # Runs against the theme bundle given with -GSTheme.  Space/Return on plain

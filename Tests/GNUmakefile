@@ -4,7 +4,8 @@ include $(GNUSTEP_MAKEFILES)/common.make
 # (menu window filter, font substitution, menu scrolling, Menu PID scan) are
 # tested in Behaviors/Tests.
 TEST_TOOL_NAME = t_AlertPanelScrolling t_ButtonSpaceKey \
-	t_ProgressStripes t_AlertPanelButtonRow t_SliderDisabled \
+	t_ProgressStripes t_AlertPanelButtonRow t_AlertPanelButtonFont \
+	t_SliderDisabled \
 	t_RestartableTimer t_EauMetricsChecker t_EauShowcaseSectionRegistry \
 	t_EauDrawerGeometry t_ButtonHover t_GrowBoxUnparentedView
 
@@ -14,6 +15,7 @@ t_AlertPanelScrolling_OBJC_FILES = t_AlertPanelScrolling.m
 t_ButtonSpaceKey_OBJC_FILES = t_ButtonSpaceKey.m
 t_ProgressStripes_OBJC_FILES = t_ProgressStripes.m
 t_AlertPanelButtonRow_OBJC_FILES = t_AlertPanelButtonRow.m
+t_AlertPanelButtonFont_OBJC_FILES = t_AlertPanelButtonFont.m
 t_SliderDisabled_OBJC_FILES = t_SliderDisabled.m
 t_RestartableTimer_OBJC_FILES = t_RestartableTimer.m
 t_EauMetricsChecker_OBJC_FILES = t_EauMetricsChecker.m
