@@ -9,8 +9,8 @@ void NSRoundRectFill(NSRect r, float radius);
 - (NSGradient *) _buttonGradientWithColor:(NSColor*) baseColor;
 - (NSGradient *) _windowTitlebarGradient;
 - (NSGradient *) _windowTitlebarGradientInactive;
-/* The colour the title bar ends in at its bottom row, for bars that continue
- * the title bar below it (a window's toolbar). */
+/* The colour the title bar gradient ends in, which its bottom row is filled
+ * with. */
 - (NSColor *) windowTitlebarBottomColorActive: (BOOL)active;
 - (NSRect) drawInnerGrayBezel: (NSRect)border withClip: (NSRect)clip;
 - (NSBezierPath*) buttonBezierPathWithRect: (NSRect)frame andStyle: (int) style;
