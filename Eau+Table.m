@@ -22,7 +22,145 @@
 
 @end
 
+/* A selection is drawn in the accent colour only where typing would act on
+ * it: in the key window, with the table (or an editor in it) taking the
+ * keys.  Everywhere else it is grey, so the one place the
+ * keyboard goes stands out, as on the reference system. */
+static BOOL EauTableSelectionIsActive(NSTableView *tableView)
+{
+  NSWindow *window = [tableView window];
+  NSResponder *responder = [window firstResponder];
+
+  if ([window isKeyWindow] == NO)
+    {
+      return NO;
+    }
+  if (responder == tableView)
+    {
+      return YES;
+    }
+  /* A cell's editor, or a rename field placed over a row (Workspace's
+   * list view), keeps the row it edits in the accent colour. */
+  if ([responder isKindOfClass: [NSText class]])
+    {
+      id delegate = [(NSText *)responder delegate];
+
+      return (delegate == (id)tableView
+              || ([delegate isKindOfClass: [NSView class]]
+                  && [(NSView *)delegate isDescendantOf: tableView]));
+    }
+  return NO;
+}
+
 @implementation Eau(EauTable)
+
+/* The text colour of a selected row's cells; nil leaves the cell's own
+ * colour, which is what an inactive (grey) selection shows. */
+- (NSColor *) eauTextColorForSelectedRow: (NSInteger)rowIndex
+                             inTableView: (NSTableView *)tableView
+{
+  if ([tableView isRowSelected: rowIndex] == NO
+      || EauTableSelectionIsActive(tableView) == NO)
+    {
+      return nil;
+    }
+  return [self colorNamed: @"highlightedTableRowTextColor"
+                    state: GSThemeNormalState];
+}
+
+- (void) eauDrawCell: (NSCell *)cell
+           withFrame: (NSRect)frame
+              inView: (NSTableView *)tableView
+           textColor: (NSColor *)textColor
+{
+  NSColor *saved = nil;
+  BOOL swap = (textColor != nil && [cell isKindOfClass: [NSTextFieldCell class]]);
+
+  if (swap)
+    {
+      saved = [(NSTextFieldCell *)cell textColor];
+      [(NSTextFieldCell *)cell setTextColor: textColor];
+    }
+  [cell drawWithFrame: frame inView: tableView];
+  if (swap)
+    {
+      [(NSTextFieldCell *)cell setTextColor: saved];
+    }
+}
+
+- (void) highlightTableViewSelectionInClipRect: (NSRect)clipRect
+                                        inView: (NSView *)view
+                              selectingColumns: (BOOL)selectingColumns
+{
+  NSTableView *tableView = (NSTableView *)view;
+  NSString *name = EauTableSelectionIsActive(tableView)
+    ? @"highlightedTableRowBackgroundColor"
+    : @"inactiveHighlightedTableRowBackgroundColor";
+  NSIndexSet *indexes = selectingColumns
+    ? [tableView selectedColumnIndexes] : [tableView selectedRowIndexes];
+  NSUInteger index;
+
+  [[self colorNamed: name state: GSThemeNormalState] set];
+  for (index = [indexes firstIndex]; index != NSNotFound;
+       index = [indexes indexGreaterThanIndex: index])
+    {
+      NSRect rect = selectingColumns
+        ? [tableView rectOfColumn: index] : [tableView rectOfRow: index];
+
+      if (NSIntersectsRect (rect, clipRect))
+        {
+          NSRectFill (NSIntersectionRect (rect, clipRect));
+        }
+    }
+}
+
+/* The gui library's row drawing with one text colour for every selected
+ * row; this one picks it by whether the selection is active. */
+- (void) drawTableViewRow: (NSInteger)rowIndex
+                 clipRect: (NSRect)clipRect
+                   inView: (NSTableView *)tableView
+{
+  NSInteger editedRow = [tableView editedRow];
+  NSInteger editedColumn = [tableView editedColumn];
+  NSArray *tableColumns = [tableView tableColumns];
+  NSColor *textColor = [self eauTextColorForSelectedRow: rowIndex
+                                            inTableView: tableView];
+  NSInteger startingColumn;
+  NSInteger endingColumn;
+  NSInteger i;
+
+  [tableView _calculatedStartingColumn: &startingColumn
+                          endingColumn: &endingColumn
+                            inClipRect: clipRect];
+
+  for (i = startingColumn; i <= endingColumn; i++)
+    {
+      NSTableColumn *tb = [tableColumns objectAtIndex: i];
+      NSCell *cell = [tb dataCellForRow: rowIndex];
+      BOOL editing = (i == editedColumn && rowIndex == editedRow);
+
+      [tableView _willDisplayCell: cell
+                   forTableColumn: tb
+                              row: rowIndex];
+      if (editing)
+        {
+          [cell _setInEditing: YES];
+        }
+      else
+        {
+          [cell setObjectValue: [tableView _objectValueForTableColumn: tb
+                                                                  row: rowIndex]];
+        }
+      [self eauDrawCell: cell
+              withFrame: [tableView frameOfCellAtColumn: i row: rowIndex]
+                 inView: tableView
+              textColor: editing ? nil : textColor];
+      if (editing)
+        {
+          [cell _setInEditing: NO];
+        }
+    }
+}
 
 
 - (NSRect) tableHeaderCellDrawingRectForBounds: (NSRect)theRect
@@ -165,6 +303,8 @@
   NSRect drawingRect;
   NSInteger i;
   NSTableColumn *outlineTableColumn = [outlineView outlineTableColumn];
+  NSColor *selectedTextColor = [self eauTextColorForSelectedRow: rowIndex
+                                                    inTableView: outlineView];
 
   if (rowIndex >= numberOfRows)
     {
@@ -212,7 +352,10 @@
 				     rowIndex: rowIndex];
         }
 
-      [cell drawWithFrame: drawingRect inView: outlineView];
+      [self eauDrawCell: cell
+              withFrame: drawingRect
+                 inView: outlineView
+              textColor: editing ? nil : selectedTextColor];
 
       if (editing)
         {
