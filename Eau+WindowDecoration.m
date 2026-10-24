@@ -208,15 +208,12 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 - (void) drawTitleBarBackground: (NSRect)rect active:(BOOL)isActive {
 
   NSGradient* gradient;
-  CGFloat bottomRowGray;
   NSColor *borderColor;
   if (isActive) {
     gradient = [self _windowTitlebarGradient];
-    bottomRowGray = 0.63;
     borderColor = [Eau controlStrokeColor];
   } else {
     gradient = [self _windowTitlebarGradientInactive];
-    bottomRowGray = 0.83;
     borderColor = [NSColor colorWithCalibratedRed:0.85 green:0.85 blue:0.85 alpha:1.0];
   }
 
@@ -236,7 +233,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   // Ensure bottom pixel row is solidly filled with the gradient's end
   // color to prevent any aliasing gap between the gradient and the
   // URSThemeIntegration bottom edge drawn on top.
-  [[NSColor colorWithCalibratedRed:bottomRowGray green:bottomRowGray blue:bottomRowGray alpha:1] set];
+  [[self windowTitlebarBottomColorActive: isActive] set];
   NSRectFill(NSMakeRect(NSMinX(titleRect), NSMinY(titleRect),
                         NSWidth(titleRect), 1));
 
