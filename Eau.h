@@ -20,6 +20,11 @@ extern void EauEnsureBehaviorsLoaded(void);
 }
 + (NSColor *) controlStrokeColor;
 - (void) invalidateScaleFactorCache;
+/* Scale factor of the window being drawn, for a process (the window manager)
+ * that draws windows on monitors with different factors; 0 ends it and the
+ * process-wide GSScaleFactor applies again. */
+- (void) setDecorationScaleFactor: (CGFloat)factor;
+- (CGFloat) decorationScaleFactor;
 - (CGFloat) menuItemIconSize;
 - (void) drawPathButton: (NSBezierPath*) path
                      in: (NSCell*)cell

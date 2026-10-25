@@ -5,6 +5,7 @@
 #import "NSMenuItemCell+Eau.h"
 #import "Eau+Button.h"
 #import "AppearanceMetrics.h"
+#import "EauDecorationScale.h"
 
 /* Process-wide GSScaleFactor cache used by the AppearanceMetrics macros;
  * reset by -invalidateScaleFactorCache for live scale-factor changes. */
@@ -60,8 +61,21 @@ NSColor *EauSafeCalibratedRGB(NSColor *c)
 /* Reset the cached GSScaleFactor so the next render picks up a live change. */
 - (void)invalidateScaleFactorCache
 {
-  GSWScaleFactorInvalidate();
+  EauDecorationScaleInvalidate();
   [self invalidateTitleTextAttributes];
+}
+
+/* The window manager draws windows on monitors with different factors; it
+ * sets the factor of each window's monitor around the theme calls for that
+ * window and 0 afterwards. */
+- (void)setDecorationScaleFactor:(CGFloat)factor
+{
+  EauSetDecorationScaleFactor(factor);
+}
+
+- (CGFloat)decorationScaleFactor
+{
+  return EauDecorationScaleFactor();
 }
 
 /* Maximum size for the icon shown in front of a menu item (the image column,
