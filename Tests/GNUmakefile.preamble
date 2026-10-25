@@ -48,3 +48,9 @@ t_ButtonHover_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
 
 # Runs against the theme bundle given with -GSTheme.
 t_GrowBoxUnparentedView_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
+
+# The scale factor the window manager draws one window's title bar at;
+# AppearanceMetrics.h needs AppKit only for its NSScreen fallback.
+t_EauDecorationScale_OBJC_FILES += ../EauDecorationScale.m
+t_EauDecorationScale_TOOL_LIBS += -lgnustep-gui -lgnustep-base -lobjc
+../EauDecorationScale.m_FILE_FLAGS += -fobjc-arc

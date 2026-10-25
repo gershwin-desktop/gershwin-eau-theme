@@ -15,6 +15,9 @@
 
 /* Cached title text attributes for each theme control state (0=active, 1=inactive, 2=main). */
 static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
+/* The scale factor the attributes were prepared at: the window manager draws
+ * windows on monitors with different factors one after the other. */
+static CGFloat titleTextAttributesScale = 0;
 
 @implementation Eau(EauWindowDecoration)
 
@@ -67,8 +70,9 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
                  andTitle: (NSString*)title
 {
 
-  if (!titleTextAttributes[0])
+  if (!titleTextAttributes[0] || titleTextAttributesScale != GSWScaleFactor())
     {
+      [self invalidateTitleTextAttributes];
       [self prepareTitleTextAttributes];
     }
 
@@ -288,6 +292,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   mainColor = keyColor;
 
   CGFloat titleFontSize = 13.0 * GSWScaleFactor();
+  titleTextAttributesScale = GSWScaleFactor();
 
   titleTextAttributes[0] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:

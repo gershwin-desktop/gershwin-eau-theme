@@ -588,9 +588,16 @@ BOOL EauTitleBarButtonStyleIsOrb(void)
     static NSColor *activeColor = nil;
     static NSColor *inactiveColor = nil;
     static NSParagraphStyle *centerStyle = nil;
+    // The window manager draws windows on monitors with different factors.
+    static CGFloat titleFontScale = 0;
 
+    if (titleFont && titleFontScale != GSWScaleFactor()) {
+        titleFont = [NSFont systemFontOfSize:(13.0 * GSWScaleFactor())];
+        titleFontScale = GSWScaleFactor();
+    }
     if (!titleFont) {
         titleFont = [NSFont systemFontOfSize:(13.0 * GSWScaleFactor())];
+        titleFontScale = GSWScaleFactor();
         activeColor = [NSColor colorWithCalibratedRed:0.05 green:0.05 blue:0.05 alpha:1];
         inactiveColor = [NSColor colorWithCalibratedRed:0.75 green:0.75 blue:0.75 alpha:1];
 

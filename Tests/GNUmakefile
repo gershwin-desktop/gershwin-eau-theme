@@ -7,7 +7,8 @@ TEST_TOOL_NAME = t_AlertPanelScrolling t_ButtonSpaceKey \
 	t_ProgressStripes t_AlertPanelButtonRow t_AlertPanelButtonFont \
 	t_SliderDisabled \
 	t_RestartableTimer t_EauMetricsChecker t_EauShowcaseSectionRegistry \
-	t_EauDrawerGeometry t_ButtonHover t_GrowBoxUnparentedView
+	t_EauDrawerGeometry t_ButtonHover t_GrowBoxUnparentedView \
+	t_EauDecorationScale
 
 ADDITIONAL_CPPFLAGS += -I$(GNUSTEP_MAKEFILES)/TestFramework
 
@@ -20,6 +21,7 @@ t_SliderDisabled_OBJC_FILES = t_SliderDisabled.m
 t_RestartableTimer_OBJC_FILES = t_RestartableTimer.m
 t_EauMetricsChecker_OBJC_FILES = t_EauMetricsChecker.m
 t_EauShowcaseSectionRegistry_OBJC_FILES = t_EauShowcaseSectionRegistry.m
+t_EauDecorationScale_OBJC_FILES = t_EauDecorationScale.m
 t_EauDrawerGeometry_OBJC_FILES = t_EauDrawerGeometry.m
 t_ButtonHover_OBJC_FILES = t_ButtonHover.m
 t_GrowBoxUnparentedView_OBJC_FILES = t_GrowBoxUnparentedView.m
