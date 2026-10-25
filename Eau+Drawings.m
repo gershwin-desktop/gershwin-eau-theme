@@ -86,6 +86,20 @@ NSRoundRectFill(NSRect r, float radius)
                                        endingColor: gradientColor2];
 }
 
+- (NSColor *) windowTitlebarBottomColorActive: (BOOL)active
+{
+  NSGradient *gradient = active ? [self _windowTitlebarGradient]
+                                : [self _windowTitlebarGradientInactive];
+  NSColor *color = nil;
+
+  /* Read off the gradient itself, so the title bar and what continues it
+   * cannot drift apart when the gradient changes. */
+  [gradient getColor: &color
+            location: NULL
+             atIndex: [gradient numberOfColorStops] - 1];
+  return color;
+}
+
 
 
 

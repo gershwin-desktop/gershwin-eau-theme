@@ -15,19 +15,17 @@
 @interface NSTextFieldCell (EauTheme)
 - (void) EAUdrawInteriorWithFrame: (NSRect)cellFrame inView: (NSView*)controlView;
 - (void) EAUdrawWithFrame: (NSRect)cellFrame inView: (NSView*)controlView;
-- (void) EAUselectWithFrame: (NSRect)aRect
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-                  length: (NSInteger)selLength;
-- (void) EAUeditWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-                 event: (NSEvent*)theEvent;
 - (void) _EAUdrawEditorWithFrame: (NSRect)cellFrame
                          inView: (NSView*)controlView;
+@end
+
+/* Implemented in libs-gui's NSCell.m */
+@interface NSCell (EauTruncation)
+- (BOOL) _shouldShortenStringForRect: (NSRect)titleRect
+                                size: (NSSize)titleSize
+                              length: (NSUInteger)length;
+- (NSAttributedString*) _resizeAttributedString: (NSAttributedString*)attrstring
+                                         forRect: (NSRect)titleRect;
 @end
 
 @implementation Eau(NSTextFieldCell)
@@ -50,34 +48,6 @@
   [xself _EAUdrawEditorWithFrame:cellFrame inView:controlView];
 }
 
-- (void) _overrrideNSTextFieldCellMethod_selectWithFrame: (NSRect)aRect
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-		  length: (NSInteger)selLength {
-  NSDebugLog(@"_overrrideNSTextFieldCellMethod_selectWithFrame::::::");
-  NSTextFieldCell *xself = (NSTextFieldCell*)self;
-  [xself selectWithFrame:aRect
-		  inView:controlView
-		  editor:textObject
-		delegate:anObject
-		   start:selStart
-		  length:selLength];
-}
-- (void) _overrideNSTextFieldCellMethod_editWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-		event: (NSEvent*)theEvent {
-  NSDebugLog(@"_overrideNSTextFieldCellMethod_editWithFrame:");
-  NSTextFieldCell *xself = (NSTextFieldCell*)self;
-  [xself editWithFrame:aRect
-		inView:controlView
-		editor:textObject
-	      delegate:anObject
-		 event:theEvent];
-}
 
 @end
 
@@ -123,7 +93,17 @@
          well).*/ 
       _cell.type = NSTextCellType;
       titleRect = [self titleRectForBounds: cellFrame];
-      [[self _drawAttributedString] drawInRect: titleRect];
+      NSAttributedString *text = [self _drawAttributedString];
+      /* Honour the truncating line break modes like NSCell does: text too
+       * long for the field is shortened with an ellipsis at the head, in
+       * the middle or at the tail, instead of being clipped. */
+      if ([self _shouldShortenStringForRect: titleRect
+                                       size: [text size]
+                                     length: [text length]])
+        {
+          text = [self _resizeAttributedString: text forRect: titleRect];
+        }
+      [text drawInRect: titleRect];
 
     }
 /*_cell.type = NSTextCellType;
@@ -134,60 +114,7 @@ titleRect.size.height += 2;
 
 }
 
-// The cell needs to be asjusted also when is selected or edited
 
-
-- (void) EAUselectWithFrame: (NSRect)aRect
-
-                  inView: (NSView*)controlView
-                  editor: (NSText*)textObject
-                delegate: (id)anObject
-                   start: (NSInteger)selStart
-                  length: (NSInteger)selLength
-{
-	[self setDrawsBackground: NO];
-	[self setBackgroundColor: [NSColor clearColor]];
-	if (![self isMemberOfClass:[NSSearchFieldCell class]])
-	{
-		NSRect drawingRect = [self drawingRectForBounds: aRect];
-		drawingRect.origin.x -= 4;
-		drawingRect.size.width -= 0;
-		drawingRect.origin.y -= 6;
-		drawingRect.size.height += 11;
-		[super selectWithFrame:drawingRect inView:controlView editor:textObject delegate:anObject start:selStart length:selLength];
-	}
-	else
-	{
-		[super selectWithFrame:aRect inView:controlView editor:textObject delegate:anObject start:selStart length:selLength];
-	}
-	[textObject setDrawsBackground: NO];
-	[textObject setBackgroundColor: [NSColor clearColor]];
-}
-
-- (void) EAUeditWithFrame: (NSRect)aRect
-                inView: (NSView*)controlView
-                editor: (NSText*)textObject
-              delegate: (id)anObject
-                 event: (NSEvent*)theEvent
-{
-	[self setDrawsBackground: NO];
-	[self setBackgroundColor: [NSColor clearColor]];
-	if (![self isMemberOfClass:[NSSearchFieldCell class]])
-	{
-		NSRect drawingRect = [self drawingRectForBounds: aRect];
-		drawingRect.origin.x += 4;
-		drawingRect.size.width -= 0; //it was 6. Same in the selectWithFrame:::::: method
-		drawingRect.origin.y -= 6;
-		drawingRect.size.height += 11;
-		[super editWithFrame:drawingRect inView:controlView editor:textObject delegate:anObject event:theEvent];
-	}
-	else
-	{
-		[super editWithFrame:aRect inView:controlView editor:textObject delegate:anObject event:theEvent];
-	}
-	[textObject setDrawsBackground: NO];
-	[textObject setBackgroundColor: [NSColor clearColor]];
-}
 
 - (void) _EAUdrawEditorWithFrame: (NSRect)cellFrame
                          inView: (NSView*)controlView
@@ -239,41 +166,68 @@ titleRect.size.height += 2;
 
 @end
 
-// Make bezeled: NO the default for NSTextField (labels are the common case).
-// Apps wanting an input field call setBezeled: YES explicitly.
-// Make bezeled: NO the default for NSTextField (labels are the common case).
-// Apps wanting an input field call setBezeled: YES explicitly.
-@interface NSTextField (EauBezelDefault)
-- (id)initEauWithFrame:(NSRect)frameRect;
-- (id)initEauWithCoder:(NSCoder *)aDecoder;
+// A text field the user can type into keeps the bezel and the white
+// background that AppKit gives it; one that cannot be edited is a label or a
+// read-only value and has neither.  What an app builds in code is editable
+// until it says otherwise, so the change is made when it does: an
+// application that sets bezeled or drawsBackground itself afterwards keeps
+// what it chose, and a field made editable again gets back what this took
+// from it.  Fields loaded from a nib are left as the nib has them.
+@interface NSTextField (EauEditableBezel)
+- (void)eauSetEditable:(BOOL)flag;
 @end
 
-@implementation NSTextField (EauBezelDefault)
+static const char EauBezelRemovedKey;
+static const char EauBackgroundRemovedKey;
 
-- (id)initEauWithFrame:(NSRect)frameRect
-{
-  self = [self initEauWithFrame:frameRect];
-  if (self != nil)
-    {
-      [self setBezeled: NO];
-    }
-  return self;
-}
+@implementation NSTextField (EauEditableBezel)
 
-- (id)initEauWithCoder:(NSCoder *)aDecoder
+- (void)eauSetEditable:(BOOL)flag
 {
-  self = [self initEauWithCoder:aDecoder];
-  if (self != nil)
+  [self eauSetEditable:flag];
+  if (!EauThemeIsActive())
     {
-      [self setBezeled: NO];
+      return;
     }
-  return self;
+  if (flag == NO)
+    {
+      if ([self isBezeled])
+        {
+          [self setBezeled: NO];
+          objc_setAssociatedObject(self, &EauBezelRemovedKey, @YES,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+      /* Only the plain white of an input field; a colour the app chose
+       * for a read-only field stays. */
+      if ([self drawsBackground]
+          && [[self backgroundColor] isEqual: [NSColor textBackgroundColor]])
+        {
+          [self setDrawsBackground: NO];
+          objc_setAssociatedObject(self, &EauBackgroundRemovedKey, @YES,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
+  else
+    {
+      if (objc_getAssociatedObject(self, &EauBezelRemovedKey) != nil)
+        {
+          [self setBezeled: YES];
+          objc_setAssociatedObject(self, &EauBezelRemovedKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+      if (objc_getAssociatedObject(self, &EauBackgroundRemovedKey) != nil)
+        {
+          [self setDrawsBackground: YES];
+          objc_setAssociatedObject(self, &EauBackgroundRemovedKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
+    }
 }
 
 @end
 
 __attribute__((constructor))
-static void initNSTextFieldBezelDefault(void)
+static void initNSTextFieldEditableBezel(void)
 {
   Class cls = [NSTextField class];
   if (!cls)
@@ -281,17 +235,10 @@ static void initNSTextFieldBezelDefault(void)
       return;
     }
 
-  Method origInit = class_getInstanceMethod(cls, @selector(initWithFrame:));
-  Method swzInit = class_getInstanceMethod(cls, @selector(initEauWithFrame:));
-  if (origInit && swzInit)
+  Method orig = class_getInstanceMethod(cls, @selector(setEditable:));
+  Method swz = class_getInstanceMethod(cls, @selector(eauSetEditable:));
+  if (orig && swz)
     {
-      method_exchangeImplementations(origInit, swzInit);
-    }
-
-  Method origCoder = class_getInstanceMethod(cls, @selector(initWithCoder:));
-  Method swzCoder = class_getInstanceMethod(cls, @selector(initEauWithCoder:));
-  if (origCoder && swzCoder)
-    {
-      method_exchangeImplementations(origCoder, swzCoder);
+      method_exchangeImplementations(orig, swz);
     }
 }

@@ -1,6 +1,7 @@
 #import "Eau.h"
 #import "Eau+TitleBarButtons.h"
 #import "AppearanceMetrics.h"
+#import "EauDrawer.h"
 
 @interface Eau(EauWindowDecoration)
 
@@ -14,6 +15,9 @@
 
 /* Cached title text attributes for each theme control state (0=active, 1=inactive, 2=main). */
 static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
+/* The scale factor the attributes were prepared at: the window manager draws
+ * windows on monitors with different factors one after the other. */
+static CGFloat titleTextAttributesScale = 0;
 
 @implementation Eau(EauWindowDecoration)
 
@@ -27,6 +31,10 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 
 - (void) drawWindowBackground: (NSRect) frame view: (NSView*) view
 {
+  if (EauDrawDrawerBackground(view, frame))
+    {
+      return;
+    }
   NSColor* backgroundColor = [[view window] backgroundColor];
   [backgroundColor setFill];
   NSRectFill(frame);
@@ -62,8 +70,9 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
                  andTitle: (NSString*)title
 {
 
-  if (!titleTextAttributes[0])
+  if (!titleTextAttributes[0] || titleTextAttributesScale != GSWScaleFactor())
     {
+      [self invalidateTitleTextAttributes];
       [self prepareTitleTextAttributes];
     }
 
@@ -149,7 +158,20 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
       BOOL useMiddleEllipsis = (leftGap < minGap || rightGap < minGap);
 
       if (useMiddleEllipsis) {
-        // Draw with middle ellipsis — no centering, just fill the available rect
+        /* Too close to a button: keep the title centered over the whole
+         * titlebar but clamped minGap away from the buttons; only a title too
+         * wide for that area is middle-truncated across all of it. */
+        NSRect allowedArea = NSInsetRect(workRect, minGap, 0);
+
+        // Center over the full titlebar width
+        CGFloat fullMidX = NSMidX(titleRect);
+        CGFloat centeredX = fullMidX - titleSize.width / 2.0;
+
+        // Clamp into allowed area
+        CGFloat allowedMinX = NSMinX(allowedArea);
+        CGFloat allowedMaxX = NSMaxX(allowedArea) - titleSize.width;
+        CGFloat titleX = MAX(allowedMinX, MIN(centeredX, allowedMaxX));
+
         NSMutableParagraphStyle *p = [[titleTextAttributes[attrIndex] objectForKey:NSParagraphStyleAttributeName] mutableCopy];
         [p setLineBreakMode:NSLineBreakByTruncatingMiddle];
         [p setAlignment:NSCenterTextAlignment];
@@ -157,9 +179,14 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
         NSMutableDictionary *truncAttrs = [titleTextAttributes[attrIndex] mutableCopy];
         [truncAttrs setObject:p forKey:NSParagraphStyleAttributeName];
 
-        workRect.origin.y = NSMidY(workRect) - titleSize.height / 2;
-        workRect.size.height = titleSize.height;
-        [title drawInRect:workRect withAttributes:truncAttrs];
+        NSRect drawRect = NSMakeRect(titleX, NSMidY(workRect) - titleSize.height / 2,
+                                     titleSize.width, titleSize.height);
+        if (titleSize.width > NSWidth(allowedArea))
+          {
+            drawRect.origin.x = NSMinX(allowedArea);
+            drawRect.size.width = NSWidth(allowedArea);
+          }
+        [title drawInRect:drawRect withAttributes:truncAttrs];
       } else {
         if (titleSize.width <= workRect.size.width)
           {
@@ -185,15 +212,12 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
 - (void) drawTitleBarBackground: (NSRect)rect active:(BOOL)isActive {
 
   NSGradient* gradient;
-  CGFloat bottomRowGray;
   NSColor *borderColor;
   if (isActive) {
     gradient = [self _windowTitlebarGradient];
-    bottomRowGray = 0.63;
     borderColor = [Eau controlStrokeColor];
   } else {
     gradient = [self _windowTitlebarGradientInactive];
-    bottomRowGray = 0.83;
     borderColor = [NSColor colorWithCalibratedRed:0.85 green:0.85 blue:0.85 alpha:1.0];
   }
 
@@ -213,7 +237,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   // Ensure bottom pixel row is solidly filled with the gradient's end
   // color to prevent any aliasing gap between the gradient and the
   // URSThemeIntegration bottom edge drawn on top.
-  [[NSColor colorWithCalibratedRed:bottomRowGray green:bottomRowGray blue:bottomRowGray alpha:1] set];
+  [[self windowTitlebarBottomColorActive: isActive] set];
   NSRectFill(NSMakeRect(NSMinX(titleRect), NSMinY(titleRect),
                         NSWidth(titleRect), 1));
 
@@ -268,6 +292,7 @@ static NSDictionary *titleTextAttributes[3] = {nil, nil, nil};
   mainColor = keyColor;
 
   CGFloat titleFontSize = 13.0 * GSWScaleFactor();
+  titleTextAttributesScale = GSWScaleFactor();
 
   titleTextAttributes[0] = [[NSMutableDictionary alloc]
     initWithObjectsAndKeys:

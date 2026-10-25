@@ -7,6 +7,7 @@
 #import "EauTestWindowController.h"
 #import "EauTestFormBuilder.h"
 #import "EauTestListDataSource.h"
+#import "EauTestControlFactory.h"
 #import "AppearanceMetrics.h"
 
 static const CGFloat EauTestWindowWidth = 580.0;
@@ -15,50 +16,27 @@ static const CGFloat EauTestFieldWidth = 280.0;
 
 static NSButton *makePushButton(NSString *title, id target, SEL action)
 {
-  NSButton *button = [[NSButton alloc] initWithFrame:
-    NSMakeRect(0, 0, METRICS_BUTTON_MIN_WIDTH, METRICS_BUTTON_HEIGHT)];
-  [button setBezelStyle: NSRoundedBezelStyle];
-  [button setButtonType: NSMomentaryPushInButton];
-  [button setTitle: title];
-  [button setTarget: target];
-  [button setAction: action];
-  return button;
+  return [EauTestControlFactory pushButtonWithTitle: title target: target action: action];
 }
 
 static NSButton *makeSwitch(NSString *title, NSInteger state, BOOL enabled)
 {
-  NSButton *button = [[NSButton alloc] initWithFrame:
-    NSMakeRect(0, 0, 90, METRICS_RADIO_BUTTON_SIZE)];
-  [button setButtonType: NSSwitchButton];
-  [button setTitle: title];
-  [button setState: state];
-  [button setEnabled: enabled];
-  return button;
+  return [EauTestControlFactory switchWithTitle: title state: state enabled: enabled];
 }
 
 static NSButton *makeBezelButton(NSBezelStyle style, CGFloat side)
 {
-  NSButton *button = [[NSButton alloc] initWithFrame: NSMakeRect(0, 0, side, side)];
-  [button setBezelStyle: style];
-  [button setButtonType: NSPushOnPushOffButton];
-  [button setTitle: @""];
-  return button;
+  return [EauTestControlFactory bezelButtonWithStyle: style side: side];
 }
 
 static NSRect fieldFrame(CGFloat width)
 {
-  return NSMakeRect(0, 0, width, METRICS_TEXT_INPUT_FIELD_HEIGHT);
+  return [EauTestControlFactory inputFieldFrameWithWidth: width];
 }
 
-/* Eau creates every text field cell unbezeled so labels look right; input
- * fields have to ask for their bezel explicitly. */
 static id makeInputField(Class fieldClass, CGFloat width)
 {
-  NSTextField *field = [[fieldClass alloc] initWithFrame: fieldFrame(width)];
-  [field setBezeled: YES];
-  [field setEditable: YES];
-  [field setDrawsBackground: YES];
-  return field;
+  return [EauTestControlFactory inputFieldOfClass: fieldClass width: width];
 }
 
 @implementation EauTestWindowController

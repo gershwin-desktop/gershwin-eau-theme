@@ -14,6 +14,30 @@ static CGFloat EauWholeDevicePixels(CGFloat points)
     return points;
   return floor(points * scale + 0.5) / scale;
 }
+
+/* Each menu row is filled independently (one NSRectFill per item, on top of
+   a single semi-transparent gradient drawn once for the whole menu).  At a
+   fractional scale factor the row rects that NSMenuView computes do not
+   themselves land on whole device pixels, so two adjoining rows' fills each
+   antialias their shared edge and only partially cover it; the gradient
+   behind shows through the gap as a thin line.  Rounding the rect OUTWARD
+   to the enclosing whole-pixel rect (rather than to the nearest one) makes
+   neighbouring rows' fills overlap by at most a pixel instead of leaving a
+   gap - invisible here since both rows fill the same colour, whereas a
+   gap is not. -[NSView convertRect:toView:nil] yields window base
+   coordinates, which are device pixels. */
+static NSRect EauPixelCoveringRect(NSView *view, NSRect rect)
+{
+  NSRect deviceRect = [view convertRect: rect toView: nil];
+  CGFloat minX = floor(NSMinX(deviceRect));
+  CGFloat minY = floor(NSMinY(deviceRect));
+  CGFloat maxX = ceil(NSMaxX(deviceRect));
+  CGFloat maxY = ceil(NSMaxY(deviceRect));
+
+  deviceRect = NSMakeRect(minX, minY, maxX - minX, maxY - minY);
+  return [view convertRect: deviceRect fromView: nil];
+}
+
 @interface Eau(EauMenu)
 
 @end
@@ -220,13 +244,14 @@ static CGFloat EauWholeDevicePixels(CGFloat points)
   NSGradient* menuitemgradient = [[NSGradient alloc] initWithStartingColor: selectedBackgroundColor1
                                                                endingColor: selectedBackgroundColor2];
   NSColor * c;
+  NSRect fillFrame = EauPixelCoveringRect(controlView, cellFrame);
   [cell setBordered:NO];
 
   if (state == GSThemeSelectedState || state == GSThemeHighlightedState)
     {
       // Draw highlight on full cell frame (including padding)
-      NSRectFillUsingOperation(cellFrame, NSCompositeClear);
-      [menuitemgradient drawInRect:cellFrame angle: -90];
+      NSRectFillUsingOperation(fillFrame, NSCompositeClear);
+      [menuitemgradient drawInRect: fillFrame angle: -90];
       return;
     }
   else
@@ -243,8 +268,8 @@ static CGFloat EauWholeDevicePixels(CGFloat points)
 
   // Set cell's background color
   [c setFill];
-  NSRectFillUsingOperation(cellFrame, NSCompositeClear);
-  NSRectFill(cellFrame);
+  NSRectFillUsingOperation(fillFrame, NSCompositeClear);
+  NSRectFill(fillFrame);
 
 }
 
