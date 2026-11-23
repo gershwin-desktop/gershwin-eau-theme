@@ -7,8 +7,8 @@
  * SPDX-License-Identifier: BSD-2-Clause OR GPL-3.0-or-later
  */
 
+#import "Eau.h"
 #import "EauProgressView.h"
-#import "EauSound.h"
 
 #import <AppKit/AppKit.h>
 #import <objc/runtime.h>
@@ -25,9 +25,25 @@ static char EauProgressStartKey;
  * enough that the user may have looked away get the completion sound. */
 #define EAU_COMPLETION_SOUND_MIN_SECONDS 5.0
 
+/* Sound playback is behavior and lives in GershwinBehaviors.bundle; Eau does
+ * not link it, so it is looked up at run time and the bar stays silent when
+ * the bundle is absent.  The trigger stays here because it rides on the
+ * value setters Eau already swizzles to drive the hosted view. */
+@interface NSObject (EauSystemSound)
++ (BOOL) playSystemSound: (NSString *)name;
+@end
+
+static void EauPlayCompletionSound(void)
+{
+  Class behaviors = NSClassFromString(@"GBBehaviors");
+  if ([behaviors respondsToSelector: @selector(playSystemSound:)])
+    [behaviors playSystemSound: @"Glass"];
+}
+
 static BOOL EauProgressIndicatorHostsView(NSProgressIndicator *indicator)
 {
-  return [indicator style] == NSProgressIndicatorBarStyle
+  return EauThemeIsActive()
+    && [indicator style] == NSProgressIndicatorBarStyle
     && [indicator isBezeled]
     && ![indicator isVertical];
 }
@@ -302,16 +318,38 @@ static void EauSwizzle(Class cls, SEL original, SEL swizzled)
       [self setEauFullProgressAnnounced: YES];
       [self setEauProgressStart: 0.0];
       if (ranLongEnough)
-        EauPlaySystemSound(@"Glass");
+        EauPlayCompletionSound();
     }
 }
 
 - (void) eau_syncProgressView
 {
+  EauProgressView *progressView;
+  BOOL hostsView;
+
+  if (!EauThemeIsActive())
+    {
+      /* Take the hosted view out entirely rather than only hiding it, so the
+       * theme that is taking over draws the indicator itself and nothing of
+       * Eau's is left in the view tree. */
+      EauProgressView *hosted =
+        objc_getAssociatedObject(self, &EauEauProgressViewKey);
+
+      if (hosted != nil)
+        {
+          [hosted setAnimated: NO];
+          [hosted removeFromSuperview];
+          objc_setAssociatedObject(self, &EauEauProgressViewKey, nil,
+                                   OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+          [self setNeedsDisplay: YES];
+        }
+      return;
+    }
+
   [self eau_announceCompletionIfNeeded];
 
-  EauProgressView *progressView = EauEauProgressViewFor(self);
-  BOOL hostsView = EauProgressIndicatorHostsView(self);
+  progressView = EauEauProgressViewFor(self);
+  hostsView = EauProgressIndicatorHostsView(self);
 
   [progressView setHidden: (!hostsView || [self isHidden])];
   if (!hostsView)

@@ -1,8 +1,8 @@
 //
 // NSAlert+Eau.h
 //
-// Comprehensive NSAlert customization for Eau theme.
-// Provides a complete custom alert panel implementation.
+// Eau alert panel: layout, icon, text, sizing and the panel's own key
+// handling.  Running an NSAlert modally lives in GershwinBehaviors.bundle.
 //
 
 #import <AppKit/AppKit.h>
@@ -47,9 +47,7 @@
 - (NSButton *) defaultButton;
 - (BOOL) isActivePanel;
 
-// Internal methods for GSAlertPanel swizzling (dynamically called)
+// Internal method for GSAlertPanel swizzling (dynamically called)
 - (id) eau_initWithoutGModelHelper;
-- (NSInteger) eau_runModalHelper;
-- (NSButton *) eau_getDefButton;
 
 @end

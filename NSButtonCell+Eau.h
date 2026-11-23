@@ -11,5 +11,4 @@
 - (NSImage *) EAUalternateImage;
 - (BOOL) isProcessingReturnButton;
 - (void) setIsProcessingReturnButton:(BOOL)processing;
-- (void) safelyMakeButtonSelectedAndHighlighted;
 @end

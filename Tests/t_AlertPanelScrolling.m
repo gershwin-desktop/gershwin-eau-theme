@@ -146,13 +146,19 @@ int main(void)
           NSClipView *clip = [scroll contentView];
           NSRect inWindow = [clip convertRect: [clip bounds] toView: nil];
           CGFloat contentHeight = [[panel contentView] bounds].size.height;
-          BOOL aligned = (inWindow.origin.x == floor(inWindow.origin.x))
-            && (inWindow.origin.y == floor(inWindow.origin.y))
-            && (inWindow.size.height == floor(inWindow.size.height))
-            && (contentHeight == floor(contentHeight));
+          /* At a scale factor such as 1.1 the conversion leaves float
+             residue around 1e-14 px; cairo keeps coordinates in 1/256 px
+             fixed point, so anything much closer than that is whole. */
+#define ON_PIXEL(v) (fabs((v) - round(v)) < 1e-6)
+          BOOL aligned = ON_PIXEL(inWindow.origin.x)
+            && ON_PIXEL(inWindow.origin.y)
+            && ON_PIXEL(inWindow.size.height)
+            && ON_PIXEL(contentHeight);
+#undef ON_PIXEL
           PASS(aligned,
-               "scrolled text area sits on whole pixels (y %.2f, height %.2f,"
-               " window height %.2f)", (double)inWindow.origin.y,
+               "scrolled text area sits on whole pixels (x %.2f, y %.2f,"
+               " height %.2f, window height %.2f)", (double)inWindow.origin.x,
+               (double)inWindow.origin.y,
                (double)inWindow.size.height, (double)contentHeight);
         }
     }

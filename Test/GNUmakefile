@@ -16,7 +16,9 @@ buttontest_OBJC_FILES = buttontest.m
 # with many Eau-drawn controls and a standard main menu.
 EauTest_INSTALL_DIR = $(GNUSTEP_SYSTEM_LIBRARY)/CoreServices/Applications
 EauTest_OBJC_FILES = EauTest_main.m EauTestMenuBuilder.m EauTestWindowController.m \
-	EauTestFormBuilder.m EauTestListDataSource.m
+	EauTestFormBuilder.m EauTestListDataSource.m EauTestControlFactory.m \
+	EauMetricsChecker.m EauShowcaseSectionRegistry.m \
+	EauShowcaseWindowController.m EauShowcaseMetricsOverlayView.m
 EauTest_OBJCFLAGS += -fobjc-arc -fobjc-arc-exceptions
 EauTest_INCLUDE_DIRS += -I..
 
