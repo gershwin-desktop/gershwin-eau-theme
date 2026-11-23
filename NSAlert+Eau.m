@@ -54,6 +54,12 @@ static BOOL EauAlertWillRunAsSheet(NSWindow *panel)
 // that shares the same ivar layout but lacks a dedicated _isStoppingModal ivar.
 static const void *kEAUAlertIsStoppingKey = &kEAUAlertIsStoppingKey;
 static const void *kEAUAlertWindowRetainKey = &kEAUAlertWindowRetainKey;
+// How often the panel was laid out again because the window manager's
+// decoration turned out to differ from the one it was laid out with.
+static const void *kEAUAlertRelayoutCountKey = &kEAUAlertRelayoutCountKey;
+// Upper bound for such re-layouts, so a window manager that insists on its
+// own size cannot make the panel and the window manager resize each other.
+static const NSUInteger kEAUAlertMaxRelayouts = 3;
 
 /* Manual retain/release for libs-gui's MRC-owned NSAlert _window ivar.
  * Tests/ also builds this file without ARC, hence both spellings. */
@@ -194,6 +200,19 @@ static void eauAlertSetStopping(id panel, BOOL val)
     result = NSAlertErrorReturn;
     isGreen = YES;
 
+    /* The window manager's decoration may become known only after the panel
+       was laid out (see -eau_decorationMayHaveChanged:). */
+    [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(eau_decorationMayHaveChanged:)
+               name: NSWindowDidMoveNotification
+             object: self];
+    [[NSNotificationCenter defaultCenter]
+        addObserver: self
+           selector: @selector(eau_decorationMayHaveChanged:)
+               name: NSWindowDidResizeNotification
+             object: self];
+
     // NSLog(@"Eau: EauAlertPanel initWithContentRect completed successfully");
     return self;
 }
@@ -272,6 +291,7 @@ static void eauAlertSetStopping(id panel, BOOL val)
     // NSLog(@"Eau: EauAlertPanel dealloc called for panel: %p", self);
     
     @try {
+        [[NSNotificationCenter defaultCenter] removeObserver: self];
         // Stop any pending animations or callbacks
         [self setDefaultButtonCell: nil];
         [self setDelegate: nil];
@@ -359,6 +379,37 @@ static void eauSnapScrollTextToDevicePixels(NSScrollView *scroll,
     frame.size.width += grow.width;
     frame.size.height += grow.height;
     [scroll setFrame: frame];
+}
+
+/* The frame-to-content conversion depends on the decoration the window
+   manager draws.  An alert shown without a modal session at login (the low
+   disk space warning of Workspace) can be laid out before the window manager
+   has started: the panel is then sized as if it had no titlebar, and once
+   the window manager frames the window the titlebar takes its height out of
+   the panel, cutting off the bottom with the buttons.  The window reports
+   being moved when it is framed, and by then the decoration is known, so the
+   panel is laid out again against it.  A modal alert is laid out a second
+   time just before it is shown, which hides this. */
+- (void) eau_decorationMayHaveChanged: (NSNotification *)note
+{
+    NSUInteger count = [objc_getAssociatedObject(self, kEAUAlertRelayoutCountKey)
+                        unsignedIntegerValue];
+    NSRect wanted;
+
+    if ([self contentView] == nil || count >= kEAUAlertMaxRelayouts)
+    {
+        return;
+    }
+    wanted = [NSWindow frameRectForContentRect: [[self contentView] frame]
+                                     styleMask: [self styleMask]];
+    if (fabs(wanted.size.height - [self frame].size.height) < 0.5
+        && fabs(wanted.size.width - [self frame].size.width) < 0.5)
+    {
+        return;
+    }
+    objc_setAssociatedObject(self, kEAUAlertRelayoutCountKey, @(count + 1),
+                             OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    [self sizePanelToFit];
 }
 
 - (void) sizePanelToFit
